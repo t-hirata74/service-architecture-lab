@@ -12,7 +12,7 @@
 - 認証: rodauth-rails + JWT (cookie / session を使わない)
 - Lint: `rubocop-rails-omakase`
 - 静的解析: brakeman（CI で実行）
-- テスト: minitest + fixtures（Rails 標準のまま）
+- テスト: **RSpec (rspec-rails) + FactoryBot**（共通方針）。詳細は [`docs/testing-strategy.md`](../testing-strategy.md)
 
 ---
 
