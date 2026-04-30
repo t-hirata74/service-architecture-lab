@@ -1,4 +1,5 @@
 import { api, setToken, clearToken } from "./api";
+import { disconnectCable } from "./cable";
 
 export type Me = {
   id: number;
@@ -46,6 +47,7 @@ export async function logout(): Promise<void> {
   try {
     await api("/logout", { method: "POST" });
   } finally {
+    disconnectCable();
     clearToken();
   }
 }

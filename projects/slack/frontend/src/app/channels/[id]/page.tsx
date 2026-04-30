@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { fetchMessages, postMessage, type Message } from "@/lib/messages";
+import { getCableConsumer } from "@/lib/cable";
 
 export default function ChannelDetailPage() {
   const params = useParams<{ id: string }>();
@@ -25,6 +26,29 @@ export default function ChannelDetailPage() {
       .catch((err) => !cancelled && setError(err instanceof Error ? err.message : String(err)));
     return () => {
       cancelled = true;
+    };
+  }, [channelId]);
+
+  // ADR 0001: MessagesChannel 購読でリアルタイム受信
+  useEffect(() => {
+    if (!channelId) return;
+    const subscription = getCableConsumer().subscriptions.create(
+      { channel: "MessagesChannel", channel_id: channelId },
+      {
+        received(data: { type: string; message?: Message }) {
+          if (data.type === "message.created" && data.message) {
+            const incoming = data.message;
+            setMessages((prev) => {
+              // 自分が投稿してすぐ optimistic に追加した可能性があるので id で dedup
+              if (prev.some((m) => m.id === incoming.id)) return prev;
+              return [...prev, incoming];
+            });
+          }
+        },
+      },
+    );
+    return () => {
+      subscription.unsubscribe();
     };
   }, [channelId]);
 
