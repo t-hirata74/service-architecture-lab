@@ -17,10 +17,10 @@ Slack 風プロジェクトの**技術課題の中核**は以下である：
 
 ## 決定
 
-ブラウザ E2E テストフレームワークとして **Playwright** を採用する。配置は `projects/slack/playwright/` 配下とする。
+ブラウザ E2E テストフレームワークとして **Playwright** を採用する。配置は `slack/playwright/` 配下とする。
 
 ```text
-projects/slack/playwright/
+slack/playwright/
   tests/
     auth.spec.ts
     messaging.spec.ts        # 2 BrowserContext で送信 → 受信を検証

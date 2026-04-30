@@ -145,7 +145,7 @@ sequenceDiagram
 
 ```bash
 # 1. インフラ
-cd projects/slack
+cd slack
 docker compose up -d mysql redis
 
 # 2. backend (Rails)

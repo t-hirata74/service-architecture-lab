@@ -31,10 +31,9 @@
 
 ```txt
 service-architecture-lab/
-  projects/
-    slack/
-    youtube/
-    github/
+  slack/
+  youtube/
+  github/
   docs/        # 共通ルール・コーディング規約・テスト戦略など
   infra/
     terraform/
@@ -44,16 +43,15 @@ service-architecture-lab/
 
 ```txt
 service-architecture-lab/
-  projects/
-    slack/
-      frontend/
-      backend/    (Rails)
-      ai-worker/  (Python)
-      docs/
-      docker-compose.yml
-      README.md
-      infra/
-        terraform/
+  slack/
+    frontend/
+    backend/    (Rails)
+    ai-worker/  (Python)
+    docs/
+    docker-compose.yml
+    README.md
+    infra/
+      terraform/
 ```
 
 ※ Terraformは実行しないが設計図として用途
@@ -115,7 +113,7 @@ service-architecture-lab/
 ### 配置
 
 ```txt
-projects/<service>/docs/adr/
+<service>/docs/adr/
   0001-<決定の見出し>.md
   0002-<決定の見出し>.md
   ...
@@ -265,4 +263,4 @@ Terraformで以下を定義（実行はしない）
 * `docs/testing-strategy.md` — テスト方針（単体 / 結合 / E2E）
 * `docs/adr-template.md` — ADR の雛形
 
-プロジェクト固有のアーキ図・ADR は `projects/<service>/docs/` 配下に配置する。
+プロジェクト固有のアーキ図・ADR は `<service>/docs/` 配下に配置する。
