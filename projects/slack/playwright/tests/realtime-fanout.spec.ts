@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { signupViaUI, uniqueEmail, uniqueChannelName } from "./helpers";
 
 const PASSWORD = "correcthorsebatterystaple";
-const API_URL = "http://localhost:3000";
+const API_URL = "http://localhost:3010";
 
 test.describe("リアルタイム fan-out (ADR 0001)", () => {
   test("Alice 送信 -> Bob が受信 / Bob 送信 -> Alice が受信", async ({ browser }) => {

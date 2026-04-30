@@ -1,7 +1,16 @@
 class ChannelsController < ApplicationController
   def index
-    channels = current_user.channels.order(:id)
-    render json: { channels: channels.map { |c| serialize(c) } }
+    channels = current_user.channels.order(:id).to_a
+    memberships_by_channel = current_user.memberships.index_by(&:channel_id)
+
+    data = channels.map do |c|
+      membership = memberships_by_channel[c.id]
+      serialize(c).merge(
+        last_read_message_id: membership&.last_read_message_id,
+        latest_message_id: c.messages.active.maximum(:id),
+      )
+    end
+    render json: { channels: data }
   end
 
   def create

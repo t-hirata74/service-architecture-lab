@@ -5,6 +5,8 @@ export type Channel = {
   name: string;
   kind: string;
   topic: string | null;
+  last_read_message_id?: number | null;
+  latest_message_id?: number | null;
 };
 
 export async function fetchChannels(): Promise<Channel[]> {

@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const FRONTEND_URL = "http://localhost:3005";
-const BACKEND_URL = "http://localhost:3000";
+const BACKEND_URL = "http://localhost:3010";
 
 export default defineConfig({
   testDir: "./tests",
@@ -24,7 +24,7 @@ export default defineConfig({
 
   webServer: [
     {
-      command: "bundle exec rails server -p 3000 -e development",
+      command: "bundle exec rails server -p 3010 -e development",
       cwd: "../backend",
       url: `${BACKEND_URL}/up`,
       reuseExistingServer: true,

@@ -5,6 +5,13 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { fetchMe, logout, type Me } from "@/lib/auth";
 import { fetchChannels, createChannel, type Channel } from "@/lib/channels";
+import { getCableConsumer } from "@/lib/cable";
+
+type ReadAdvancedEvent = {
+  type: "read.advanced";
+  channel_id: number;
+  last_read_message_id: number;
+};
 
 export default function ChannelsLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -32,6 +39,29 @@ export default function ChannelsLayout({ children }: { children: React.ReactNode
       .catch((err) => !cancelled && setError(err instanceof Error ? err.message : String(err)));
     return () => {
       cancelled = true;
+    };
+  }, [me]);
+
+  // ADR 0002: UserChannel 購読で他デバイスの既読 advance を反映
+  useEffect(() => {
+    if (!me) return;
+    const subscription = getCableConsumer().subscriptions.create(
+      { channel: "UserChannel" },
+      {
+        received(data: ReadAdvancedEvent) {
+          if (data.type !== "read.advanced") return;
+          setChannels((prev) =>
+            prev.map((c) =>
+              c.id === data.channel_id
+                ? { ...c, last_read_message_id: data.last_read_message_id }
+                : c,
+            ),
+          );
+        },
+      },
+    );
+    return () => {
+      subscription.unsubscribe();
     };
   }, [me]);
 
@@ -74,13 +104,26 @@ export default function ChannelsLayout({ children }: { children: React.ReactNode
           <ul className="space-y-1">
             {channels.map((ch) => {
               const active = pathname === `/channels/${ch.id}`;
+              const unread =
+                ch.latest_message_id != null &&
+                ch.latest_message_id > (ch.last_read_message_id ?? 0);
               return (
                 <li key={ch.id}>
                   <Link
                     href={`/channels/${ch.id}`}
-                    className={`block rounded px-2 py-1 text-sm ${active ? "bg-slate-700" : "hover:bg-slate-800"}`}
+                    data-channel-id={ch.id}
+                    data-unread={unread ? "true" : "false"}
+                    className={`flex items-center justify-between rounded px-2 py-1 text-sm ${active ? "bg-slate-700" : "hover:bg-slate-800"}`}
                   >
-                    # {ch.name}
+                    <span className={unread ? "font-semibold" : ""}>
+                      # {ch.name}
+                    </span>
+                    {unread && (
+                      <span
+                        aria-label="未読あり"
+                        className="ml-2 inline-block h-2 w-2 rounded-full bg-indigo-400"
+                      />
+                    )}
                   </Link>
                 </li>
               );

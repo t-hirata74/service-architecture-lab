@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { fetchMessages, postMessage, type Message } from "@/lib/messages";
+import { markChannelRead } from "@/lib/channels";
 import { getCableConsumer } from "@/lib/cable";
 
 export default function ChannelDetailPage() {
@@ -13,6 +14,23 @@ export default function ChannelDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const listRef = useRef<HTMLUListElement | null>(null);
+  const lastSentReadRef = useRef<number>(0);
+
+  // ADR 0002: チャンネル切替で送信済みカーソル状態をリセット
+  useEffect(() => {
+    lastSentReadRef.current = 0;
+  }, [channelId]);
+
+  // ADR 0002: 表示中の最新メッセージで既読 cursor を進める (単調増加で重複送信を回避)
+  useEffect(() => {
+    if (!channelId || messages.length === 0) return;
+    const latest = messages[messages.length - 1].id;
+    if (latest <= lastSentReadRef.current) return;
+    lastSentReadRef.current = latest;
+    void markChannelRead(channelId, latest).catch((err) =>
+      console.error("既読更新失敗", err),
+    );
+  }, [messages, channelId]);
 
   useEffect(() => {
     if (!channelId) return;
@@ -63,8 +81,8 @@ export default function ChannelDetailPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const msg = await postMessage(channelId, text);
-      setMessages((prev) => [...prev, msg]);
+      // optimistic 追加はせず broadcast 経由の単一経路に揃える (dedup による重複防止が破綻するため)
+      await postMessage(channelId, text);
       setBody("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "投稿に失敗しました");
