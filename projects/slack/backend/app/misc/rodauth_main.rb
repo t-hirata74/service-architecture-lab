@@ -34,9 +34,9 @@ class RodauthMain < Rodauth::Rails::Auth
     # Accept only JSON requests.
     only_json? true
 
-    # Handle login and password confirmation fields on the client side.
-    # require_password_confirmation? false
-    # require_login_confirmation? false
+    # API クライアントが送信するため、サーバー側での confirm フィールド一致は不要。
+    require_password_confirmation? false
+    require_login_confirmation? false
 
     # Use path prefix for all routes.
     # prefix "/auth"
