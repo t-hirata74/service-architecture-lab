@@ -110,20 +110,13 @@ class RodauthMain < Rodauth::Rails::Auth
     jwt_secret { Rails.application.secret_key_base }
 
     # ==> Hooks
-    # Validate custom fields in the create account form.
-    # before_create_account do
-    #   throw_error_status(422, "name", "must be present") if param("name").empty?
-    # end
-
-    # Perform additional actions after the account is created.
-    # after_create_account do
-    #   Profile.create!(account_id: account_id, name: param("name"))
-    # end
-
-    # Do additional cleanup after the account is closed.
-    # after_close_account do
-    #   Profile.find_by!(account_id: account_id).destroy
-    # end
+    # Account 作成と同時に 1:1 の User レコードを作成する（共有 PK / ADR 0004）。
+    # display_name はリクエストで指定可能、未指定時はメール local part をフォールバック。
+    after_create_account do
+      requested = param_or_nil("display_name")
+      fallback = account[:email].to_s.split("@").first
+      User.create!(id: account_id, display_name: requested.presence || fallback)
+    end
 
     # ==> Deadlines
     # Change default deadlines for some actions.
