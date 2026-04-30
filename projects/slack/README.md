@@ -65,12 +65,24 @@ Slack のアーキテクチャを参考に、リアルタイムチャットの**
 
 ### 起動
 
+インフラ（MySQL / Redis）：
+
 ```bash
-docker compose up
+docker compose up -d mysql redis
 ```
 
-現在は `mysql` と `redis` のみ起動可能。  
-`backend` / `frontend` / `ai-worker` は実装完了次第、compose に追加していく。
+> MySQL のホスト側ポートは **3307**（他プロジェクトとの 3306 競合回避）。
+
+Backend（Rails）— ローカル実行：
+
+```bash
+cd backend
+bundle install
+bundle exec rails db:create db:migrate
+bundle exec rails server   # http://localhost:3000
+```
+
+`frontend` / `ai-worker` は実装完了次第、compose に追加していく。
 
 ---
 
@@ -78,11 +90,11 @@ docker compose up
 
 | コンポーネント | ステータス |
 | --- | --- |
-| インフラ（MySQL, Redis）   | 🟡 compose 定義済み |
-| Backend (Rails)            | ⚪ 未着手 |
+| インフラ（MySQL, Redis）   | 🟢 起動・migrate 通過確認済み |
+| Backend (Rails)            | 🟡 Rails 8 + rodauth-rails 初期セットアップ済み |
 | Frontend (Next.js)         | ⚪ 未着手 |
 | ai-worker (Python)         | ⚪ 未着手 |
-| ADR                        | 🟢 0001 / 0002 / 0003 採択済み |
+| ADR                        | 🟢 0001 / 0002 / 0003 / 0004 採択済み |
 
 ---
 

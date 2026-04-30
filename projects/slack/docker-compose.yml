@@ -11,9 +11,10 @@ services:
       - --collation-server=utf8mb4_0900_ai_ci
       - --default-authentication-plugin=caching_sha2_password
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./infra/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "slack", "-pslack"]
       interval: 5s
