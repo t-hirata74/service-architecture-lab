@@ -1,19 +1,24 @@
 services:
-  postgres:
-    image: postgres:16-alpine
+  mysql:
+    image: mysql:8.0
     environment:
-      POSTGRES_USER: slack
-      POSTGRES_PASSWORD: slack
-      POSTGRES_DB: slack_development
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: slack_development
+      MYSQL_USER: slack
+      MYSQL_PASSWORD: slack
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U slack -d slack_development"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "slack", "-pslack"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -30,14 +35,14 @@ services:
   # backend:
   #   build: ./backend
   #   depends_on:
-  #     postgres:
+  #     mysql:
   #       condition: service_healthy
   #     redis:
   #       condition: service_healthy
   #   ports:
   #     - "3000:3000"
   #   environment:
-  #     DATABASE_URL: postgres://slack:slack@postgres:5432/slack_development
+  #     DATABASE_URL: mysql2://slack:slack@mysql:3306/slack_development
   #     REDIS_URL: redis://redis:6379/0
   #     AI_WORKER_URL: http://ai-worker:8000
   #   volumes:
@@ -58,18 +63,18 @@ services:
   # ai-worker:
   #   build: ./ai-worker
   #   depends_on:
-  #     postgres:
+  #     mysql:
   #       condition: service_healthy
   #     redis:
   #       condition: service_healthy
   #   ports:
   #     - "8000:8000"
   #   environment:
-  #     DATABASE_URL: postgres://slack:slack@postgres:5432/slack_development
+  #     DATABASE_URL: mysql+pymysql://slack:slack@mysql:3306/slack_development
   #     REDIS_URL: redis://redis:6379/0
   #   volumes:
   #     - ./ai-worker:/app
 
 volumes:
-  postgres_data:
+  mysql_data:
   redis_data:

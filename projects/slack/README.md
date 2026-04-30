@@ -46,7 +46,7 @@ Slack のアーキテクチャを参考に、リアルタイムチャットの**
                       └─────────────┘
                              ▲
                       ┌──────┴──────┐
-                      │  PostgreSQL │
+                      │    MySQL    │
                       └─────────────┘
 ```
 
@@ -69,7 +69,7 @@ Slack のアーキテクチャを参考に、リアルタイムチャットの**
 docker compose up
 ```
 
-現在は `postgres` と `redis` のみ起動可能。  
+現在は `mysql` と `redis` のみ起動可能。  
 `backend` / `frontend` / `ai-worker` は実装完了次第、compose に追加していく。
 
 ---
@@ -78,11 +78,11 @@ docker compose up
 
 | コンポーネント | ステータス |
 | --- | --- |
-| インフラ（Postgres, Redis） | 🟡 compose 定義済み |
+| インフラ（MySQL, Redis）   | 🟡 compose 定義済み |
 | Backend (Rails)            | ⚪ 未着手 |
 | Frontend (Next.js)         | ⚪ 未着手 |
 | ai-worker (Python)         | ⚪ 未着手 |
-| ADR                        | 🟢 0001 / 0002 採択済み |
+| ADR                        | 🟢 0001 / 0002 / 0003 採択済み |
 
 ---
 
