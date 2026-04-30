@@ -33,24 +33,15 @@ Slack のアーキテクチャを参考に、リアルタイムチャットの**
 
 ## アーキテクチャ概要
 
-```txt
-┌─────────────┐       ┌─────────────┐       ┌─────────────┐
-│  Frontend   │◀─────▶│   Backend   │◀─────▶│  ai-worker  │
-│ (Next.js)   │       │   (Rails)   │       │  (Python)   │
-└─────────────┘       └─────────────┘       └─────────────┘
-       ▲                     ▲                     ▲
-       │                     │                     │
-       │              ┌──────┴──────┐              │
-       └──────────────│    Redis    │──────────────┘
-                      │  (Pub/Sub)  │
-                      └─────────────┘
-                             ▲
-                      ┌──────┴──────┐
-                      │    MySQL    │
-                      └─────────────┘
-```
+詳細な構成図・配信シーケンス・既読同期シーケンスは **[docs/architecture.md](docs/architecture.md)** を参照。
 
-詳細図は `docs/architecture.md` 参照（追記予定）。
+主要要素：
+
+- **Frontend (Next.js 16 / React 19)** — JWT を localStorage に保持、`@rails/actioncable` で WebSocket 購読
+- **Backend (Rails 8 API mode)** — rodauth-rails で JWT 認証、ActionCable + Redis で fan-out
+- **ai-worker (FastAPI / Python 3.13)** — メッセージ要約のモック実装
+- **MySQL 8** — 永続化 (Slack 自身の構成と整合 / ADR 0003)
+- **Redis 7** — Pub/Sub アダプタ (ADR 0001)
 
 ---
 
@@ -65,24 +56,26 @@ Slack のアーキテクチャを参考に、リアルタイムチャットの**
 
 ### 起動
 
-インフラ（MySQL / Redis）：
+詳細は [docs/architecture.md](docs/architecture.md#起動順序) を参照。
 
 ```bash
-docker compose up -d mysql redis
+# 1. インフラ
+docker compose up -d mysql redis    # 3307, 6379
+
+# 2. backend
+cd backend && bundle exec rails db:create db:migrate
+bundle exec rails server -p 3010
+
+# 3. ai-worker
+cd ../ai-worker && source .venv/bin/activate
+uvicorn main:app --port 8000
+
+# 4. frontend
+cd ../frontend && npm run dev        # http://localhost:3005
+
+# 5. E2E (任意)
+cd ../playwright && AI_WORKER_RUNNING=1 npm test
 ```
-
-> MySQL のホスト側ポートは **3307**（他プロジェクトとの 3306 競合回避）。
-
-Backend（Rails）— ローカル実行：
-
-```bash
-cd backend
-bundle install
-bundle exec rails db:create db:migrate
-bundle exec rails server   # http://localhost:3000
-```
-
-`frontend` / `ai-worker` は実装完了次第、compose に追加していく。
 
 ---
 
@@ -91,14 +84,16 @@ bundle exec rails server   # http://localhost:3000
 | コンポーネント | ステータス |
 | --- | --- |
 | インフラ（MySQL, Redis）   | 🟢 起動・migrate 通過確認済み |
-| Backend (Rails)            | 🟢 認証 / REST / ActionCable 実装済み（9 tests passing） |
-| Frontend (Next.js)         | 🟡 Next 16 + TypeScript + Tailwind 初期化済み (port 3005) |
-| ai-worker (Python)         | ⚪ 未着手 |
-| ADR                        | 🟢 0001 / 0002 / 0003 / 0004 採択済み |
+| Backend (Rails)            | 🟢 認証 / REST / ActionCable / ai-worker 連携 (minitest 9 件) |
+| Frontend (Next.js)         | 🟢 Next 16 / Tailwind v4 / 認証 / チャット / 既読 / 要約 UI |
+| ai-worker (Python)         | 🟢 FastAPI でメッセージ要約 mock |
+| E2E (Playwright)           | 🟢 chromium で 6 ケース通過 (auth/fanout/read-sync/summary) |
+| ADR                        | 🟢 0001〜0005 採択済み |
 
 ---
 
 ## ドキュメント
 
-- [ADR 一覧](docs/adr/)
+- [アーキテクチャ図](docs/architecture.md) — システム全体・配信フロー・既読同期・ai-worker 境界の Mermaid 図
+- [ADR 一覧](docs/adr/) — 設計判断の記録 (5 件採択済み)
 - リポジトリ全体の方針：[../../CLAUDE.md](../../CLAUDE.md)
