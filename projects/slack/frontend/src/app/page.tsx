@@ -9,7 +9,7 @@ export default function Home() {
 
   useEffect(() => {
     const token = getToken();
-    router.replace(token ? "/me" : "/login");
+    router.replace(token ? "/channels" : "/login");
   }, [router]);
 
   return (

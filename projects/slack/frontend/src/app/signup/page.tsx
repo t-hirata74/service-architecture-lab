@@ -19,7 +19,7 @@ export default function SignupPage() {
     setSubmitting(true);
     try {
       await signup(email, password, displayName);
-      router.push("/me");
+      router.push("/channels");
     } catch (err) {
       setError(err instanceof Error ? err.message : "登録に失敗しました");
     } finally {
