@@ -27,14 +27,15 @@
 
 ---
 
-### 2. ディレクトリ構成
+### 2. ディレクトリ構成例
 
 ```txt
 service-architecture-lab/
   projects/
-    youtube/
     slack/
+    youtube/
     github/
+  docs/        # 共通ルール・コーディング規約・テスト戦略など
   infra/
     terraform/
 ```
@@ -44,7 +45,7 @@ service-architecture-lab/
 ```txt
 service-architecture-lab/
   projects/
-    youtube/
+    slack/
       frontend/
       backend/    (Rails)
       ai-worker/  (Python)
@@ -247,3 +248,21 @@ Terraformで以下を定義（実行はしない）
 目的：
 
 > 「本番化するならどう設計するか」を示す
+
+---
+
+## 関連ドキュメント
+
+詳細なルールは `docs/` 配下に分割して配置する。  
+**走りながら整備する方針**（最初のプロジェクト着手時から必要になったものを書き起こしていく）。
+
+想定する分割：
+
+* `docs/coding-rules/frontend.md` — React / Next.js のコーディング規約
+* `docs/coding-rules/rails.md` — Rails のコーディング規約
+* `docs/coding-rules/python.md` — Python (ai-worker) のコーディング規約
+* `docs/git-workflow.md` — ブランチ戦略・コミット規約・PR運用
+* `docs/testing-strategy.md` — テスト方針（単体 / 結合 / E2E）
+* `docs/adr-template.md` — ADR の雛形
+
+プロジェクト固有のアーキ図・ADR は `projects/<service>/docs/` 配下に配置する。
