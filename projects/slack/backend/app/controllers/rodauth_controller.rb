@@ -1,10 +1,7 @@
 class RodauthController < ApplicationController
-  # Used by Rodauth for rendering views, CSRF protection, running any
-  # registered action callbacks and rescue handlers, instrumentation etc.
-
-  # Controller callbacks and rescue handlers will run around Rodauth endpoints.
-  # before_action :verify_captcha, only: :login, if: -> { request.post? }
-  # rescue_from("SomeError") { |exception| ... }
+  # rodauth 自身のエンドポイント (login/create-account/logout 等) は認証前に呼ばれるため、
+  # ApplicationController の before_action :authenticate! を skip する必要がある。
+  skip_before_action :authenticate!
 
   # Layout can be changed for all Rodauth pages or only certain pages.
   # layout "authentication"
