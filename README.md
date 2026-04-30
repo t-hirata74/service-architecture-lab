@@ -17,6 +17,43 @@
 
 ---
 
+## 候補プロジェクト（検討中）
+
+「着手するなら何が学びになるか」を整理しているストック。実際に着手する時点で ADR を書きスコープを確定させる。
+
+### AI / LLM テーマ
+
+LLM・AI エージェント・マイクロサービス・モジュラーモノリスを横断的に学ぶための案。
+
+| 候補 | モチーフ | 主な技術課題 |
+| --- | --- | --- |
+| AI Coding Agent | Cursor / Devin / Cline | LLM tool use ループ / sandbox 隔離 / streaming / agent state machine ・中断/再開 |
+| AI Workflow 自動化 | Zapier + AI / n8n | trigger→action DAG 実行 / connector プラグイン / 冪等性・リトライ |
+| AI 検索 | Perplexity | RAG / マルチエージェント協調（検索→抽出→統合）/ 引用つき streaming |
+| AI カスタマーサポート | Intercom Fin / Zendesk AI | KB の RAG 検索 / human-in-the-loop / エスカレーション state machine |
+
+> LLM 本体はローカル完結方針に従い ai-worker でモック応答（tool call JSON 含む）を返す。
+
+### 既存サービスをモチーフにしたテーマ
+
+| 候補 | モチーフ | 主な技術課題 |
+| --- | --- | --- |
+| `discord` | Discord | 大規模ギルド fan-out / voice channel (WebRTC SFU) / 権限ビットマスク・ロール継承 |
+| `figma` | Figma | リアルタイム共同編集 (CRDT) / multiplayer cursor / undo/redo の協調 |
+| `stripe` | Stripe | idempotency key 設計 / webhook 配信保証（at-least-once + 順序）/ 決済 state machine / 通貨計算 |
+| `shopify` | Shopify | **モジュラーモノリス (Rails Engine 分割)** / マルチテナント / 在庫整合性（同時減算）/ App プラットフォーム |
+| `zoom` | Zoom | WebRTC SFU / 大規模 conference 参加者 / 録画パイプライン / 共有画面 |
+| `chatgpt` | ChatGPT | LLM streaming / context window 管理 / tool calling / 会話履歴の永続化と分岐 |
+
+### 候補同士の組み合わせ・棲み分け
+
+- **`shopify`** は本リポで唯一「モジュラーモノリス」を正面から扱う候補。Rails Engine 分割 / 内部境界 / 依存方向の規律が中心テーマ
+- **AI Coding Agent / chatgpt** はテーマが近接。Coding Agent を選べば chatgpt の課題（streaming / context / tool）はおおむね包含する
+- **`discord` / `zoom`** は voice / video の有無で違いを出す。Slack で扱った fan-out の規模感を超えたい場合は discord、WebRTC を中心に学びたい場合は zoom
+- **AI Workflow** は microservices の練習に最適（trigger / executor / connector の自然な分割）
+
+---
+
 ## slack プロジェクトのハイライト
 
 - **2 BrowserContext での双方向 WebSocket fan-out** を Playwright で E2E 検証（[ADR 0001](slack/docs/adr/0001-realtime-delivery-method.md)）
