@@ -22,6 +22,16 @@ class ChannelsController < ApplicationController
     render json: serialize(channel), status: :created
   end
 
+  # ai-worker によるチャンネル要約 (モック)
+  def summary
+    channel = current_user.channels.find(params[:id])
+    recent = channel.messages.active.includes(:user).order(id: :desc).limit(30).reverse
+    result = AiWorkerClient.new.summarize(channel_name: channel.name, messages: recent)
+    render json: result
+  rescue AiWorkerClient::Error => e
+    render json: { error: e.message }, status: :bad_gateway
+  end
+
   # public チャンネルへの参加 (idempotent)
   def join
     channel = Channel.find(params[:id])

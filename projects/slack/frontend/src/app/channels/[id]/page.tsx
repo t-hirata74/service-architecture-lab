@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { fetchMessages, postMessage, type Message } from "@/lib/messages";
 import { markChannelRead } from "@/lib/channels";
+import { fetchChannelSummary, type Summary } from "@/lib/summary";
 import { getCableConsumer } from "@/lib/cable";
 
 export default function ChannelDetailPage() {
@@ -13,13 +14,29 @@ export default function ChannelDetailPage() {
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [summarizing, setSummarizing] = useState(false);
   const listRef = useRef<HTMLUListElement | null>(null);
   const lastSentReadRef = useRef<number>(0);
 
   // ADR 0002: チャンネル切替で送信済みカーソル状態をリセット
   useEffect(() => {
     lastSentReadRef.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSummary(null);
   }, [channelId]);
+
+  async function handleSummarize() {
+    setSummarizing(true);
+    setError(null);
+    try {
+      setSummary(await fetchChannelSummary(channelId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "要約取得に失敗しました");
+    } finally {
+      setSummarizing(false);
+    }
+  }
 
   // ADR 0002: 表示中の最新メッセージで既読 cursor を進める (単調増加で重複送信を回避)
   useEffect(() => {
@@ -93,6 +110,42 @@ export default function ChannelDetailPage() {
 
   return (
     <>
+      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          チャンネル
+        </p>
+        <button
+          type="button"
+          onClick={handleSummarize}
+          disabled={summarizing}
+          className="rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          data-testid="summarize-button"
+        >
+          {summarizing ? "要約中…" : "📝 AI 要約"}
+        </button>
+      </header>
+
+      {summary && (
+        <section
+          data-testid="summary-panel"
+          className="border-b border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-900 dark:border-indigo-900/40 dark:bg-indigo-950/40 dark:text-indigo-100"
+        >
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider">
+              AI 要約 ({summary.message_count} 件 / {summary.participants.length} 名)
+            </p>
+            <button
+              type="button"
+              onClick={() => setSummary(null)}
+              className="text-xs text-indigo-700 hover:underline dark:text-indigo-300"
+            >
+              閉じる
+            </button>
+          </div>
+          <p>{summary.summary}</p>
+        </section>
+      )}
+
       <ul ref={listRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.map((msg) => (
           <li key={msg.id} className="space-y-1" data-testid="message">

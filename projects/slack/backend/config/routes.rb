@@ -10,6 +10,7 @@ Rails.application.routes.draw do
     member do
       post :read
       post :join
+      get :summary
     end
     resources :messages, only: [:index, :create]
   end
