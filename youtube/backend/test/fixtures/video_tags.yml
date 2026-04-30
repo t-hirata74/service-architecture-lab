@@ -1,0 +1,11 @@
+published_one_rails:
+  video: published_one
+  tag: rails
+
+published_one_ruby:
+  video: published_one
+  tag: ruby
+
+published_two_python:
+  video: published_two
+  tag: python

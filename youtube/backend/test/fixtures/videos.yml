@@ -1,0 +1,28 @@
+published_one:
+  title: 公開済み動画 1
+  description: published sample
+  status: 3
+  duration_seconds: 120
+  published_at: <%= 1.day.ago %>
+  user: alice
+
+published_two:
+  title: 公開済み動画 2
+  description: published sample
+  status: 3
+  duration_seconds: 90
+  published_at: <%= 2.hours.ago %>
+  user: bob
+
+ready_one:
+  title: 公開直前動画
+  description: 公開準備中
+  status: 2
+  duration_seconds: 60
+  user: alice
+
+transcoding_one:
+  title: エンコード中動画
+  description: 進行中
+  status: 1
+  user: bob

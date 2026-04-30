@@ -1,0 +1,8 @@
+rails:
+  name: rails
+
+ruby:
+  name: ruby
+
+python:
+  name: python

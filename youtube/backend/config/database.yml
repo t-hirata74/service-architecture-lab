@@ -1,0 +1,50 @@
+# MySQL backed by docker-compose service "mysql" (host port 3308 → container 3306).
+# Solid Queue / Solid Cache / Solid Cable は本番環境で個別 DB に分離するパターンを踏襲。
+default: &default
+  adapter: mysql2
+  encoding: utf8mb4
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  username: <%= ENV.fetch("DB_USERNAME") { "youtube" } %>
+  password: <%= ENV.fetch("DB_PASSWORD") { "youtube" } %>
+  host: <%= ENV.fetch("DB_HOST") { "127.0.0.1" } %>
+  port: <%= ENV.fetch("DB_PORT") { 3308 } %>
+
+development:
+  primary:
+    <<: *default
+    database: youtube_development
+  cache:
+    <<: *default
+    database: youtube_development_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+    database: youtube_development_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+    database: youtube_development_cable
+    migrations_paths: db/cable_migrate
+
+test:
+  <<: *default
+  database: youtube_test
+
+production:
+  primary: &primary_production
+    <<: *default
+    database: youtube_production
+    username: youtube
+    password: <%= ENV["YOUTUBE_DATABASE_PASSWORD"] %>
+  cache:
+    <<: *primary_production
+    database: youtube_production_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_production
+    database: youtube_production_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *primary_production
+    database: youtube_production_cable
+    migrations_paths: db/cable_migrate
