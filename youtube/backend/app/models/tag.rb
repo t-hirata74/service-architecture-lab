@@ -9,7 +9,8 @@ class Tag < ApplicationRecord
     return [] if names.empty?
     now = Time.current
     rows = names.map { |n| { name: n, created_at: now, updated_at: now } }
-    upsert_all(rows, unique_by: :index_tags_on_name)
+    # MySQL は ON DUPLICATE KEY UPDATE で衝突解決するため :unique_by 不要 (PG とは挙動が異なる)
+    upsert_all(rows)
     where(name: names)
   end
 end

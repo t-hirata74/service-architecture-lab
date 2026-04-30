@@ -44,6 +44,40 @@ RSpec.describe "Videos", type: :request do
     end
   end
 
+  describe "GET /videos/:id/recommendations" do
+    let(:base) { AiWorkerClient.base_url }
+
+    it "returns Video records that match worker-scored ids" do
+      target = create(:video, :published, title: "target")
+      cand1  = create(:video, :published, title: "cand1")
+      cand2  = create(:video, :published, title: "cand2")
+
+      stub_request(:post, "#{base}/recommend")
+        .to_return(status: 200,
+                   body: { target_id: target.id,
+                           items: [{ id: cand1.id, score: 0.8 },
+                                   { id: cand2.id, score: 0.4 }] }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      get "/videos/#{target.id}/recommendations"
+
+      expect(response).to have_http_status(:ok)
+      items = response.parsed_body["items"]
+      expect(items.map { _1["id"] }).to eq([cand1.id, cand2.id])
+      expect(items.first["score"]).to eq(0.8)
+    end
+
+    it "degrades gracefully when ai-worker is unreachable" do
+      target = create(:video, :published)
+      stub_request(:post, "#{base}/recommend").to_raise(Errno::ECONNREFUSED)
+
+      get "/videos/#{target.id}/recommendations"
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body).to eq("items" => [], "degraded" => true)
+    end
+  end
+
   describe "GET /videos/:id/status" do
     it "returns status regardless of viewability" do
       video = create(:video, :transcoding)

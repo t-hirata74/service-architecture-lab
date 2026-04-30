@@ -23,6 +23,28 @@ class VideosController < ApplicationController
     render json: { id: video.id, status: video.status }
   end
 
+  # GET /videos/:id/recommendations
+  # ADR 0003: 関連動画を ai-worker で計算する。Rails は対象 + 候補集合を渡し、
+  # ai-worker のスコアリング結果に対応する Video レコードを返す。
+  def recommendations
+    target = Video.viewable.find_by(id: params[:id])
+    return render json: { error: "not_found" }, status: :not_found unless target
+
+    candidates = Video.listable.where.not(id: target.id).limit(50).to_a
+    items = AiWorkerClient.recommend(target: target, candidates: candidates, limit: 5)
+    by_id = candidates.index_by(&:id)
+    payload = items.map do |item|
+      video = by_id[item["id"]]
+      next unless video
+      serialize(video, summary: true).merge(score: item["score"])
+    end.compact
+
+    render json: { items: payload }
+  rescue AiWorkerClient::Error => e
+    Rails.logger.warn("recommendations failed: #{e.class}: #{e.message}")
+    render json: { items: [], degraded: true }, status: :ok
+  end
+
   # POST /videos/:id/publish
   # ready -> published への遷移。Phase 3 では認証なしで誰でも公開できる。
   def publish
@@ -67,9 +89,18 @@ class VideosController < ApplicationController
       duration_seconds: video.duration_seconds,
       published_at: video.published_at&.iso8601,
       author: { id: video.user_id, name: video.user.name },
-      tags: video.tags.map(&:name)
+      tags: video.tags.map(&:name),
+      thumbnail_url: thumbnail_url_for(video)
     }
     return base if summary
     base.merge(description: video.description)
+  end
+
+  def thumbnail_url_for(video)
+    return nil unless video.thumbnail.attached?
+    Rails.application.routes.url_helpers.rails_blob_url(
+      video.thumbnail,
+      host: ENV.fetch("BACKEND_PUBLIC_URL", "http://localhost:3020")
+    )
   end
 end

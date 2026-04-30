@@ -8,6 +8,7 @@ Rails.application.routes.draw do
   resources :videos, only: %i[index show create] do
     member do
       get :status, to: "videos#status"
+      get :recommendations, to: "videos#recommendations"
       post :publish
     end
   end

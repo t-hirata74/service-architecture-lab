@@ -12,6 +12,10 @@ class TranscodeJob < ApplicationJob
 
     if video.original.attached?
       video.mark_ready!
+      # ADR 0003: 成功後に ai-worker 呼び出しを別ジョブにチェイン。
+      # ai 機能が落ちても本流 (uploaded → ready) は完了している。
+      ExtractTagsJob.perform_later(video.id)
+      GenerateThumbnailJob.perform_later(video.id)
     else
       video.mark_failed!("original attachment missing")
     end
