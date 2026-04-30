@@ -2,7 +2,7 @@
 
 ## ステータス
 
-Proposed（2026-04-30）
+Accepted（2026-05-01）
 
 ## コンテキスト
 
@@ -66,11 +66,14 @@ Slack で同じ判断（メッセージ要約）をしたとき ai-worker 側に
 - **スキーマ整合**: Rails と FastAPI でレコメンド I/F を二重に定義することになる（Pydantic + Ruby Hash）
 - **キャッシュ整合性**: 候補集合が変わったらキャッシュを破棄する責任が Rails 側に発生
 
-## このADRを守るテスト / 実装ポインタ（Phase 4 で確定）
+## このADRを守るテスト / 実装ポインタ
 
-- `youtube/backend/app/services/recommendation_service.rb` — ai-worker への HTTP 呼び出し境界
+- `youtube/backend/app/services/ai_worker_client.rb` — Net::HTTP / open=2s, read=10s / 失敗時 `AiWorkerClient::Error` を返し本流は止めない
 - `youtube/ai-worker/main.py:recommend` — Jaccard モックの実装
-- `youtube/backend/test/services/recommendation_service_test.rb` — タイムアウトとフォールバック
+- `youtube/backend/spec/services/ai_worker_client_spec.rb` — 200 / 5xx / 接続不能のスタブ検証
+- `youtube/backend/spec/jobs/extract_tags_job_spec.rb` — タグマージ + 失敗時 noop
+- `youtube/backend/spec/jobs/generate_thumbnail_job_spec.rb` — Active Storage 添付 + degrade
+- `youtube/backend/app/controllers/videos_controller.rb#recommendations` — `degraded: true` フォールバック
 
 ## 関連 ADR
 

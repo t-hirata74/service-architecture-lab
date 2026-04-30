@@ -88,14 +88,14 @@ npm run dev                              # http://localhost:3015
 | コンポーネント | ステータス |
 | --- | --- |
 | インフラ（MySQL）          | 🟢 起動・db:prepare 通過確認済み |
-| Backend (Rails 8)          | 🟢 Phase 3: 状態機械 + Solid Queue + Active Storage / minitest 25 件 |
-| Frontend (Next.js)         | 🟢 Phase 3: 一覧 / 詳細 / アップロード / 状態ポーリング UI |
-| Solid Queue worker         | 🟢 `bin/jobs` で TranscodeJob 駆動確認 |
-| ai-worker (Python)         | 🟡 Phase 1: recommend / tags / thumbnail スタブ実装 |
-| レコメンド境界             | ⚪ Phase 4 で実装予定 |
+| Backend (Rails 8)          | 🟢 Phase 4: 状態機械 + Solid Queue + Active Storage + ai-worker 統合 / RSpec 40 件 |
+| Frontend (Next.js)         | 🟢 Phase 4: 一覧 / 詳細 (サムネ + 関連動画) / アップロード / 状態ポーリング UI |
+| Solid Queue worker         | 🟢 `bin/jobs` が Transcode → ExtractTags → GenerateThumbnail のチェインを駆動 |
+| ai-worker (Python)         | 🟢 Phase 4: recommend / tags / thumbnail を Rails から呼び出し動作確認 |
+| レコメンド境界             | 🟢 ADR 0003 Accepted (Jaccard モック / 失敗時 `degraded: true`) |
 | E2E (Playwright)           | ⚪ Phase 5 で追加予定 |
 | インフラ設計図 (Terraform) | ⚪ Phase 5 で追加予定 |
-| ADR                        | 🟡 0001〜0004 Proposed / 0005 Accepted |
+| ADR                        | 🟡 0001-0002 / 0004 Proposed / 0003 / 0005 Accepted |
 
 ---
 
@@ -113,6 +113,6 @@ npm run dev                              # http://localhost:3015
 | --- | --- | --- |
 | 1 | 雛形 + 各サービス疎通 | ✅ 完了 |
 | 2 | 動画メタデータ CRUD + 一覧/詳細 UI | ✅ 完了 |
-| 3 | アップロード + 状態機械 + Solid Queue | ✅ いまここ |
-| 4 | ai-worker 統合（recommend / tags / thumbnail） | — |
+| 3 | アップロード + 状態機械 + Solid Queue | ✅ 完了 |
+| 4 | ai-worker 統合（recommend / tags / thumbnail） | ✅ いまここ |
 | 5 | コメント + 検索 + Playwright E2E + Terraform + CI | — |

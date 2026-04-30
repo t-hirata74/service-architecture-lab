@@ -12,7 +12,7 @@
 | プロジェクト | 元サービス | 主な技術課題 | ステータス | ドキュメント |
 | --- | --- | --- | --- | --- |
 | [`slack`](slack/) | Slack 風リアルタイムチャット | WebSocket fan-out / 既読 cursor 整合性 / Rails ↔ Python 境界 | 🟢 MVP 完成 (E2E 6 件通過) | [README](slack/README.md) ・ [Architecture](slack/docs/architecture.md) ・ [ADR (5)](slack/docs/adr/) |
-| [`youtube`](youtube/) | YouTube 風動画プラットフォーム | 非同期動画変換パイプライン / 状態機械 / レコメンド責務分離 / Solid Queue (Redis 不使用) | 🟡 Phase 3 (状態機械 + Solid Queue / minitest 25 件) | [README](youtube/README.md) ・ [Architecture](youtube/docs/architecture.md) ・ [ADR (4 Proposed / 1 Accepted)](youtube/docs/adr/) |
+| [`youtube`](youtube/) | YouTube 風動画プラットフォーム | 非同期動画変換パイプライン / 状態機械 / Rails ↔ Python 境界 (タグ抽出 / サムネ / レコメンド) / Solid Queue (Redis 不使用) | 🟡 Phase 4 (ai-worker 統合 / RSpec 40 件) | [README](youtube/README.md) ・ [Architecture](youtube/docs/architecture.md) ・ [ADR (3 Proposed / 2 Accepted)](youtube/docs/adr/) |
 | `github` | GitHub 風 Issue Tracker | 権限グラフ / Issue・PR モデル / CI ステータス集約 | ⚪ 未着手 | — |
 
 ---
