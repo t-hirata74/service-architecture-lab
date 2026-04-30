@@ -1,0 +1,59 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: youtube_development
+      MYSQL_USER: youtube
+      MYSQL_PASSWORD: youtube
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "youtube", "-pyoutube"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # backend:
+  #   build: ./backend
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3020:3000"
+  #   environment:
+  #     DATABASE_URL: mysql2://youtube:youtube@mysql:3306/youtube_development
+  #     AI_WORKER_URL: http://ai-worker:8000
+  #   volumes:
+  #     - ./backend:/app
+  #     - video_storage:/app/storage
+
+  # frontend:
+  #   build: ./frontend
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3015:3000"
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:3020
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+
+  # ai-worker:
+  #   build: ./ai-worker
+  #   ports:
+  #     - "8010:8000"
+  #   volumes:
+  #     - ./ai-worker:/app
+
+volumes:
+  mysql_data:
+  video_storage:
