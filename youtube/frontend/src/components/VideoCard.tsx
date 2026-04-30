@@ -8,9 +8,18 @@ export default function VideoCard({ video }: { video: VideoSummary }) {
       className="group flex flex-col gap-2 rounded-lg p-2 transition hover:bg-white/5"
     >
       <div className="relative aspect-video overflow-hidden rounded-md bg-zinc-800">
-        <div className="absolute inset-0 flex items-center justify-center text-xs uppercase tracking-widest opacity-60 group-hover:opacity-90">
-          thumbnail placeholder
-        </div>
+        {video.thumbnail_url ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={video.thumbnail_url}
+            alt={video.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-xs uppercase tracking-widest opacity-60 group-hover:opacity-90">
+            thumbnail placeholder
+          </div>
+        )}
         <span className="absolute bottom-2 right-2 rounded bg-black/80 px-1.5 py-0.5 text-xs">
           {formatDuration(video.duration_seconds)}
         </span>

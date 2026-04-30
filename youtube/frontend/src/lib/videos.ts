@@ -8,10 +8,18 @@ export type VideoSummary = {
   published_at: string | null;
   author: { id: number; name: string };
   tags: string[];
+  thumbnail_url: string | null;
 };
 
 export type VideoDetail = VideoSummary & {
   description: string | null;
+};
+
+export type RecommendedVideo = VideoSummary & { score: number };
+
+export type RecommendationsResponse = {
+  items: RecommendedVideo[];
+  degraded?: boolean;
 };
 
 export type VideoListResponse = {
@@ -30,6 +38,16 @@ export async function fetchVideo(id: string | number): Promise<VideoDetail | nul
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`videos show ${res.status}`);
   return (await res.json()) as VideoDetail;
+}
+
+export async function fetchRecommendations(
+  id: string | number,
+): Promise<RecommendationsResponse> {
+  const res = await fetch(`${apiBaseUrl()}/videos/${id}/recommendations`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return { items: [], degraded: true };
+  return (await res.json()) as RecommendationsResponse;
 }
 
 export type VideoStatus = "uploaded" | "transcoding" | "ready" | "published" | "failed";
