@@ -13,16 +13,19 @@ class ChannelsController < ApplicationController
     render json: serialize(channel), status: :created
   end
 
-  # ADR 0002: 単調増加ガード付きで last_read_message_id を進める
+  # ADR 0002: 単調増加ガード付きで last_read_message_id を進め、他デバイスへ broadcast
   def read
     channel = current_user.channels.find(params[:id])
     membership = current_user.memberships.find_by!(channel: channel)
     message_id = Integer(params.require(:message_id))
     advanced = membership.advance_read_cursor!(message_id)
-    render json: {
-      last_read_message_id: membership.reload.last_read_message_id,
-      advanced: advanced
-    }
+    last_read = membership.reload.last_read_message_id
+
+    if advanced
+      UserChannel.broadcast_to(current_user, type: "read.advanced", channel_id: channel.id, last_read_message_id: last_read)
+    end
+
+    render json: { last_read_message_id: last_read, advanced: advanced }
   end
 
   private

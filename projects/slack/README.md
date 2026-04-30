@@ -91,7 +91,7 @@ bundle exec rails server   # http://localhost:3000
 | コンポーネント | ステータス |
 | --- | --- |
 | インフラ（MySQL, Redis）   | 🟢 起動・migrate 通過確認済み |
-| Backend (Rails)            | 🟡 Rails 8 + rodauth-rails 初期セットアップ済み |
+| Backend (Rails)            | 🟢 認証 / REST / ActionCable 実装済み（9 tests passing） |
 | Frontend (Next.js)         | ⚪ 未着手 |
 | ai-worker (Python)         | ⚪ 未着手 |
 | ADR                        | 🟢 0001 / 0002 / 0003 / 0004 採択済み |

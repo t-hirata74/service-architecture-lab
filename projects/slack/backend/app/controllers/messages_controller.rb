@@ -19,6 +19,7 @@ class MessagesController < ApplicationController
 
   def create
     message = @channel.messages.create!(message_params.merge(user: current_user))
+    MessagesChannel.broadcast_to(@channel, type: "message.created", message: serialize(message))
     render json: serialize(message), status: :created
   end
 
