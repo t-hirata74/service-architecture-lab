@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  slack-backend:
+    name: slack / backend (Rails)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: slack_test
+          MYSQL_USER: slack
+          MYSQL_PASSWORD: slack
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=5
+
+    defaults:
+      run:
+        working-directory: slack/backend
+
+    env:
+      RAILS_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USERNAME: slack
+      DB_PASSWORD: slack
+      REDIS_URL: redis://localhost:6379/1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.1"
+          bundler-cache: true
+          working-directory: slack/backend
+
+      - name: Grant slack_* DB privileges
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot \
+            -e "GRANT ALL PRIVILEGES ON \`slack\_%\`.* TO 'slack'@'%'; FLUSH PRIVILEGES;"
+
+      - name: Database create + migrate
+        run: bundle exec rails db:create db:migrate
+
+      - name: Rails tests (minitest)
+        run: bundle exec rails test
+
+  slack-frontend:
+    name: slack / frontend (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: slack/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: slack/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+  slack-ai-worker:
+    name: slack / ai-worker (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: slack/ai-worker
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: slack/ai-worker/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Import smoke test
+        run: python -c "import main; print('main import OK')"
+
+      - name: Boot smoke test
+        run: |
+          uvicorn main:app --port 8000 &
+          PID=$!
+          sleep 3
+          curl -fsS http://localhost:8000/health
+          kill $PID
