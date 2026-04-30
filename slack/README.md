@@ -88,12 +88,14 @@ cd ../playwright && AI_WORKER_RUNNING=1 npm test
 | Frontend (Next.js)         | 🟢 Next 16 / Tailwind v4 / 認証 / チャット / 既読 / 要約 UI |
 | ai-worker (Python)         | 🟢 FastAPI でメッセージ要約 mock |
 | E2E (Playwright)           | 🟢 chromium で 6 ケース通過 (auth/fanout/read-sync/summary) |
-| ADR                        | 🟢 0001〜0005 採択済み |
+| インフラ設計図 (Terraform) | 🟢 ECS / Aurora / Redis / CloudFront 等を terraform validate 通過 |
+| ADR                        | 🟢 0001〜0006 採択済み |
 
 ---
 
 ## ドキュメント
 
 - [アーキテクチャ図](docs/architecture.md) — システム全体・配信フロー・既読同期・ai-worker 境界の Mermaid 図
-- [ADR 一覧](docs/adr/) — 設計判断の記録 (5 件採択済み)
+- [本番化想定 Terraform](infra/terraform/) — AWS (ECS / Aurora / Redis / CloudFront 等) 設計図と Mermaid（実 apply はしない）
+- [ADR 一覧](docs/adr/) — 設計判断の記録 (6 件採択済み)
 - リポジトリ全体の方針：[../../CLAUDE.md](../../CLAUDE.md)

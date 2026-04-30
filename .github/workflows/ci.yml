@@ -97,6 +97,30 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+  slack-terraform:
+    name: slack / infra (terraform validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: slack/infra/terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init (no backend)
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        run: terraform validate
+
   slack-ai-worker:
     name: slack / ai-worker (Python)
     runs-on: ubuntu-latest
