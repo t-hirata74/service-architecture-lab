@@ -9,6 +9,7 @@ Rails.application.routes.draw do
   resources :channels, only: [:index, :create] do
     member do
       post :read
+      post :join
     end
     resources :messages, only: [:index, :create]
   end

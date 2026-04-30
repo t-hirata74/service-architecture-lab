@@ -13,6 +13,20 @@ class ChannelsController < ApplicationController
     render json: serialize(channel), status: :created
   end
 
+  # public チャンネルへの参加 (idempotent)
+  def join
+    channel = Channel.find(params[:id])
+    unless channel.kind == "public"
+      return render json: { error: "public 以外のチャンネルへは参加できません" }, status: :forbidden
+    end
+
+    membership = Membership.find_or_create_by!(user: current_user, channel: channel) do |m|
+      m.role = "member"
+    end
+
+    render json: { id: membership.id, channel: serialize(channel) }, status: :ok
+  end
+
   # ADR 0002: 単調増加ガード付きで last_read_message_id を進め、他デバイスへ broadcast
   def read
     channel = current_user.channels.find(params[:id])
