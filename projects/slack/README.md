@@ -82,7 +82,7 @@ docker compose up
 | Backend (Rails)            | ⚪ 未着手 |
 | Frontend (Next.js)         | ⚪ 未着手 |
 | ai-worker (Python)         | ⚪ 未着手 |
-| ADR                        | 🟡 0001 起案中 |
+| ADR                        | 🟢 0001 / 0002 採択済み |
 
 ---
 
