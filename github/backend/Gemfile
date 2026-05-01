@@ -1,0 +1,38 @@
+source "https://rubygems.org"
+
+gem "rails", "~> 8.0.5"
+gem "mysql2", "~> 0.5"
+gem "puma", ">= 5.0"
+
+gem "tzinfo-data", platforms: %i[ windows jruby ]
+
+# Database-backed adapters (Solid Queue / Cache / Cable)
+gem "solid_cache"
+gem "solid_queue"
+
+# CORS (frontend Next.js とクロスオリジン)
+gem "rack-cors"
+
+# GraphQL stack (ADR 0001)
+gem "graphql", "~> 2.4"
+gem "graphql-batch"
+
+# 認可 (ADR 0002 — PermissionResolver + Pundit policy)
+gem "pundit"
+
+gem "kamal", require: false
+gem "thruster", require: false
+
+group :development, :test do
+  gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
+  gem "brakeman", require: false
+  gem "rubocop-rails-omakase", require: false
+
+  # Rails backend テストは RSpec + FactoryBot (docs/coding-rules/rails.md)
+  gem "rspec-rails", "~> 7.1"
+  gem "factory_bot_rails"
+end
+
+group :test do
+  gem "webmock", require: false
+end

@@ -158,8 +158,8 @@ cd ../frontend && npm run dev      # http://localhost:3025
 
 | Phase | 範囲 | 状態 |
 | --- | --- | --- |
-| 1 | scaffolding + ADR + architecture.md + docker-compose | 🟡 進行中 |
-| 2 | Org / Team / User / Repository モデル + 権限 Resolver + GraphQL `viewer` / `repository` | ⚪ 未着手 |
+| 1 | scaffolding + ADR + architecture.md + docker-compose | 🟢 完了 |
+| 2 | Org / Team / User / Repository モデル + 権限 Resolver + GraphQL `viewer` / `organization` / `repository` | 🟢 完了 (RSpec 18 件 / `viewerPermission` 出力確認) |
 | 3 | Issue / Comment / Label + GraphQL Mutation (`createIssue` / `assignIssue`) | ⚪ 未着手 |
 | 4 | PullRequest / Review / RequestedReviewer + Mutation (`requestReview` / `submitReview` / `mergePullRequest`) | ⚪ 未着手 |
 | 5 | CI チェック集約 + ai-worker 統合（`/review`, `/check/run`）+ Playwright E2E + Terraform + CI | ⚪ 未着手 |

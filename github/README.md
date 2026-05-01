@@ -86,8 +86,8 @@ npm run dev                              # http://localhost:3025
 | アーキテクチャ図           | 🟢 docs/architecture.md |
 | ディレクトリ scaffolding   | 🟢 backend / frontend / ai-worker / infra placeholder |
 | docker-compose             | 🟢 MySQL のみ (3309) |
-| Backend (Rails 8 + GraphQL) | ⚪ Phase 2 未着手 |
-| Frontend (Next.js + urql)   | ⚪ Phase 2 未着手 |
+| Backend (Rails 8 + GraphQL) | 🟢 Phase 2 完了: User/Org/Team/Repository + PermissionResolver + GraphQL viewer/organization/repository / RSpec 18 件 |
+| Frontend (Next.js + urql)   | ⚪ Phase 2 では未着手 (backend-first) |
 | ai-worker (Python)          | ⚪ Phase 5 未着手 |
 | Solid Queue                 | ⚪ Phase 5 未着手 |
 | E2E (Playwright)            | ⚪ Phase 5 未着手 |
@@ -113,8 +113,8 @@ npm run dev                              # http://localhost:3025
 
 | Phase | 範囲 | 成果物 |
 | --- | --- | --- |
-| 1 | 雛形 + ADR + architecture.md + docker-compose | 🟡 進行中 |
-| 2 | Org / Team / User / Repository + PermissionResolver + GraphQL `viewer` / `repository` | ⚪ |
+| 1 | 雛形 + ADR + architecture.md + docker-compose | 🟢 完了 |
+| 2 | Org / Team / User / Repository + PermissionResolver + GraphQL `viewer` / `organization` / `repository` | 🟢 完了 (RSpec 18 件) |
 | 3 | Issue / Comment / Label + Mutation `createIssue` / `assignIssue` | ⚪ |
 | 4 | PullRequest / Review + Mutation `requestReview` / `submitReview` / `mergePullRequest` | ⚪ |
 | 5 | CI 集約 + ai-worker 統合 + Playwright E2E + Terraform + CI | ⚪ |
