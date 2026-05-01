@@ -1,20 +1,36 @@
 # Slack風 Realtime Chat
 
-Slack のアーキテクチャを参考に、リアルタイムチャットの**技術課題**をローカル環境で再現する学習プロジェクト。
+Slack のアーキテクチャを参考に、**「メッセージの fan-out」「既読 cursor の整合性」「Rails と Python (ai-worker) の責務境界」** という 3 つの技術課題をローカル環境で再現したプロジェクト。
+
+機能網羅ではなく、Slack が解いている技術課題を **小さく動く形で再現する** ことを目的にしている。
+学習対象から外れる絵文字ピッカー / ハドル / SSO 等は意図的に除外している（[CLAUDE.md のスコープ方針](../CLAUDE.md#スコープの考え方)参照）。
 
 ---
 
-## このプロジェクトが扱う技術課題
+## 見どころハイライト
 
-機能網羅ではなく、以下の技術課題の再現を主目的とする。
+- **[2 BrowserContext の双方向 fan-out を Playwright で E2E 検証](playwright/tests/realtime-fanout.spec.ts)** — ブラウザ A から送信したメッセージがブラウザ B に WebSocket 経由で到達することを実ブラウザ 2 つで保証。`broadcast` の id で dedup する規約も spec で固定 (ADR 0001)
+- **既読 cursor の単調増加ガード + 多デバイス同期** — `last_read_message_id` は `MAX(current, incoming)` でしか進めない。古い id で再リクエストしても advance しないことを minitest で検証 (ADR 0002)
+- **Rails ↔ ai-worker 境界** — Rails は認可と最新 30 件の取得まで、要約計算は FastAPI の ai-worker に切る。ai-worker 失敗時は **`502 Bad Gateway` で graceful degradation** ([../docs/operating-patterns.md](../docs/operating-patterns.md))
+- **rodauth-rails + JWT のクロスオリジン認証** — REST も WebSocket もヘッダ / クエリパラメータの JWT で同じ `current_user` に解決 (ADR 0004)
 
-- **メッセージの fan-out**：1メッセージを多数の購読クライアントへ低遅延で配信する
-- **既読カウンタの整合性**：複数デバイス間で既読状態をどう管理するか
-- **リアルタイム購読の責務分離**：Frontend / Rails / Redis の役割をどう切るか
-- **Rails ↔ ai-worker の境界設計**：要約・分析処理をどこで呼び、結果をどう返すか
-- **検索の責務分離**：全文検索を Rails でやるか別レイヤーに切るか
+---
 
-採用した設計判断は `docs/adr/` を参照。
+## アーキテクチャ概要
+
+```mermaid
+flowchart LR
+  user([User Browser])
+  user -->|HTTPS / REST| front[Next.js 16<br/>:3005]
+  user -->|WebSocket<br/>?token=JWT| cable[ActionCable]
+  front -->|REST + JWT| api[Rails 8 API<br/>:3010]
+  api --- cable
+  api -->|POST /summarize| ai[FastAPI ai-worker<br/>:8000]
+  api --- mysql[(MySQL 8<br/>:3307)]
+  cable --- redis[(Redis 7<br/>Pub/Sub)]
+```
+
+詳細な構成図 / 配信シーケンス / 既読同期シーケンスは **[docs/architecture.md](docs/architecture.md)** を参照。
 
 ---
 
@@ -22,26 +38,67 @@ Slack のアーキテクチャを参考に、リアルタイムチャットの**
 
 | 含める | 除外 |
 | --- | --- |
-| WebSocket によるリアルタイム配信 | ハドル（音声通話） |
-| チャンネル / DM / メッセージ | 絵文字ピッカーの作り込み |
-| 既読管理 | スレッド機能の作り込み（最小のみ） |
+| WebSocket によるリアルタイム配信 | ハドル（音声通話） / WebRTC |
+| チャンネル / DM / メッセージ | 絵文字ピッカー / リッチテキスト |
+| 既読管理（多デバイス同期） | スレッド機能の作り込み |
 | 検索（最小） | エンタープライズ管理機能 |
-| 通知（アプリ内のみ、1経路） | メール / プッシュ通知配信 |
-| メッセージ要約（モック AI） | Slackbot / アプリ統合 |
+| 通知（アプリ内のみ、1 経路） | メール / プッシュ / Webhook |
+| メッセージ要約（モック AI） | Slackbot / アプリ統合 / SSO |
 
 ---
 
-## アーキテクチャ概要
+## 主要な設計判断 (ADR ハイライト)
 
-詳細な構成図・配信シーケンス・既読同期シーケンスは **[docs/architecture.md](docs/architecture.md)** を参照。
+| # | 判断 | 何を選んで何を捨てたか |
+| --- | --- | --- |
+| [0001](docs/adr/0001-realtime-delivery-method.md) | **WebSocket + Redis Pub/Sub (ActionCable)** | SSE / long-polling を退け fan-out のスケール特性を学ぶ。Redis 依存を引き受ける |
+| [0002](docs/adr/0002-message-persistence-and-read-tracking.md) | **`memberships.last_read_message_id` の単調増加** | 既読カウンタではなく cursor で多デバイス同期。古い id で advance しないガードを model layer に置く |
+| [0003](docs/adr/0003-database-choice.md) | **MySQL 8 (Slack 自身と整合)** | Postgres でなく MySQL。Vitess へのスケール経路を視野に入れた選択 |
+| [0004](docs/adr/0004-authentication-strategy.md) | **rodauth-rails + JWT** | Devise + session でなく rodauth + token。WebSocket でも同じ JWT を使う |
+| [0005](docs/adr/0005-browser-e2e-with-playwright.md) | **Playwright で 2 BrowserContext 並行 E2E** | minitest だけでは fan-out が保証できない。実ブラウザを 2 つ立てて検証する |
+| [0006](docs/adr/0006-production-aws-architecture.md) | **本番想定は ECS + Aurora + ElastiCache** | ローカルは単純 docker-compose、本番設計は Terraform で別管理 |
 
-主要要素：
+---
 
-- **Frontend (Next.js 16 / React 19)** — JWT を localStorage に保持、`@rails/actioncable` で WebSocket 購読
-- **Backend (Rails 8 API mode)** — rodauth-rails で JWT 認証、ActionCable + Redis で fan-out
-- **ai-worker (FastAPI / Python 3.13)** — メッセージ要約のモック実装
-- **MySQL 8** — 永続化 (Slack 自身の構成と整合 / ADR 0003)
-- **Redis 7** — Pub/Sub アダプタ (ADR 0001)
+## 動作確認 (Try it)
+
+`docker compose up -d mysql redis` で起動した後、以下で API / WebSocket / 要約まで疎通できる。
+
+```bash
+# 1. ユーザを作って JWT を取得
+TOKEN=$(curl -sS -X POST http://localhost:3010/create-account \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"password123","login":"alice"}' \
+  | jq -r '.access_token')
+
+# 2. 自分の情報を確認
+curl -sS http://localhost:3010/me -H "Authorization: Bearer $TOKEN"
+
+# 3. メッセージを投稿 (broadcast 経由で同チャンネル購読中の他 client にも届く)
+curl -sS -X POST http://localhost:3010/channels/1/messages \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"body":"hello world"}'
+
+# 4. 既読 cursor を進める (id=42 まで読んだ)
+curl -sS -X POST http://localhost:3010/channels/1/read \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"message_id":42}'
+
+# 5. ai-worker でチャンネル要約
+curl -sS http://localhost:3010/channels/1/summary -H "Authorization: Bearer $TOKEN"
+```
+
+ブラウザで http://localhost:3005 を開けば 2 タブに分けて自分宛 fan-out も観察できる。
+
+---
+
+## テスト
+
+| レイヤ | フレームワーク | 件数 / カバー範囲 |
+| --- | --- | --- |
+| 単体・統合 | Rails minitest | 9 件 (model / channel / connection / broadcast) |
+| E2E | Playwright (chromium) | 6 件 (auth / fan-out / read-sync / summary) |
+| ai-worker | — | import smoke / `/health` ping (CI で boot 検証) |
 
 ---
 
@@ -49,33 +106,38 @@ Slack のアーキテクチャを参考に、リアルタイムチャットの**
 
 ### 前提
 
-- Docker / Docker Compose
-- Node.js 20+ (frontend 開発時)
-- Ruby 3.3+ (backend 開発時)
-- Python 3.12+ (ai-worker 開発時)
+- Docker / Docker Compose / Node.js 20+ / Ruby 3.3+ / Python 3.12+
 
 ### 起動
 
-詳細は [docs/architecture.md](docs/architecture.md#起動順序) を参照。
-
 ```bash
 # 1. インフラ
-docker compose up -d mysql redis    # 3307, 6379
+docker compose up -d mysql redis            # 3307, 6379
 
 # 2. backend
 cd backend && bundle exec rails db:create db:migrate
-bundle exec rails server -p 3010
+bundle exec rails server -p 3010            # http://localhost:3010
 
 # 3. ai-worker
 cd ../ai-worker && source .venv/bin/activate
 uvicorn main:app --port 8000
 
 # 4. frontend
-cd ../frontend && npm run dev        # http://localhost:3005
+cd ../frontend && npm run dev               # http://localhost:3005
 
-# 5. E2E (任意)
+# 5. E2E (任意 / ai-worker 必須のテストを含む)
 cd ../playwright && AI_WORKER_RUNNING=1 npm test
 ```
+
+### ポート割り当て
+
+| サービス | ポート | 備考 |
+| --- | --- | --- |
+| frontend (Next.js)  | 3005 | App Router / Tailwind v4 |
+| backend (Rails)     | 3010 | API mode / rodauth-rails / ActionCable |
+| ai-worker (FastAPI) | 8000 | mock summarize |
+| MySQL               | 3307 | 他プロジェクトとの衝突回避で 3307 → 3306 |
+| Redis               | 6379 | ActionCable Pub/Sub |
 
 ---
 
@@ -83,19 +145,21 @@ cd ../playwright && AI_WORKER_RUNNING=1 npm test
 
 | コンポーネント | ステータス |
 | --- | --- |
-| インフラ（MySQL, Redis）   | 🟢 起動・migrate 通過確認済み |
-| Backend (Rails)            | 🟢 認証 / REST / ActionCable / ai-worker 連携 (minitest 9 件) |
-| Frontend (Next.js)         | 🟢 Next 16 / Tailwind v4 / 認証 / チャット / 既読 / 要約 UI |
-| ai-worker (Python)         | 🟢 FastAPI でメッセージ要約 mock |
-| E2E (Playwright)           | 🟢 chromium で 6 ケース通過 (auth/fanout/read-sync/summary) |
-| インフラ設計図 (Terraform) | 🟢 ECS / Aurora / Redis / CloudFront 等を terraform validate 通過 |
-| ADR                        | 🟢 0001〜0006 採択済み |
+| インフラ (MySQL, Redis)    | 🟢 docker-compose で起動 |
+| Backend (Rails 8)          | 🟢 認証 / REST / ActionCable / ai-worker 連携 / minitest 9 件 |
+| Frontend (Next.js 16)      | 🟢 認証 / チャット / 既読 / 要約 UI / Tailwind v4 |
+| ai-worker (FastAPI)        | 🟢 メッセージ要約 mock |
+| E2E (Playwright)           | 🟢 chromium 6 件 (auth / fan-out / read-sync / summary) |
+| インフラ設計図 (Terraform) | 🟢 `terraform validate` 通過 |
+| CI (GitHub Actions)        | 🟢 slack-{backend, frontend, ai-worker, terraform} ジョブ |
+| ADR                        | 🟢 0001-0006 全 Accepted |
 
 ---
 
 ## ドキュメント
 
-- [アーキテクチャ図](docs/architecture.md) — システム全体・配信フロー・既読同期・ai-worker 境界の Mermaid 図
-- [本番化想定 Terraform](infra/terraform/) — AWS (ECS / Aurora / Redis / CloudFront 等) 設計図と Mermaid（実 apply はしない）
-- [ADR 一覧](docs/adr/) — 設計判断の記録 (6 件採択済み)
-- リポジトリ全体の方針：[../../CLAUDE.md](../../CLAUDE.md)
+- [アーキテクチャ図](docs/architecture.md) — Mermaid で全体構成 / 配信フロー / 既読同期 / ai-worker 境界
+- [本番想定 Terraform](infra/terraform/) — AWS (ECS / Aurora / ElastiCache / CloudFront) 設計図（apply はしない）
+- [ADR 一覧](docs/adr/) — 設計判断 6 件
+- リポジトリ全体方針: [../CLAUDE.md](../CLAUDE.md)
+- 共通ルール: [../docs/](../docs/) (api-style / coding-rules / operating-patterns / testing-strategy)
