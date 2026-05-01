@@ -42,7 +42,9 @@ class AiWorkerClient
     raise Error, "ai-worker #{path} returned #{response.code}: #{response.body}" unless response.is_a?(Net::HTTPSuccess)
 
     JSON.parse(response.body)
-  rescue Errno::ECONNREFUSED, Net::OpenTimeout, Net::ReadTimeout => e
+  rescue Errno::ECONNREFUSED, Net::OpenTimeout, Net::ReadTimeout, SocketError => e
     raise Error, "ai-worker unreachable: #{e.message}"
+  rescue JSON::ParserError => e
+    raise Error, "ai-worker returned non-JSON body: #{e.message}"
   end
 end

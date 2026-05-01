@@ -12,6 +12,11 @@ class Chunk < ApplicationRecord
     array = value.to_a
     raise ArgumentError, "embedding must be #{EMBEDDING_DIMS}-d (got #{array.size})" if array.size != EMBEDDING_DIMS
 
+    # NaN / Infinity は pack("e*") で黙って通って毒データになるので明示的に reject
+    unless array.all? { |v| v.is_a?(Numeric) && v.respond_to?(:finite?) && v.finite? }
+      raise ArgumentError, "embedding must contain only finite Numeric values"
+    end
+
     super(array.pack(EMBEDDING_PACK))
   end
 

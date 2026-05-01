@@ -5,13 +5,18 @@ memory: 256-d float32 = 1024 byte / chunk。1 万 chunk で 10 MB。
 本番想定でこれを越えるなら Faiss / OpenSearch (Terraform 設計図) に切り替える.
 
 Rails ↔ ai-worker は SQLAlchemy で同 MySQL を共有 (ADR 0001: ai-worker は読み専).
+
+並行性 (レビュー指摘 §3.2 への対応):
+- snapshot pattern: (chunks, matrix, body_index, source_index) を 1 つの immutable
+  Snapshot にまとめ、reload 時は新 Snapshot を構築して **属性を 1 行で差し替え**.
+- retrieve 中の読み手は self._snapshot を 1 度だけ参照すれば、その間 Snapshot は
+  GC されない (Python の reference 取得は atomic)。整合性が崩れない.
+- chunk_body / chunk_to_source は dict ベースで O(1) 化 (レビュー指摘 §3.3).
 """
 from __future__ import annotations
 
 import logging
 import os
-import struct
-import threading
 from dataclasses import dataclass
 
 import numpy as np
@@ -32,15 +37,27 @@ class StoredChunk:
     body: str
 
 
+@dataclass(frozen=True)
+class Snapshot:
+    """ロード結果の immutable スナップショット. 入れ替えは属性代入 1 回で原子的."""
+    chunks: tuple[StoredChunk, ...]
+    matrix: np.ndarray  # shape (N, 256) or (0, 256)
+    body_by_id: dict[int, str]
+    source_by_id: dict[int, int]
+
+    @classmethod
+    def empty(cls) -> "Snapshot":
+        return cls(chunks=(), matrix=np.zeros((0, EMBEDDING_DIMS), dtype=EMBEDDING_DTYPE),
+                   body_by_id={}, source_by_id={})
+
+
 class EmbeddingStore:
     """cold start で全件ロード。retrieve 中はロックなしで read-only."""
 
     def __init__(self, engine: Engine | None = None, embedding_version: str | None = None):
         self._engine = engine or _build_default_engine()
         self._embedding_version = embedding_version  # None = ENV / encoder.version() に追従
-        self._lock = threading.Lock()
-        self._chunks: list[StoredChunk] = []
-        self._matrix: np.ndarray = np.zeros((0, EMBEDDING_DIMS), dtype=EMBEDDING_DTYPE)
+        self._snapshot: Snapshot = Snapshot.empty()
         self._loaded = False
 
     @property
@@ -49,7 +66,7 @@ class EmbeddingStore:
 
     @property
     def size(self) -> int:
-        return len(self._chunks)
+        return len(self._snapshot.chunks)
 
     def load(self) -> int:
         """対象 embedding_version の chunk を numpy にロード. ロード件数を返す."""
@@ -72,46 +89,55 @@ class EmbeddingStore:
 
         chunks: list[StoredChunk] = []
         vectors: list[np.ndarray] = []
+        body_by_id: dict[int, str] = {}
+        source_by_id: dict[int, int] = {}
         for row in rows:
             blob = row.embedding
             if blob is None or len(blob) != EMBEDDING_BYTES:
                 logger.warning("skipping chunk %s: invalid embedding length", row.id)
                 continue
             vec = np.frombuffer(blob, dtype="<f4")  # little-endian float32, ADR 0002
-            chunks.append(StoredChunk(chunk_id=row.id, source_id=row.source_id, body=row.body))
+            chunk = StoredChunk(chunk_id=row.id, source_id=row.source_id, body=row.body)
+            chunks.append(chunk)
             vectors.append(vec)
+            body_by_id[row.id] = row.body
+            source_by_id[row.id] = row.source_id
 
-        with self._lock:
-            self._chunks = chunks
-            self._matrix = (
-                np.stack(vectors, axis=0).astype(EMBEDDING_DTYPE)
-                if vectors
-                else np.zeros((0, EMBEDDING_DIMS), dtype=EMBEDDING_DTYPE)
-            )
-            self._loaded = True
+        matrix = (
+            np.stack(vectors, axis=0).astype(EMBEDDING_DTYPE)
+            if vectors
+            else np.zeros((0, EMBEDDING_DIMS), dtype=EMBEDDING_DTYPE)
+        )
+        new_snapshot = Snapshot(
+            chunks=tuple(chunks),
+            matrix=matrix,
+            body_by_id=body_by_id,
+            source_by_id=source_by_id,
+        )
+
+        # 属性差し替えは Python の単一代入で atomic (GIL 下).
+        # 旧 snapshot を参照中の retrieve は最後まで一貫した値を見る.
+        self._snapshot = new_snapshot
+        self._loaded = True
 
         logger.info("EmbeddingStore loaded %d chunks (version=%s)", len(chunks), version)
         return len(chunks)
 
     def cosine_against(self, query_vec: np.ndarray) -> dict[int, float]:
-        """クエリベクタとの cosine 類似度. encoder の出力は単位ベクタなので内積 = cosine.
-
-        chunk が空の場合は空 dict を返す.
-        """
-        if self._matrix.shape[0] == 0:
+        """クエリベクタとの cosine 類似度. encoder の出力は単位ベクタなので内積 = cosine."""
+        snap = self._snapshot
+        if snap.matrix.shape[0] == 0:
             return {}
         # encoder が L2 正規化済み → 内積で OK
-        scores = self._matrix @ query_vec.astype(EMBEDDING_DTYPE)
-        return {self._chunks[i].chunk_id: float(scores[i]) for i in range(len(self._chunks))}
+        scores = snap.matrix @ query_vec.astype(EMBEDDING_DTYPE)
+        return {snap.chunks[i].chunk_id: float(scores[i]) for i in range(len(snap.chunks))}
 
     def chunk_to_source(self) -> dict[int, int]:
-        return {c.chunk_id: c.source_id for c in self._chunks}
+        # 呼び出し側に変更させないよう shallow copy
+        return dict(self._snapshot.source_by_id)
 
     def chunk_body(self, chunk_id: int) -> str | None:
-        for c in self._chunks:
-            if c.chunk_id == chunk_id:
-                return c.body
-        return None
+        return self._snapshot.body_by_id.get(chunk_id)
 
 
 def _build_default_engine() -> Engine:
