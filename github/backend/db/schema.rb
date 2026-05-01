@@ -10,7 +10,63 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_05_01_063141) do
+ActiveRecord::Schema[8.0].define(version: 2026_05_01_065046) do
+  create_table "comments", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.string "commentable_type", null: false
+    t.bigint "commentable_id", null: false
+    t.bigint "author_id", null: false
+    t.text "body", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["author_id"], name: "index_comments_on_author_id"
+    t.index ["commentable_type", "commentable_id", "created_at"], name: "idx_on_commentable_type_commentable_id_created_at_89c6e27600"
+  end
+
+  create_table "issue_assignees", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "issue_id", null: false
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["issue_id", "user_id"], name: "index_issue_assignees_on_issue_id_and_user_id", unique: true
+    t.index ["issue_id"], name: "index_issue_assignees_on_issue_id"
+    t.index ["user_id"], name: "index_issue_assignees_on_user_id"
+  end
+
+  create_table "issue_labels", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "issue_id", null: false
+    t.bigint "label_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["issue_id", "label_id"], name: "index_issue_labels_on_issue_id_and_label_id", unique: true
+    t.index ["issue_id"], name: "index_issue_labels_on_issue_id"
+    t.index ["label_id"], name: "index_issue_labels_on_label_id"
+  end
+
+  create_table "issues", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "repository_id", null: false
+    t.bigint "author_id", null: false
+    t.integer "number", null: false
+    t.string "title", null: false
+    t.text "body", null: false
+    t.integer "state", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["author_id"], name: "index_issues_on_author_id"
+    t.index ["repository_id", "number"], name: "index_issues_on_repository_id_and_number", unique: true
+    t.index ["repository_id", "state"], name: "index_issues_on_repository_id_and_state"
+    t.index ["repository_id"], name: "index_issues_on_repository_id"
+  end
+
+  create_table "labels", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "repository_id", null: false
+    t.string "name", null: false
+    t.string "color", default: "888888", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["repository_id", "name"], name: "index_labels_on_repository_id_and_name", unique: true
+    t.index ["repository_id"], name: "index_labels_on_repository_id"
+  end
+
   create_table "memberships", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.bigint "organization_id", null: false
     t.bigint "user_id", null: false
@@ -50,6 +106,14 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_01_063141) do
     t.index ["repository_id", "user_id"], name: "index_repository_collaborators_on_repository_id_and_user_id", unique: true
     t.index ["repository_id"], name: "index_repository_collaborators_on_repository_id"
     t.index ["user_id"], name: "index_repository_collaborators_on_user_id"
+  end
+
+  create_table "repository_issue_numbers", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "repository_id", null: false
+    t.integer "last_number", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["repository_id"], name: "index_repository_issue_numbers_on_repository_id", unique: true
   end
 
   create_table "team_members", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
@@ -94,11 +158,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_01_063141) do
     t.index ["login"], name: "index_users_on_login", unique: true
   end
 
+  add_foreign_key "comments", "users", column: "author_id"
+  add_foreign_key "issue_assignees", "issues"
+  add_foreign_key "issue_assignees", "users"
+  add_foreign_key "issue_labels", "issues"
+  add_foreign_key "issue_labels", "labels"
+  add_foreign_key "issues", "repositories"
+  add_foreign_key "issues", "users", column: "author_id"
+  add_foreign_key "labels", "repositories"
   add_foreign_key "memberships", "organizations"
   add_foreign_key "memberships", "users"
   add_foreign_key "repositories", "organizations"
   add_foreign_key "repository_collaborators", "repositories"
   add_foreign_key "repository_collaborators", "users"
+  add_foreign_key "repository_issue_numbers", "repositories"
   add_foreign_key "team_members", "teams"
   add_foreign_key "team_members", "users"
   add_foreign_key "team_repository_roles", "repositories"

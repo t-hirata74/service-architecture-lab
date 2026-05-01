@@ -10,12 +10,29 @@ module Types
     field :viewer_permission, Types::RepositoryPermissionEnum, null: false,
           description: "Effective role of the current viewer (ADR 0002)."
 
+    field :issues, [Types::IssueType], null: false do
+      argument :state, Types::IssueStateEnum, required: false
+      argument :first, Integer, required: false, default_value: 30
+    end
+
+    field :labels, [Types::LabelType], null: false
+
     def owner
       object.organization
     end
 
     def viewer_permission
       PermissionResolver.new(context[:current_user], object).effective_role
+    end
+
+    def issues(state: nil, first: 30)
+      scope = object.issues.order(number: :desc)
+      scope = scope.where(state: Issue.states[state]) if state
+      scope.limit(first)
+    end
+
+    def labels
+      object.labels.order(:name)
     end
   end
 end
