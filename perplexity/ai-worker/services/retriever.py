@@ -20,6 +20,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_TOP_K = 10
 DEFAULT_ALPHA = 0.5
 BM25_FETCH_LIMIT = 100  # BM25 段で多めに取り、cosine で再ランク
+NGRAM_MIN_TOKEN_SIZE = 2  # MySQL ngram parser の最小マッチ長
+
+# MySQL FULLTEXT BOOLEAN MODE の operator (これらが含まれるとクエリ意味が変わる).
+# +foo, -foo, "phrase", (group), ~lower, foo*, <less, >more, @ (proximity).
+# パラメタライズ済みなので SQL injection ではないが、ユーザクエリの意味を壊す.
+_BOOLEAN_OPERATORS = frozenset('+-"()~*<>@\\\'')
 
 
 class Retriever:
@@ -41,9 +47,9 @@ class Retriever:
         )
 
     def _bm25(self, query_text: str, limit: int) -> dict[int, float]:
-        # MySQL FULLTEXT は + や " のような演算子が含まれるとエラーになるので escape する.
-        # クエリは boolean mode で全 token を含む形に: "東京 タワー" → "+東京 +タワー"
-        boolean_query = self._to_boolean_query(query_text)
+        # MySQL FULLTEXT は + や " のような演算子が含まれるとクエリ意味が変わるので
+        # escape する. パラメタライズ済みなので SQL injection ではない.
+        boolean_query = to_boolean_query(query_text)
         if not boolean_query:
             return {}
 
@@ -68,13 +74,21 @@ class Retriever:
         qvec = encoder.encode(query_text)
         return self._store.cosine_against(qvec)
 
-    @staticmethod
-    def _to_boolean_query(query_text: str) -> str:
-        """ngram parser 向けに boolean operator を除去し、空白区切りに."""
-        # 危険な文字を消す: + - " ' ( ) ~ * < > @ ! を space に
-        cleaned = "".join(ch if ch.isalnum() or ch in "ぁ-んァ-ヶ亜-熙 　" else " " for ch in query_text)
-        tokens = [t for t in cleaned.split() if t]
-        if not tokens:
-            return ""
-        # boolean mode で全 token を「あれば優先」(必須でない) にして OR 結合
-        return " ".join(tokens)
+
+def to_boolean_query(query_text: str) -> str:
+    """Sanitize a user query for MySQL FULLTEXT BOOLEAN MODE.
+
+    - BOOLEAN operator chars (+ - " ( ) ~ * < > @ \\ ') を空白に置換
+    - 連続空白を 1 個に圧縮
+    - 最小 token 長 (ngram min_token_size = 2) 未満の token を捨てる
+    - ngram parser は CJK / Latin を区別なく n-gram で索引するので、
+      日本語英語混在クエリにそのまま使える
+
+    >>> to_boolean_query('foo "bar" -baz')
+    'foo bar baz'
+    >>> to_boolean_query('a +b')
+    'b'
+    """
+    cleaned = "".join(" " if ch in _BOOLEAN_OPERATORS else ch for ch in query_text)
+    tokens = [t for t in cleaned.split() if len(t) >= NGRAM_MIN_TOKEN_SIZE]
+    return " ".join(tokens)
