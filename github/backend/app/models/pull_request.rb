@@ -12,6 +12,26 @@ class PullRequest < ApplicationRecord
   enum :state, { open: 0, closed: 1, merged: 2 }, prefix: :state
   enum :mergeable_state, { mergeable: 0, conflict: 1, merged_state: 2, closed_state: 3 }, prefix: :mergeable
 
+  # ADR 0004: PR の集約 check 状態は head_sha 配下の最新行から派生
+  AGGREGATED_CHECK_STATES = %w[success failure pending none].freeze
+
+  def commit_checks
+    repository.commit_checks.where(head_sha: head_sha)
+  end
+
+  def aggregated_check_state
+    states = commit_checks.map(&:state).map(&:to_s)
+    return "none" if states.empty?
+
+    if states.any? { |s| %w[failure error].include?(s) }
+      "failure"
+    elsif states.all? { |s| s == "success" }
+      "success"
+    else
+      "pending"
+    end
+  end
+
   validates :title, presence: true
   validates :head_ref, presence: true
   validates :base_ref, presence: true

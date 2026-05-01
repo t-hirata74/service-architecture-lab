@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_05_01_071019) do
+ActiveRecord::Schema[8.0].define(version: 2026_05_01_071853) do
   create_table "comments", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "commentable_type", null: false
     t.bigint "commentable_id", null: false
@@ -20,6 +20,21 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_01_071019) do
     t.datetime "updated_at", null: false
     t.index ["author_id"], name: "index_comments_on_author_id"
     t.index ["commentable_type", "commentable_id", "created_at"], name: "idx_on_commentable_type_commentable_id_created_at_89c6e27600"
+  end
+
+  create_table "commit_checks", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "repository_id", null: false
+    t.string "head_sha", null: false
+    t.string "name", null: false
+    t.integer "state", default: 0, null: false
+    t.datetime "started_at"
+    t.datetime "completed_at"
+    t.text "output"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["repository_id", "head_sha", "name"], name: "idx_commit_checks_uniq", unique: true
+    t.index ["repository_id", "head_sha"], name: "index_commit_checks_on_repository_id_and_head_sha"
+    t.index ["repository_id"], name: "index_commit_checks_on_repository_id"
   end
 
   create_table "issue_assignees", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
@@ -200,6 +215,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_01_071019) do
   end
 
   add_foreign_key "comments", "users", column: "author_id"
+  add_foreign_key "commit_checks", "repositories"
   add_foreign_key "issue_assignees", "issues"
   add_foreign_key "issue_assignees", "users"
   add_foreign_key "issue_labels", "issues"

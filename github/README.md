@@ -86,13 +86,13 @@ npm run dev                              # http://localhost:3025
 | アーキテクチャ図           | 🟢 docs/architecture.md |
 | ディレクトリ scaffolding   | 🟢 backend / frontend / ai-worker / infra placeholder |
 | docker-compose             | 🟢 MySQL のみ (3309) |
-| Backend (Rails 8 + GraphQL) | 🟢 Phase 4 完了: PullRequest / Review / RequestedReviewer + Issue/PR 番号共有 + 8 mutation / RSpec 51 件 |
-| Frontend (Next.js + urql)   | ⚪ Phase 2 では未着手 (backend-first) |
-| ai-worker (Python)          | ⚪ Phase 5 未着手 |
-| Solid Queue                 | ⚪ Phase 5 未着手 |
-| E2E (Playwright)            | ⚪ Phase 5 未着手 |
-| インフラ設計図 (Terraform)  | ⚪ Phase 5 未着手 |
-| CI (GitHub Actions)         | ⚪ Phase 5 未着手 |
+| Backend (Rails 8 + GraphQL) | 🟢 Phase 5a 完了: commit_checks + 集約 (PullRequest.checkStatus) + Internal ingress / RSpec 63 件 |
+| Frontend (Next.js + urql)   | ⚪ Phase 5b 未着手 |
+| ai-worker (Python)          | 🟢 Phase 5a 完了: /review / /code-summary / /check/run 実装 + backend ingress 疎通 |
+| Solid Queue                 | ⚪ Phase 5b 未着手 |
+| E2E (Playwright)            | ⚪ Phase 5b 未着手 |
+| インフラ設計図 (Terraform)  | ⚪ Phase 5b 未着手 |
+| CI (GitHub Actions)         | ⚪ Phase 5b 未着手 |
 
 ---
 
@@ -117,4 +117,5 @@ npm run dev                              # http://localhost:3025
 | 2 | Org / Team / User / Repository + PermissionResolver + GraphQL `viewer` / `organization` / `repository` | 🟢 完了 (RSpec 18 件) |
 | 3 | Issue / Comment / Label + IssueNumberAllocator + Mutation `createIssue` / `closeIssue` / `assignIssue` / `addComment` | 🟢 完了 (RSpec 34 件) |
 | 4 | PullRequest / Review / RequestedReviewer + Mutation `createPullRequest` / `requestReview` / `submitReview` / `mergePullRequest` + Issue/PR 番号空間共有 | 🟢 完了 (RSpec 51 件) |
-| 5 | CI 集約 + ai-worker 統合 + Playwright E2E + Terraform + CI | ⚪ |
+| 5a | CI 集約 (commit_checks + PullRequest.checkStatus) + ai-worker (/review, /code-summary, /check/run) + backend Internal ingress | 🟢 完了 (RSpec 63 件 / 全層疎通) |
+| 5b | Frontend (Next.js + urql) + Playwright E2E + Terraform + CI workflows | ⚪ |
