@@ -1,0 +1,88 @@
+# 各サービスの依存関係を集約して Dependabot で更新追従する。
+# 個別 .github/dependabot.yml は持たず、ルートに集約する。
+version: 2
+updates:
+  # ==== GitHub Actions ====
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: ["deps", "ci"]
+
+  # ==== slack ====
+  - package-ecosystem: bundler
+    directory: /slack/backend
+    schedule:
+      interval: weekly
+    labels: ["deps", "slack/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /slack/frontend
+    schedule:
+      interval: weekly
+    labels: ["deps", "slack/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /slack/playwright
+    schedule:
+      interval: weekly
+    labels: ["deps", "slack/playwright"]
+
+  - package-ecosystem: pip
+    directory: /slack/ai-worker
+    schedule:
+      interval: weekly
+    labels: ["deps", "slack/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /slack/infra/terraform
+    schedule:
+      interval: weekly
+    labels: ["deps", "slack/infra"]
+
+  # ==== youtube ====
+  - package-ecosystem: bundler
+    directory: /youtube/backend
+    schedule:
+      interval: weekly
+    labels: ["deps", "youtube/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /youtube/frontend
+    schedule:
+      interval: weekly
+    labels: ["deps", "youtube/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /youtube/playwright
+    schedule:
+      interval: weekly
+    labels: ["deps", "youtube/playwright"]
+
+  - package-ecosystem: pip
+    directory: /youtube/ai-worker
+    schedule:
+      interval: weekly
+    labels: ["deps", "youtube/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /youtube/infra/terraform
+    schedule:
+      interval: weekly
+    labels: ["deps", "youtube/infra"]
