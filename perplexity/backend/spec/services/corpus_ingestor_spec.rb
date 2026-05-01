@@ -63,4 +63,52 @@ RSpec.describe CorpusIngestor do
     ingestor = described_class.new(chunker: chunker)
     expect { ingestor.ingest(source) }.to raise_error(AiWorkerClient::Error, /unreachable/)
   end
+
+  # 原子性: ai-worker 失敗時に既存 chunk が壊れないこと (ADR 0003 §C / レビュー指摘 §2.1)
+  it "preserves prior chunks when ai-worker fails on re-ingest (atomic on failure)" do
+    pieces = chunker.split(source)
+    stub_embed(texts: pieces.map { |p| p[:body] })
+    initial = described_class.new(chunker: chunker).ingest(source)
+    initial_ids = initial.map(&:id)
+    initial_count = Chunk.where(source_id: source.id).count
+    expect(initial_count).to eq(pieces.size)
+
+    # 2 回目の ingest で ai-worker が落ちる
+    WebMock.reset!
+    stub_request(:post, "http://localhost:8030/corpus/embed").to_timeout
+
+    expect {
+      described_class.new(chunker: chunker).ingest(source)
+    }.to raise_error(AiWorkerClient::Error)
+
+    # 旧 chunk は一切壊れていない
+    surviving = Chunk.where(source_id: source.id).pluck(:id)
+    expect(surviving.sort).to eq(initial_ids.sort)
+    expect(Chunk.where(source_id: source.id).count).to eq(initial_count)
+    Chunk.where(source_id: source.id).each do |c|
+      expect(c.read_attribute(:embedding)).to be_present
+      expect(c.embedding_version).to eq("mock-hash-v1")
+    end
+  end
+
+  # 原子性: count mismatch 時も旧 chunk が壊れない
+  it "preserves prior chunks when ai-worker returns count mismatch on re-ingest" do
+    pieces = chunker.split(source)
+    stub_embed(texts: pieces.map { |p| p[:body] })
+    described_class.new(chunker: chunker).ingest(source)
+    initial_count = Chunk.where(source_id: source.id).count
+
+    WebMock.reset!
+    stub_request(:post, "http://localhost:8030/corpus/embed")
+      .to_return(
+        status: 200,
+        body: { embeddings: [Array.new(256, 0.0)], embedding_version: "v2" }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+    expect {
+      described_class.new(chunker: chunker).ingest(source)
+    }.to raise_error(AiWorkerClient::Error, /count mismatch/)
+    expect(Chunk.where(source_id: source.id).count).to eq(initial_count)
+  end
 end

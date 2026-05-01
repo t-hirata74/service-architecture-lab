@@ -69,8 +69,3 @@ RSpec.configure do |config|
   # FactoryBot syntax (build / create / build_stubbed をトップレベルで使う)
   config.include FactoryBot::Syntax::Methods
 end
-
-# WebMock: ai-worker への HTTP 呼び出しを stub する (ADR 0005)
-# ローカルホストへの allow は不要 (ai-worker は WebMock で完全 stub する方針)
-require "webmock/rspec"
-WebMock.disable_net_connect!(allow_localhost: false)
