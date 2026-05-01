@@ -116,8 +116,8 @@ cd ../playwright && npm test
 | --- | --- |
 | ADR (0001-0006)             | 🟢 全 Accepted (設計確定 / 独立レビュー通過済み) |
 | architecture.md             | 🟢 RAG パイプライン / ER / SSE イベント形式 / degradation 規律まで記述 |
-| Backend (Rails 8)           | ⏳ Phase 2 で着手 |
-| ai-worker (FastAPI + numpy) | ⏳ Phase 2 で着手 (擬似 encoder / chunker / hybrid retriever / cold start ロード) |
+| Backend (Rails 8)           | 🟢 Phase 2 完了 — sources/chunks 永続化 + Chunkers + CorpusIngestor + AiWorkerClient (RSpec 19 件) |
+| ai-worker (FastAPI + numpy) | 🟢 Phase 2 完了 — 擬似 encoder + score_fusion + EmbeddingStore + Retriever + cold start lifespan (pytest 24 件) |
 | Frontend (Next.js)          | ⏳ Phase 4 で着手 (fetch ReadableStream + 引用ハイライト) |
 | E2E (Playwright)            | ⏳ Phase 5 で着手 |
 | インフラ設計図 (Terraform)  | ⏳ Phase 5 で追加 (本番想定で OpenSearch を描く想定 / ADR 0002 と整合) |
@@ -146,7 +146,7 @@ cd ../playwright && npm test
 | Phase | 範囲 | 状態 |
 | --- | --- | --- |
 | 1 | scaffolding + ADR 6 本 + architecture.md + docker-compose | 🟢 設計フェーズ完了 (独立レビュー通過) |
-| 2 | コーパス取り込み (Source / Chunk + chunker + 擬似 encoder + embedding 永続化) + ai-worker `/retrieve` の hybrid 実装 + cold start ロード | ⏳ 未着手 |
+| 2 | コーパス取り込み (Source / Chunk + chunker + 擬似 encoder + embedding 永続化) + ai-worker `/retrieve` の hybrid 実装 + cold start ロード | 🟢 完了 (RSpec 19 件 + pytest 24 件 / 5 ドキュメント seed → curl `/retrieve` で hybrid 動作確認済み) |
 | 3 | Query / Answer / Citation モデル + Rails オーケストレーター + ai-worker `/extract` `/synthesize/stream` | ⏳ 未着手 |
 | 4 | SSE streaming endpoint + 引用整合性検証 + 認証 (rodauth-rails) + Frontend (fetch ReadableStream + 引用ハイライト UI) | ⏳ 未着手 |
 | 5 | Playwright E2E (クエリ→ストリーミング→引用 + degradation §A/§B) + Terraform 設計図 + CI workflows | ⏳ 未着手 |

@@ -4,7 +4,7 @@
 # 各ターゲットの説明は `## ` 以降の行から自動生成される。
 #
 # 命名規約: `<service>-<action>` で揃える。
-#   - <service>: slack / youtube / github / (今後追加)
+#   - <service>: slack / youtube / github / perplexity / (今後追加)
 #   - <action>:  deps-up / deps-down / setup / backend / backend-test /
 #                frontend / frontend-lint / ai / e2e / test
 
@@ -27,7 +27,7 @@ openapi-lint: ## OpenAPI スキーマを Redocly CLI で lint (slack / youtube)
 	npx -y @redocly/cli@latest lint --config redocly.yaml
 
 .PHONY: ci-local
-ci-local: openapi-lint slack-test youtube-test github-test ## CI 相当のチェックをローカルで一通り実行
+ci-local: openapi-lint slack-test youtube-test github-test perplexity-test ## CI 相当のチェックをローカルで一通り実行
 
 # ─── slack ────────────────────────────────────────────────────────────────────
 
@@ -164,3 +164,41 @@ github-e2e: ## github Playwright E2E (要: backend / frontend 起動済み)
 
 .PHONY: github-test
 github-test: github-backend-test github-frontend-lint ## github の backend テスト + frontend lint を一括実行
+
+# ─── perplexity ───────────────────────────────────────────────────────────────
+
+.PHONY: perplexity-deps-up
+perplexity-deps-up: ## perplexity 依存コンテナ (mysql:3310) を起動
+	cd perplexity && docker compose up -d mysql
+
+.PHONY: perplexity-deps-down
+perplexity-deps-down: ## perplexity 依存コンテナを停止
+	cd perplexity && docker compose down
+
+.PHONY: perplexity-setup
+perplexity-setup: perplexity-deps-up ## perplexity 全コンポーネントの初期セットアップ
+	cd perplexity/backend   && bundle install && bundle exec rails db:prepare
+	cd perplexity/ai-worker && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+.PHONY: perplexity-backend
+perplexity-backend: ## perplexity backend (Rails API) を :3040 で起動
+	cd perplexity/backend && bundle exec rails server -p 3040
+
+.PHONY: perplexity-backend-test
+perplexity-backend-test: ## perplexity backend テスト (RSpec)
+	cd perplexity/backend && bundle exec rspec
+
+.PHONY: perplexity-ai
+perplexity-ai: ## perplexity ai-worker (FastAPI) を :8030 で起動
+	cd perplexity/ai-worker && uvicorn main:app --port 8030
+
+.PHONY: perplexity-ai-test
+perplexity-ai-test: ## perplexity ai-worker テスト (pytest)
+	cd perplexity/ai-worker && .venv/bin/python -m pytest tests/
+
+.PHONY: perplexity-seed
+perplexity-seed: ## perplexity の seed (5 ドキュメント / 要 ai-worker 起動)
+	cd perplexity/backend && bundle exec rails db:seed
+
+.PHONY: perplexity-test
+perplexity-test: perplexity-backend-test perplexity-ai-test ## perplexity の backend + ai-worker テストを一括実行
