@@ -1,0 +1,501 @@
+openapi: 3.0.3
+info:
+  title: youtube-backend
+  description: |
+    YouTube 風プロジェクトの REST API。
+    詳細は `docs/api-style.md` および `youtube/docs/architecture.md` を参照。
+  version: 0.1.0
+servers:
+  - url: http://localhost:3020
+    description: Local development
+
+tags:
+  - name: health
+  - name: videos
+  - name: comments
+  - name: search
+  - name: uploads
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: ヘルスチェック
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /videos:
+    get:
+      tags: [videos]
+      summary: 公開済み動画一覧 (新しい順)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoList"
+    post:
+      tags: [videos]
+      summary: 動画メタデータの直接作成 (Phase 2 互換 / 認証なし管理用)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VideoCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoDetail"
+        "404":
+          description: user_email に該当する User が存在しない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+  /videos/search:
+    get:
+      tags: [search]
+      summary: 公開済み動画の全文検索 (MySQL FULLTEXT ngram)
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+          required: false
+          description: 検索クエリ。BOOLEAN モードのメタ文字は除去される
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResult"
+
+  /videos/{id}:
+    get:
+      tags: [videos]
+      summary: 動画詳細 (viewable=ready/published のみ)
+      parameters:
+        - $ref: "#/components/parameters/VideoId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoDetail"
+        "404":
+          description: 非公開状態 (uploaded / transcoding / failed) を含む
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /videos/{id}/status:
+    get:
+      tags: [videos]
+      summary: 動画状態のポーリング (どの状態でも 200 を返す)
+      parameters:
+        - $ref: "#/components/parameters/VideoId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoStatus"
+        "404":
+          description: ID 不在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /videos/{id}/recommendations:
+    get:
+      tags: [videos]
+      summary: 関連動画 (ai-worker でスコアリング、失敗時は degraded:true)
+      parameters:
+        - $ref: "#/components/parameters/VideoId"
+      responses:
+        "200":
+          description: 通常成功 / ai-worker 失敗時の degraded 応答も含む
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecommendationsResponse"
+        "404":
+          description: 対象動画が viewable でない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /videos/{id}/publish:
+    post:
+      tags: [videos]
+      summary: ready 状態を published へ遷移 (ADR 0001)
+      parameters:
+        - $ref: "#/components/parameters/VideoId"
+      responses:
+        "200":
+          description: 公開成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoDetail"
+        "404":
+          description: ID 不在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: 状態機械ガード違反 (非 ready から呼ばれた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StateConflict"
+
+  /videos/{video_id}/comments:
+    parameters:
+      - $ref: "#/components/parameters/VideoIdInPath"
+    get:
+      tags: [comments]
+      summary: コメント一覧 (1段スレッド構造)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommentList"
+        "404":
+          description: 対象動画が viewable でない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags: [comments]
+      summary: コメント / 返信を投稿 (parent_id 指定で返信)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentCreateRequest"
+      responses:
+        "201":
+          description: 投稿成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "404":
+          description: video が viewable でない / user_email 不在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: バリデーションエラー (本文空 / 2段以上のスレッド等)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+  /uploads:
+    post:
+      tags: [uploads]
+      summary: 動画ファイルをアップロードし transcoding 状態へ遷移 (ADR 0001)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [user_email, title, file]
+              properties:
+                user_email:
+                  type: string
+                  format: email
+                title:
+                  type: string
+                  maxLength: 200
+                description:
+                  type: string
+                  maxLength: 5000
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: "Created (status: transcoding)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadResponse"
+        "404":
+          description: user_email 不在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: バリデーションエラー
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+components:
+  parameters:
+    VideoId:
+      in: path
+      name: id
+      schema:
+        type: integer
+      required: true
+    VideoIdInPath:
+      in: path
+      name: video_id
+      schema:
+        type: integer
+      required: true
+
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+        time:
+          type: string
+          format: date-time
+
+    Author:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    VideoStatusEnum:
+      type: string
+      enum: [uploaded, transcoding, ready, published, failed]
+
+    VideoSummary:
+      type: object
+      required: [id, title, status, duration_seconds, published_at, author, tags, thumbnail_url]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/VideoStatusEnum"
+        duration_seconds:
+          type: integer
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        author:
+          $ref: "#/components/schemas/Author"
+        tags:
+          type: array
+          items:
+            type: string
+        thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+
+    VideoDetail:
+      allOf:
+        - $ref: "#/components/schemas/VideoSummary"
+        - type: object
+          required: [description]
+          properties:
+            description:
+              type: string
+              nullable: true
+
+    VideoList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/VideoSummary"
+
+    SearchResult:
+      type: object
+      required: [items, query]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/VideoSummary"
+        query:
+          type: string
+
+    VideoStatus:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: integer
+        status:
+          $ref: "#/components/schemas/VideoStatusEnum"
+
+    RecommendedVideo:
+      allOf:
+        - $ref: "#/components/schemas/VideoSummary"
+        - type: object
+          required: [score]
+          properties:
+            score:
+              type: number
+
+    RecommendationsResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecommendedVideo"
+        degraded:
+          type: boolean
+          description: ai-worker と通信できなかった場合 true (graceful degradation)
+
+    Comment:
+      type: object
+      required: [id, body, created_at, author, parent_id]
+      properties:
+        id:
+          type: integer
+        body:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        author:
+          $ref: "#/components/schemas/Author"
+        parent_id:
+          type: integer
+          nullable: true
+        replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comment"
+
+    CommentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comment"
+
+    CommentCreateRequest:
+      type: object
+      required: [user_email, body]
+      properties:
+        user_email:
+          type: string
+          format: email
+        body:
+          type: string
+        parent_id:
+          type: integer
+          nullable: true
+
+    VideoCreateRequest:
+      type: object
+      required: [user_email, title]
+      properties:
+        user_email:
+          type: string
+          format: email
+        title:
+          type: string
+        description:
+          type: string
+        duration_seconds:
+          type: integer
+        status:
+          $ref: "#/components/schemas/VideoStatusEnum"
+        tags:
+          type: array
+          items:
+            type: string
+
+    UploadResponse:
+      type: object
+      required: [id, title, status, author, original_filename]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        status:
+          $ref: "#/components/schemas/VideoStatusEnum"
+        author:
+          $ref: "#/components/schemas/Author"
+        original_filename:
+          type: string
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    ValidationError:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          items:
+            type: string
+
+    StateConflict:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: invalid_transition
+        detail:
+          type: string

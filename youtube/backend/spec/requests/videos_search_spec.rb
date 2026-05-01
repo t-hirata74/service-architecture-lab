@@ -22,6 +22,7 @@ RSpec.describe "Videos search", type: :request do
     it "returns published videos matching the query" do
       get "/videos/search", params: { q: "rails" }
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       titles = response.parsed_body["items"].map { _1["title"] }
       expect(titles).to include("Rails 入門")
       expect(titles).not_to include("公開前の Rails") # ready は除外
@@ -36,12 +37,14 @@ RSpec.describe "Videos search", type: :request do
     it "returns empty for blank query" do
       get "/videos/search", params: { q: " " }
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       expect(response.parsed_body["items"]).to eq([])
     end
 
     it "strips boolean-mode operators that would crash the parser" do
       get "/videos/search", params: { q: "+rails" }
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       titles = response.parsed_body["items"].map { _1["title"] }
       expect(titles).to include("Rails 入門")
     end

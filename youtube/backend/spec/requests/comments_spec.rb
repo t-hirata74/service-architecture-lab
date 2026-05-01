@@ -13,6 +13,7 @@ RSpec.describe "Comments", type: :request do
       get "/videos/#{video.id}/comments"
 
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       items = response.parsed_body["items"]
       expect(items.size).to eq(2)
       expect(items[0]["body"]).to eq("first")
@@ -24,6 +25,7 @@ RSpec.describe "Comments", type: :request do
       hidden = create(:video, :transcoding)
       get "/videos/#{hidden.id}/comments"
       expect(response).to have_http_status(:not_found)
+      assert_schema_conform(404)
     end
   end
 
@@ -33,6 +35,7 @@ RSpec.describe "Comments", type: :request do
            params: { user_email: user.email, body: "great video" }
 
       expect(response).to have_http_status(:created)
+      assert_schema_conform(201)
       body = response.parsed_body
       expect(body["body"]).to eq("great video")
       expect(body.dig("author", "name")).to eq("Alice")
@@ -44,6 +47,7 @@ RSpec.describe "Comments", type: :request do
            params: { user_email: user.email, body: "thanks", parent_id: top.id }
 
       expect(response).to have_http_status(:created)
+      assert_schema_conform(201)
       expect(response.parsed_body["parent_id"]).to eq(top.id)
     end
 
@@ -51,12 +55,14 @@ RSpec.describe "Comments", type: :request do
       post "/videos/#{video.id}/comments",
            params: { user_email: user.email, body: "" }
       expect(response).to have_http_status(:unprocessable_entity)
+      assert_schema_conform(422)
     end
 
     it "responds 404 for unknown user_email" do
       post "/videos/#{video.id}/comments",
            params: { user_email: "ghost@nowhere.test", body: "x" }
       expect(response).to have_http_status(:not_found)
+      assert_schema_conform(404)
     end
   end
 end

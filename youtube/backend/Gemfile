@@ -56,4 +56,6 @@ end
 
 group :test do
   gem "webmock", require: false
+  # OpenAPI 契約検証 (docs/api-style.md): request spec のレスポンスを openapi.yml と照合
+  gem "committee-rails"
 end

@@ -10,6 +10,7 @@ RSpec.describe "Videos", type: :request do
       get "/videos"
 
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       titles = response.parsed_body["items"].map { _1["title"] }
       expect(titles).to eq([new_pub.title, old_pub.title])
     end
@@ -24,6 +25,7 @@ RSpec.describe "Videos", type: :request do
       get "/videos/#{video.id}"
 
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       body = response.parsed_body
       expect(body["title"]).to eq("公開動画")
       expect(body["status"]).to eq("published")
@@ -35,12 +37,14 @@ RSpec.describe "Videos", type: :request do
       video = create(:video, :transcoding)
       get "/videos/#{video.id}"
       expect(response).to have_http_status(:not_found)
+      assert_schema_conform(404)
     end
 
     it "200s for ready videos (内部確認向け)" do
       video = create(:video, :ready)
       get "/videos/#{video.id}"
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
     end
   end
 
@@ -62,6 +66,7 @@ RSpec.describe "Videos", type: :request do
       get "/videos/#{target.id}/recommendations"
 
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       items = response.parsed_body["items"]
       expect(items.map { _1["id"] }).to eq([cand1.id, cand2.id])
       expect(items.first["score"]).to eq(0.8)
@@ -74,6 +79,7 @@ RSpec.describe "Videos", type: :request do
       get "/videos/#{target.id}/recommendations"
 
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       expect(response.parsed_body).to eq("items" => [], "degraded" => true)
     end
   end
@@ -83,6 +89,7 @@ RSpec.describe "Videos", type: :request do
       video = create(:video, :transcoding)
       get "/videos/#{video.id}/status"
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       expect(response.parsed_body["status"]).to eq("transcoding")
     end
   end
@@ -92,6 +99,7 @@ RSpec.describe "Videos", type: :request do
       video = create(:video, :ready)
       post "/videos/#{video.id}/publish"
       expect(response).to have_http_status(:ok)
+      assert_schema_conform(200)
       expect(response.parsed_body["status"]).to eq("published")
     end
 
@@ -99,6 +107,7 @@ RSpec.describe "Videos", type: :request do
       video = create(:video, :transcoding)
       post "/videos/#{video.id}/publish"
       expect(response).to have_http_status(:conflict)
+      assert_schema_conform(409)
     end
   end
 end

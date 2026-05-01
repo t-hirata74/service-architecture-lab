@@ -23,6 +23,7 @@ RSpec.describe "Uploads", type: :request do
       }.to have_enqueued_job(TranscodeJob)
 
       expect(response).to have_http_status(:created)
+      assert_schema_conform(201)
       body = response.parsed_body
       expect(body["status"]).to eq("transcoding")
       expect(body["original_filename"]).to eq("sample.mp4")
@@ -39,6 +40,7 @@ RSpec.describe "Uploads", type: :request do
         file: fake_mp4
       }
       expect(response).to have_http_status(:not_found)
+      assert_schema_conform(404)
     end
   end
 end
