@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import CommentsPanel from "@/components/CommentsPanel";
 import Header from "@/components/Header";
 import VideoCard from "@/components/VideoCard";
 import {
@@ -64,6 +65,8 @@ export default async function VideoDetailPage({ params }: { params: Params }) {
           <p className="mt-6 whitespace-pre-line rounded-lg bg-white/5 p-4 text-sm leading-relaxed">
             {video.description ?? "(説明なし)"}
           </p>
+
+          <CommentsPanel videoId={video.id} />
         </article>
 
         <aside>

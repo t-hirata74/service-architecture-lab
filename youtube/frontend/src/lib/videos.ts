@@ -33,6 +33,15 @@ export async function fetchVideos(): Promise<VideoSummary[]> {
   return body.items;
 }
 
+export async function searchVideos(q: string): Promise<VideoSummary[]> {
+  const res = await fetch(`${apiBaseUrl()}/videos/search?q=${encodeURIComponent(q)}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`videos search ${res.status}`);
+  const body = (await res.json()) as VideoListResponse;
+  return body.items;
+}
+
 export async function fetchVideo(id: string | number): Promise<VideoDetail | null> {
   const res = await fetch(`${apiBaseUrl()}/videos/${id}`, { cache: "no-store" });
   if (res.status === 404) return null;
