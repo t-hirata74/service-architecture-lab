@@ -2,7 +2,7 @@
 
 ## ステータス
 
-Proposed（2026-04-30）
+Accepted（2026-05-01）
 
 ## コンテキスト
 
@@ -73,11 +73,12 @@ YouTube 風プロジェクトの永続化要件：
 - **大規模時のボトルネック**: FULLTEXT は数百万行で性能劣化が出る。本番想定では別レイヤー
 - **ngram の同義語処理なし**: シソーラス展開等は一切しない
 
-## このADRを守るテスト / 実装ポインタ（Phase 5 で確定）
+## このADRを守るテスト / 実装ポインタ
 
-- `youtube/backend/db/migrate/*_add_fulltext_to_videos.rb` — ngram 指定の FULLTEXT
-- `youtube/backend/app/controllers/searches_controller.rb` — クエリ組み立て
-- `youtube/backend/test/integration/search_test.rb` — 検索結果の順序
+- `youtube/backend/db/migrate/20260430141600_create_videos.rb` — ngram 指定の FULLTEXT インデックス
+- `youtube/backend/app/controllers/videos_controller.rb#search` — `MATCH AGAINST IN BOOLEAN MODE` でクエリ組み立て
+- `youtube/backend/spec/requests/videos_search_spec.rb` — トランザクションを切って FULLTEXT を検証
+- `youtube/playwright/tests/search.spec.ts` — 日本語クエリ + 0 件ケースを E2E 確認
 
 ## 関連 ADR
 

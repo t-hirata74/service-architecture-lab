@@ -2,7 +2,7 @@
 
 ## ステータス
 
-Proposed（2026-04-30）
+Accepted（2026-05-01）
 
 ## コンテキスト
 
@@ -61,11 +61,12 @@ Proposed（2026-04-30）
 - **CDN 効果なし**: 動画配信は backend が直接返すので遅い → 学習用なので許容
 - **大容量テスト不可**: 数十 MB 程度のサンプルでパイプラインを回す。スケール検証は別の機会
 
-## このADRを守るテスト / 実装ポインタ（Phase 3 で確定）
+## このADRを守るテスト / 実装ポインタ
 
 - `youtube/backend/config/storage.yml` — `:local` service 定義
-- `youtube/backend/app/models/video.rb` — `has_one_attached`
-- `youtube/infra/terraform/s3.tf`（予定） — 本番想定の S3 + CloudFront
+- `youtube/backend/app/models/video.rb` — `has_one_attached :original` / `:thumbnail`
+- `youtube/infra/terraform/s3.tf` — 本番想定の S3 (`youtube-videos-*` / `youtube-thumbnails-*`)
+- `youtube/infra/terraform/cloudfront.tf` — CDN 経由配信
 
 ## 関連 ADR
 

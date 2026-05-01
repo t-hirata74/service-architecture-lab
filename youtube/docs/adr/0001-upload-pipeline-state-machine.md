@@ -2,7 +2,7 @@
 
 ## ステータス
 
-Proposed（2026-04-30）
+Accepted（2026-05-01）
 
 ## コンテキスト
 
@@ -63,11 +63,15 @@ YouTube 風プロジェクトの中核技術課題は **「アップロードさ
 - **本番想定との乖離**: コード (Solid Queue) と Terraform (SQS) で別物になる。ADR で明示することで合意済み扱いとする
 - **モニタリング**: Mission Control を入れるか、最小は Rails console で確認
 
-## このADRを守るテスト / 実装ポインタ（Phase 3 で確定）
+## このADRを守るテスト / 実装ポインタ
 
-- `youtube/backend/app/models/video.rb` — 状態 ENUM と遷移メソッド
-- `youtube/backend/app/jobs/transcode_job.rb` — 失敗時の `failed` 遷移
-- `youtube/backend/test/models/video_test.rb` — 不正遷移を弾くガード
+- `youtube/backend/app/models/video.rb` — 状態 ENUM と遷移ガード (`InvalidTransition`)
+- `youtube/backend/app/jobs/transcode_job.rb` — 失敗時の `failed` 遷移、成功時に AI ジョブをチェイン
+- `youtube/backend/app/jobs/application_job.rb` — `enqueue_after_transaction_commit = true` でコミット後 enqueue
+- `youtube/backend/spec/models/video_state_machine_spec.rb` — 不正遷移 / 原子的 enqueue
+- `youtube/backend/spec/jobs/transcode_job_spec.rb` — 添付有無 / チェイン確認
+- `youtube/backend/spec/requests/uploads_spec.rb` — POST /uploads → enqueue 確認
+- `youtube/playwright/tests/upload.spec.ts` — uploaded → ready → published を E2E 確認
 
 ## 関連 ADR
 
