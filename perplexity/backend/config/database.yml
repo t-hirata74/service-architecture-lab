@@ -1,0 +1,35 @@
+default: &default
+  adapter: mysql2
+  encoding: utf8mb4
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  username: <%= ENV.fetch("DB_USER") { "perplexity" } %>
+  password: <%= ENV.fetch("DB_PASSWORD") { "perplexity" } %>
+  host: <%= ENV.fetch("DB_HOST") { "127.0.0.1" } %>
+  port: <%= ENV.fetch("DB_PORT") { 3310 } %>
+
+development:
+  <<: *default
+  database: perplexity_development
+
+test:
+  <<: *default
+  database: perplexity_test
+
+production:
+  primary: &primary_production
+    <<: *default
+    database: perplexity_production
+    username: perplexity
+    password: <%= ENV["PERPLEXITY_DATABASE_PASSWORD"] %>
+  cache:
+    <<: *primary_production
+    database: perplexity_production_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_production
+    database: perplexity_production_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *primary_production
+    database: perplexity_production_cable
+    migrations_paths: db/cable_migrate
