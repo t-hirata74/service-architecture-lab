@@ -1,11 +1,11 @@
 """ai-worker: Perplexity 風 RAG の計算層 (mock).
 
-エンドポイント (Phase 2 時点):
-- GET  /health           : 疎通確認
-- POST /corpus/embed     : テキストを擬似 encoder で 256-d float32 に変換 (ADR 0002)
-- POST /retrieve         : BM25 + cosine の hybrid retrieval (ADR 0002)
-
-Phase 3 / 4 で /extract, /synthesize/stream を追加する.
+エンドポイント (Phase 3 時点):
+- GET  /health             : 疎通確認
+- POST /corpus/embed       : テキストを擬似 encoder で 256-d float32 に変換 (ADR 0002)
+- POST /retrieve           : BM25 + cosine の hybrid retrieval (ADR 0002)
+- POST /extract            : chunk_ids → passages に整形 (ADR 0001)
+- POST /synthesize/stream  : mock LLM の SSE 応答 (ADR 0001 / 0003 / 0004)
 """
 from __future__ import annotations
 
@@ -14,11 +14,14 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from services import encoder
 from services.embedding_store import EmbeddingStore, _build_default_engine
+from services.extractor import Extractor, Passage
 from services.retriever import DEFAULT_ALPHA, DEFAULT_TOP_K, Retriever
+from services.synthesizer import synthesize_stream as run_synthesize
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = engine
     app.state.embedding_store = store
     app.state.retriever = Retriever(engine=engine, store=store)
+    app.state.extractor = Extractor(store=store)
     yield
     engine.dispose()
 
@@ -75,6 +79,34 @@ class RetrieveResponse(BaseModel):
     hits: list[RetrieveHit]
     embedding_version: str
     loaded_chunks: int
+
+
+class ExtractRequest(BaseModel):
+    chunk_ids: list[int] = Field(..., min_length=1, max_length=100)
+
+
+class ExtractPassage(BaseModel):
+    chunk_id: int
+    source_id: int
+    snippet: str
+    ord: int
+
+
+class ExtractResponse(BaseModel):
+    passages: list[ExtractPassage]
+
+
+class SynthesizePassage(BaseModel):
+    chunk_id: int
+    source_id: int
+    snippet: str
+    ord: int
+
+
+class SynthesizeRequest(BaseModel):
+    query_text: str = Field(..., min_length=1, max_length=2000)
+    passages: list[SynthesizePassage] = Field(..., min_length=0, max_length=20)
+    allowed_source_ids: list[int] = Field(..., min_length=0, max_length=100)
 
 
 # ---- Endpoints ------------------------------------------------------------
@@ -132,4 +164,40 @@ def retrieve(req: RetrieveRequest) -> RetrieveResponse:
         ],
         embedding_version=encoder.version(),
         loaded_chunks=store.size,
+    )
+
+
+@app.post("/extract", response_model=ExtractResponse)
+def extract(req: ExtractRequest) -> ExtractResponse:
+    """ADR 0001: chunk_ids → passages. Phase 3 では snippet = chunk.body そのまま."""
+    extractor: Extractor | None = getattr(app.state, "extractor", None)
+    if extractor is None:
+        raise HTTPException(status_code=503, detail="extractor not initialized")
+
+    passages = extractor.extract(req.chunk_ids)
+    return ExtractResponse(
+        passages=[
+            ExtractPassage(chunk_id=p.chunk_id, source_id=p.source_id, snippet=p.snippet, ord=p.ord)
+            for p in passages
+        ]
+    )
+
+
+@app.post("/synthesize/stream")
+async def synthesize_stream_endpoint(req: SynthesizeRequest):
+    """ADR 0001 / 0003 / 0004: mock LLM が answer を SSE で逐次生成する.
+
+    Rails 側 (RagOrchestrator / Phase 3 同期 or SSE proxy / Phase 4) が consume.
+    """
+    passages = [
+        Passage(chunk_id=p.chunk_id, source_id=p.source_id, snippet=p.snippet, ord=p.ord)
+        for p in req.passages
+    ]
+    return StreamingResponse(
+        run_synthesize(req.query_text, passages, req.allowed_source_ids),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # ADR 0003: nginx バッファ抑制
+        },
     )
