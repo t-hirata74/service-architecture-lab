@@ -228,3 +228,80 @@ E2E (Playwright) は **現状 CI で動かしていない**（ブラウザバイ
   - ADR 0001 → fan-out E2E (`realtime-fanout.spec.ts`)
   - ADR 0002 → 既読 cursor 単調増加 (model test) + 同期 broadcast (integration test) + 多タブ同期 (E2E)
 - ADR を新しく書いたら「これを守るテストはどれか」を ADR 内で言及する
+
+---
+
+## GraphQL プロジェクト固有のテストパターン
+
+github プロジェクト (ADR 0001 / 0002) で確立。GraphQL を採用したら次の 3 つを必ず書く。
+
+### N+1 spec — Dataloader の実効性を縛る
+
+ADR で「Dataloader で N+1 を潰す」と宣言したら、宣言を裏付ける spec を書かないと約束が砕ける。
+
+```ruby
+# spec/graphql/n_plus_one_spec.rb
+def count_queries
+  queries = []
+  callback = ->(_, _, _, _, payload) {
+    next if payload[:name] == "SCHEMA"
+    next if payload[:sql] =~ /\A(SAVEPOINT|RELEASE|BEGIN|COMMIT|ROLLBACK)/i
+    queries << payload[:sql]
+  }
+  ActiveSupport::Notifications.subscribed(callback, "sql.active_record") { yield }
+  queries
+end
+
+it "resolves viewer_permission for N repositories with constant DB queries" do
+  queries = count_queries do
+    BackendSchema.execute('{ organization(login:"acme"){ repositories { viewerPermission } } }',
+                          context: { current_user: user })
+  end
+  # Loader が効いていれば repo 数 N に対してクエリ本数は定数オーダー
+  expect(queries.size).to be <= 10
+end
+```
+
+実例: `github/backend/spec/graphql/n_plus_one_spec.rb`。
+
+### Field-level authorization spec
+
+「権限不足のフィールドは `null` を返す（HTTP は 200）」という GraphQL の慣習をテストで縛る。
+
+```ruby
+it "hides private repository from outsiders (returns null)" do
+  body = post_graphql(repo_query, headers: { "X-User-Login" => outsider.login })
+  expect(body.dig("data", "repository")).to be_nil  # 404 ではない
+  expect(body["errors"]).to be_nil
+end
+```
+
+実例: `github/backend/spec/requests/graphql_spec.rb`。
+
+### Pundit Scope spec
+
+一覧 (connection / list) 経路は本体 verb spec ほど書き忘れやすい。outside_collaborator のような **base 継承を持たない role** を陽にテストする:
+
+```ruby
+it "outside_collaborator does NOT inherit org base — only sees public" do
+  user = create(:user)
+  Membership.create!(organization: org, user: user, role: :outside_collaborator)
+  expect(RepositoryPolicy::Scope.new(user, Repository.all).resolve).to contain_exactly(public_repo)
+end
+```
+
+実例: `github/backend/spec/policies/repository_policy_scope_spec.rb`。
+
+### 連番採番 (`with_lock`) の限界
+
+transactional fixtures は同じ DB connection を共有するので、threads を並行起動しても本物の lock 競合は再現できない。**意図確認に留める**:
+
+```ruby
+it "uses with_lock to serialize concurrent updates" do
+  expect_any_instance_of(RepositoryIssueNumber).to receive(:with_lock).and_call_original
+  IssueNumberAllocator.next_for(repository)
+end
+```
+
+真の並行性を見たい場合は別 DB / システムテストで `:truncation` strategy にする (学習リポでは不要)。
+実例: `github/backend/spec/services/issue_number_allocator_spec.rb`。

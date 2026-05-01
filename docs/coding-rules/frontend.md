@@ -99,6 +99,65 @@ src/
 
 ---
 
+## urql Provider pattern (GraphQL プロジェクト)
+
+github プロジェクト (ADR 0001) で確立した構成。GraphQL を使う今後のプロジェクトはここから始める。
+
+### Client は `useState` initializer で 1 度だけ生成
+
+```tsx
+"use client";
+import { useState } from "react";
+import { Provider, Client, cacheExchange, fetchExchange } from "urql";
+import { getViewerLogin } from "@/lib/viewer";
+
+const GRAPHQL_URL = process.env.NEXT_PUBLIC_GRAPHQL_URL ?? "http://127.0.0.1:3030/graphql";
+
+function createClient(): Client {
+  return new Client({
+    url: GRAPHQL_URL,
+    exchanges: [cacheExchange, fetchExchange],
+    fetchOptions: () => {
+      // localStorage / cookie を fetch のたびに読み直す (auth 切替で client を再生成しない)
+      const login = typeof window !== "undefined" ? getViewerLogin() : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (login) headers["X-User-Login"] = login;
+      return { headers };
+    },
+    requestPolicy: "cache-and-network"
+  });
+}
+
+export default function UrqlProvider({ children }: { children: React.ReactNode }) {
+  const [client] = useState<Client>(() => createClient());
+  return <Provider value={client}>{children}</Provider>;
+}
+```
+
+**やらないこと**: モジュール singleton (`let _client: Client | null`) で生成する。`"use client"` でも Next.js は SSR で 1 度評価されるため、シングルトンが SSR と CSR で残り続けて事故る。`useState` 初期化なら確実に新しい Client が CSR 側で生まれる。
+
+### urql は queries に GET を使う
+
+backend 側の API ルーティング / CORS が GET を許可していないと **`[Network] Failed to fetch`** で詰まる。これを E2E 直前に踏むと原因特定に時間が溶けるので、最初から両方許可する:
+
+- Rails: `match "/graphql", via: %i[get post]`
+- CORS: `methods: %i[get post options]`
+
+詳細は [api-style.md](../api-style.md#graphql-の運用github-プロジェクトで確立) を参照。
+
+### codegen 出力は commit する
+
+`codegen.ts` で生成した型ファイル (`lib/gql/types.ts` 等) は **commit して**、CI で `git diff --exit-code` を実行する。
+さもないと「型付き hooks がある」という前提が壊れたまま開発が進む。OpenAPI の `npm run gen:api` と同じ思想。
+
+### サンプル位置
+
+- `github/frontend/components/UrqlProvider.tsx`
+- `github/frontend/codegen.ts`
+- `github/frontend/lib/viewer.ts` (auth header 切替の例)
+
+---
+
 ## スタイリング (Tailwind v4)
 
 - Tailwind ユーティリティを基本とし、`globals.css` には CSS 変数とリセットだけ書く
