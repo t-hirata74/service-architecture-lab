@@ -1,0 +1,61 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: perplexity_development
+      MYSQL_USER: perplexity
+      MYSQL_PASSWORD: perplexity
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3310:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "perplexity", "-pperplexity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # backend / frontend / ai-worker は Phase 2 以降で uncomment して起動する
+  # backend:
+  #   build: ./backend
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3040:3000"
+  #   environment:
+  #     DATABASE_URL: mysql2://perplexity:perplexity@mysql:3306/perplexity_development
+  #     AI_WORKER_URL: http://ai-worker:8000
+  #     INTERNAL_INGRESS_TOKEN: dev-internal-token
+  #   volumes:
+  #     - ./backend:/app
+
+  # frontend:
+  #   build: ./frontend
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3035:3000"
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:3040
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+
+  # ai-worker:
+  #   build: ./ai-worker
+  #   ports:
+  #     - "8030:8000"
+  #   environment:
+  #     DATABASE_URL: mysql+pymysql://perplexity:perplexity@mysql:3306/perplexity_development
+  #   volumes:
+  #     - ./ai-worker:/app
+
+volumes:
+  mysql_data:
