@@ -197,7 +197,7 @@ cd ../backend && bundle exec rails db:seed
 | Phase | 範囲 | 状態 |
 | --- | --- | --- |
 | 1 | scaffolding + ADR 6 本 + architecture.md + docker-compose | 🟢 設計フェーズ完了 |
-| 2 | コーパス取り込み (Source / Chunk + 擬似 encoder + chunker) + ai-worker `/retrieve` の hybrid 実装 + cold start ロード | ⏳ 未着手 |
-| 3 | Query / Answer / Citation モデル + Rails オーケストレーター + ai-worker `/extract` `/synthesize/stream` | ⏳ 未着手 |
+| 2 | コーパス取り込み (Source / Chunk + 擬似 encoder + chunker) + ai-worker `/retrieve` の hybrid 実装 + cold start ロード | 🟢 完了 |
+| 3 | Query / Answer / Citation モデル + Rails オーケストレーター + ai-worker `/extract` `/synthesize/stream` | 🟢 完了 (Phase 3 は同期 RAG / Phase 4 で SSE proxy 化) |
 | 4 | SSE streaming endpoint + 引用整合性検証 + 認証 (rodauth-rails) + Frontend (fetch ReadableStream + 引用ハイライト UI) | ⏳ 未着手 |
 | 5 | Playwright E2E (クエリ→ストリーミング→引用 + degradation §A/§B) + Terraform 設計図 + CI workflows | ⏳ 未着手 |
