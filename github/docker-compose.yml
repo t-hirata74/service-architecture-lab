@@ -1,0 +1,58 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: github_development
+      MYSQL_USER: github
+      MYSQL_PASSWORD: github
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "github", "-pgithub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # backend / frontend / ai-worker は Phase 2 以降で uncomment して起動する
+  # backend:
+  #   build: ./backend
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3030:3000"
+  #   environment:
+  #     DATABASE_URL: mysql2://github:github@mysql:3306/github_development
+  #     AI_WORKER_URL: http://ai-worker:8000
+  #   volumes:
+  #     - ./backend:/app
+
+  # frontend:
+  #   build: ./frontend
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3025:3000"
+  #   environment:
+  #     NEXT_PUBLIC_GRAPHQL_URL: http://localhost:3030/graphql
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+
+  # ai-worker:
+  #   build: ./ai-worker
+  #   ports:
+  #     - "8020:8000"
+  #   volumes:
+  #     - ./ai-worker:/app
+
+volumes:
+  mysql_data:
