@@ -88,14 +88,15 @@ npm run dev                              # http://localhost:3015
 | コンポーネント | ステータス |
 | --- | --- |
 | インフラ（MySQL）          | 🟢 起動・db:prepare 通過確認済み |
-| Backend (Rails 8)          | 🟢 Phase 4: 状態機械 + Solid Queue + Active Storage + ai-worker 統合 / RSpec 40 件 |
-| Frontend (Next.js)         | 🟢 Phase 4: 一覧 / 詳細 (サムネ + 関連動画) / アップロード / 状態ポーリング UI |
-| Solid Queue worker         | 🟢 `bin/jobs` が Transcode → ExtractTags → GenerateThumbnail のチェインを駆動 |
-| ai-worker (Python)         | 🟢 Phase 4: recommend / tags / thumbnail を Rails から呼び出し動作確認 |
-| レコメンド境界             | 🟢 ADR 0003 Accepted (Jaccard モック / 失敗時 `degraded: true`) |
-| E2E (Playwright)           | ⚪ Phase 5 で追加予定 |
-| インフラ設計図 (Terraform) | ⚪ Phase 5 で追加予定 |
-| ADR                        | 🟡 0001-0002 / 0004 Proposed / 0003 / 0005 Accepted |
+| Backend (Rails 8)          | 🟢 Phase 5 完了: 状態機械 + Solid Queue + Active Storage + ai-worker 統合 + コメント + 検索 / RSpec 55 件 |
+| Frontend (Next.js)         | 🟢 Phase 5 完了: 一覧 / 詳細 / アップロード / 状態ポーリング / 検索 / コメント UI |
+| Solid Queue worker         | 🟢 `bin/jobs` が Transcode → ExtractTags → GenerateThumbnail を駆動 |
+| ai-worker (Python)         | 🟢 recommend / tags / thumbnail を Rails から呼び出し |
+| 検索                       | 🟢 MySQL FULLTEXT (ngram) で日本語クエリも動作 |
+| E2E (Playwright)           | 🟢 chromium で 4 ケース通過 (browse / search × 2 / upload) |
+| インフラ設計図 (Terraform) | 🟢 ECS / Aurora / S3 / CloudFront / SQS を `terraform validate` 通過 |
+| CI (GitHub Actions)        | 🟢 youtube-{backend, frontend, ai-worker, terraform} ジョブ追加 |
+| ADR                        | 🟢 0001-0006 全 Accepted (1 つ追加: 本番 AWS 構成) |
 
 ---
 
@@ -114,5 +115,5 @@ npm run dev                              # http://localhost:3015
 | 1 | 雛形 + 各サービス疎通 | ✅ 完了 |
 | 2 | 動画メタデータ CRUD + 一覧/詳細 UI | ✅ 完了 |
 | 3 | アップロード + 状態機械 + Solid Queue | ✅ 完了 |
-| 4 | ai-worker 統合（recommend / tags / thumbnail） | ✅ いまここ |
-| 5 | コメント + 検索 + Playwright E2E + Terraform + CI | — |
+| 4 | ai-worker 統合（recommend / tags / thumbnail） | ✅ 完了 |
+| 5 | コメント + 検索 + Playwright E2E + Terraform + CI | ✅ MVP 完成 |
