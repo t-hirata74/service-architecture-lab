@@ -6,11 +6,15 @@ Rails.application.routes.draw do
   get "health" => "health#show"
 
   resources :videos, only: %i[index show create] do
+    collection do
+      get :search
+    end
     member do
       get :status, to: "videos#status"
       get :recommendations, to: "videos#recommendations"
       post :publish
     end
+    resources :comments, only: %i[index create]
   end
 
   # Phase 3: アップロード窓口は別エンドポイント。multipart で受け取り

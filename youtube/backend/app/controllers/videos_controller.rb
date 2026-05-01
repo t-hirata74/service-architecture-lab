@@ -23,6 +23,25 @@ class VideosController < ApplicationController
     render json: { id: video.id, status: video.status }
   end
 
+  # GET /videos/search?q=...
+  # ADR 0004: MySQL FULLTEXT (ngram) で日本語タイトル / 説明文を検索する。
+  # listable (published) のみ対象。q が空なら 200 + 空配列。
+  def search
+    query = params[:q].to_s.strip
+    return render(json: { items: [], query: query }) if query.empty?
+
+    # ngram は IN BOOLEAN MODE で動かす。`+` などの BOOLEAN 構文文字は除去する
+    sanitized = query.gsub(/[+\-><()~*"@]/, " ").squish
+    return render(json: { items: [], query: query }) if sanitized.empty?
+
+    videos = Video.listable
+                  .includes(:user, :tags)
+                  .where("MATCH(title, description) AGAINST (? IN BOOLEAN MODE)", sanitized)
+                  .limit(50)
+
+    render json: { items: videos.map { |v| serialize(v, summary: true) }, query: query }
+  end
+
   # GET /videos/:id/recommendations
   # ADR 0003: 関連動画を ai-worker で計算する。Rails は対象 + 候補集合を渡し、
   # ai-worker のスコアリング結果に対応する Video レコードを返す。

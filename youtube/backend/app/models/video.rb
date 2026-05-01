@@ -11,6 +11,7 @@ class Video < ApplicationRecord
   belongs_to :user
   has_many :video_tags, dependent: :destroy
   has_many :tags, through: :video_tags
+  has_many :comments, dependent: :destroy
 
   # ADR 0002: ストレージは Active Storage local。本番想定は S3 + CloudFront を Terraform で示す
   has_one_attached :original
