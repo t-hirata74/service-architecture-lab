@@ -95,7 +95,44 @@ end
 - 外部 HTTP 呼び出し / 複雑な多モデルにまたがる処理に使う
 - `Net::HTTP` ベースで十分。`faraday` 等の追加依存はビジネス上の理由が無ければ入れない
 - タイムアウトは必ず明示（例: open=2s / read=10s）
-- 例: `AiWorkerClient` は Python (FastAPI) の `/summarize` を呼ぶラッパー。URL は `ENV.fetch("AI_WORKER_URL", "http://localhost:8000")`
+- 例: `AiWorkerClient` は Python (FastAPI) を呼ぶラッパー。URL は `ENV.fetch("AI_WORKER_URL", "http://localhost:8010")`
+
+### ai-worker 境界（共通方針）
+
+slack と youtube で同じパターンが独立に発生したので、共通ルールに昇格する。
+
+1. **失敗時は本流を止めない**: ai-worker への HTTP 呼び出しは **graceful degradation** を前提に書く。サーバ落ち / タイムアウト / 5xx でも、UI は基本機能（一覧・詳細）が動き続ける
+2. **エラー型は3種**: `Client::Error` (本流非破壊で握れる) / `Client::Timeout` (Error の派生) / それ以外は `raise`
+3. **ジョブ呼び出しは noop でログ警告のみ**:
+   ```ruby
+   def perform(video_id)
+     ...
+     AiWorkerClient.extract_tags(...)
+   rescue AiWorkerClient::Error => e
+     Rails.logger.warn("ExtractTagsJob video##{video_id} skipped: #{e.message}")
+   end
+   ```
+4. **コントローラ呼び出しは `200 + degraded: true`**:
+   ```ruby
+   render json: { items: [], degraded: true }, status: :ok
+   ```
+5. **テストは WebMock で実 HTTP を遮断**: `WebMock.disable_net_connect!(allow_localhost: true)` を `rails_helper.rb` で有効化。各 spec で `stub_request` を明示
+6. **タイムアウト**: `open_timeout = 2`、`read_timeout = 10`（学習用途。本番は ADR で）
+7. **境界は Service オブジェクトに集約**: コントローラ / ジョブから直接 `Net::HTTP` を叩かない
+
+### Job の原子的 enqueue
+
+state machine + job enqueue を「同時に成立 / 同時に成立しない」で揃えたい場合:
+
+- **Rails 8.1 で `config.active_job.enqueue_after_transaction_commit` の global 設定が deprecated**。代わりに **`ApplicationJob` 側で**:
+  ```ruby
+  class ApplicationJob < ActiveJob::Base
+    self.enqueue_after_transaction_commit = true
+  end
+  ```
+- これにより `Video.transaction { update!(...); SomeJob.perform_later(id) }` で
+  rollback 時にジョブが enqueue されない / commit 後に enqueue される
+- multi-DB 跨ぎの分散トランザクションは張れないが、**ジョブ先行 → DB rollback の事故は防げる**
 
 ---
 

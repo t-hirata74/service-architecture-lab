@@ -68,8 +68,24 @@ ai-worker/
 ## Rails からの呼び出し
 
 - Rails 側 `AiWorkerClient` (`slack/backend/app/services/ai_worker_client.rb`) から HTTP で呼ばれる
-- ベース URL は環境変数 `AI_WORKER_URL`（デフォルト `http://localhost:8000`）
+- ベース URL は環境変数 `AI_WORKER_URL`（slack: デフォルト `http://localhost:8000` / youtube: デフォルト `http://localhost:8010`）
 - Rails 側で open 2s / read 10s タイムアウトを設定済み。Python 側も**重い処理を作らない**
+
+### graceful degradation を前提に書く
+
+ai-worker は **本流ではない** 補助レイヤー。Rails 側は失敗時に `200 + degraded: true`
+で返す（[`operating-patterns.md`](../operating-patterns.md#graceful-degradation)）。
+そのため Python 側で:
+
+- 例外を返すよりも **空配列 / 既定値で 200 を返す** ほうが望ましい
+- どうしても異常系を返す場合は **5xx ではなく 4xx**（例: バリデーションエラーは 422）
+- ヘルスチェック `/health` は **依存先（DB / モデルロード）に左右されず** 200 を返す
+- ジョブ完了通知 / コールバックを Rails に投げる方向の通信はしない（pull のみ）
+
+### バイナリレスポンス
+
+サムネ画像のような binary は `Response(content=bytes, media_type="image/png")` で返す。
+JSON を期待する Rails 側のクライアントが切り替えられるよう、エンドポイントを分ける。
 
 ---
 

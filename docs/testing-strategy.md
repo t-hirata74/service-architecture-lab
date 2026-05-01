@@ -71,6 +71,79 @@ bundle exec rspec spec/models/video_spec.rb:42   # 行指定
 - `subject` は対象の振る舞いを命名する時のみ使う（`is_expected.to ...` で短くなる時）
 - FactoryBot trait を使って状態のバリエーションを表現（例: `:transcoding`, `:published`）
 
+### 実装中に出た落とし穴（リポジトリ固有）
+
+#### MySQL FULLTEXT (ngram) は transactional fixtures だと検索ヒットしない
+
+InnoDB FULLTEXT は **commit 後にしか index に反映されない**。RSpec デフォルトの
+`use_transactional_fixtures = true` だと、example 内で `create` した行が
+`MATCH ... AGAINST ...` でヒットせず、結果が空になる。
+
+回避策（spec ファイル単位で適用）:
+
+```ruby
+RSpec.describe "Videos search", type: :request do
+  self.use_transactional_tests = false
+
+  before(:all) do
+    [Video, User, Tag, VideoTag].each(&:delete_all)
+    @v1 = create(:video, :published, title: "...")
+    ...
+  end
+  after(:all) do
+    [Video, User, Tag, VideoTag].each(&:delete_all)
+  end
+end
+```
+
+#### `enqueue_after_transaction_commit` は **ApplicationJob 側に書く**
+
+Rails 8.1 で `config.active_job.enqueue_after_transaction_commit` の **global 指定が deprecated**。
+state machine + enqueue の原子性を担保するなら、`app/jobs/application_job.rb` に:
+
+```ruby
+class ApplicationJob < ActiveJob::Base
+  self.enqueue_after_transaction_commit = true
+end
+```
+
+詳細は [`coding-rules/rails.md`](coding-rules/rails.md) の「Job の原子的 enqueue」を参照。
+
+#### Active Storage の `analyze_later` がテストログに ffmpeg エラーを残す
+
+ダミーの `StringIO.new("fake-bytes")` を `attach` すると、Active Storage が
+動画メタデータ抽出ジョブを enqueue し、ffmpeg が `moov atom not found` で
+失敗する。**動作としては無害**（仕様）。ログを抑制したい場合は
+`config.active_storage.analyze_later = false` を test 環境に設定するか、
+`Video.original.analyze` を呼び出さないテストデータを使う。
+
+#### WebMock は ai-worker 境界の HTTP 越境を遮断する
+
+`spec/rails_helper.rb`:
+
+```ruby
+WebMock.disable_net_connect!(allow_localhost: true)
+```
+
+これで実 ai-worker への HTTP コールが起きないことを保証する。各 spec で
+`stub_request(:post, "#{base}/...")` を明示する。詳細は
+[`coding-rules/rails.md`](coding-rules/rails.md) の「ai-worker 境界（共通方針）」を参照。
+
+### OpenAPI 契約検証
+
+REST + OpenAPI を採用するプロジェクト（slack / youtube）では、request spec が
+`backend/docs/openapi.yml` のスキーマに **必ず一致**することを committee-rails で検証する。
+
+```ruby
+# spec/requests/videos_spec.rb
+it "matches OpenAPI schema" do
+  get "/videos"
+  assert_response_schema_confirm  # committee-rails が openapi.yml と照合
+end
+```
+
+詳細は [`api-style.md`](api-style.md) を参照。
+
 ---
 
 ## E2E (Playwright)

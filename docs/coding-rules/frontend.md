@@ -52,6 +52,23 @@ src/
 - 認証エラー / バリデーションエラーは `error` / `field-error` フィールドに従って `lib/auth.ts` のような形でパースして throw
 - リアルタイム購読は `lib/cable.ts` の singleton consumer を使う（複数生成しない）
 
+### REST + OpenAPI のプロジェクト
+
+[`api-style.md`](../api-style.md) で REST + OpenAPI を採用するプロジェクト
+（slack / youtube）では:
+
+- **`openapi-typescript` で `backend/docs/openapi.yml` から TS 型を自動生成**
+- 生成先: `src/lib/api-types.ts`（git 管理）
+- `lib/<domain>.ts` 内の手書き型は撤去し、生成された型を import
+- スキーマ更新時は `npm run gen:api` を走らせて regenerate → diff をコミット
+- `tsc --noEmit` で乖離が即検知される
+
+### GraphQL のプロジェクト（github 等）
+
+- スキーマ駆動でクライアントを生成（`graphql-codegen` 等。プロジェクト着手時に確定）
+- 単一エンドポイント `/graphql` に POST。`urql` か `@apollo/client` のどちらかを ADR で選定
+- `lib/<domain>.ts` の代わりに **operation ファイル**（`.graphql` / `.gql`）でクエリを定義
+
 ---
 
 ## サーバー / クライアントコンポーネント
@@ -59,6 +76,26 @@ src/
 - App Router のデフォルト（Server Component）を活かし、`"use client"` は**必要な所だけ**付ける
 - 必要な所 = `useState`/`useEffect`/イベントハンドラ / ActionCable 購読 / localStorage アクセス
 - ページの「データ取得 → 表示」は Server Component、インタラクションのある部分だけ子の Client Component に切り出す
+
+### Next 16 で踏んだ落とし穴
+
+- **`useSearchParams` を使うクライアントコンポーネントは `<Suspense>` で必ずラップ**。
+  Server Component から子として import する場合、ラップしないとビルドが落ちる:
+  ```tsx
+  <Suspense fallback={<div className="flex-1" />}>
+    <SearchBar />
+  </Suspense>
+  ```
+- **`react-hooks/set-state-in-effect` ルール**: `useEffect` 内で `setState` を直接呼ぶと
+  ESLint エラー。fetch + cancel パターンに置き換える:
+  ```tsx
+  useEffect(() => {
+    let cancelled = false;
+    fetchData().then((d) => { if (!cancelled) setData(d); });
+    return () => { cancelled = true; };
+  }, [deps]);
+  ```
+- 詳細は `<service>/frontend/AGENTS.md` に「学習データに無いバージョン」の警告がある。書く前に `node_modules/next/dist/docs/` を読む。
 
 ---
 
