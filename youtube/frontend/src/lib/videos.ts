@@ -1,30 +1,18 @@
 import { apiBaseUrl } from "./api";
+import type { components } from "./api-types";
 
-export type VideoSummary = {
-  id: number;
-  title: string;
-  status: string;
-  duration_seconds: number | null;
-  published_at: string | null;
-  author: { id: number; name: string };
-  tags: string[];
-  thumbnail_url: string | null;
-};
+// OpenAPI スキーマ (backend/docs/openapi.yml) から生成された型を使う。
+// 手書き型は撤去 — `npm run gen:api` で再生成する。
+export type VideoSummary = components["schemas"]["VideoSummary"];
+export type VideoDetail = components["schemas"]["VideoDetail"];
+export type RecommendedVideo = components["schemas"]["RecommendedVideo"];
+export type RecommendationsResponse = components["schemas"]["RecommendationsResponse"];
+export type VideoStatus = components["schemas"]["VideoStatusEnum"];
+export type UploadResult = components["schemas"]["UploadResponse"];
 
-export type VideoDetail = VideoSummary & {
-  description: string | null;
-};
-
-export type RecommendedVideo = VideoSummary & { score: number };
-
-export type RecommendationsResponse = {
-  items: RecommendedVideo[];
-  degraded?: boolean;
-};
-
-export type VideoListResponse = {
-  items: VideoSummary[];
-};
+type VideoListResponse = components["schemas"]["VideoList"];
+type SearchResult = components["schemas"]["SearchResult"];
+type VideoStatusResponse = components["schemas"]["VideoStatus"];
 
 export async function fetchVideos(): Promise<VideoSummary[]> {
   const res = await fetch(`${apiBaseUrl()}/videos`, { cache: "no-store" });
@@ -38,7 +26,7 @@ export async function searchVideos(q: string): Promise<VideoSummary[]> {
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`videos search ${res.status}`);
-  const body = (await res.json()) as VideoListResponse;
+  const body = (await res.json()) as SearchResult;
   return body.items;
 }
 
@@ -59,13 +47,11 @@ export async function fetchRecommendations(
   return (await res.json()) as RecommendationsResponse;
 }
 
-export type VideoStatus = "uploaded" | "transcoding" | "ready" | "published" | "failed";
-
 export async function fetchVideoStatus(id: string | number): Promise<VideoStatus | null> {
   const res = await fetch(`${apiBaseUrl()}/videos/${id}/status`, { cache: "no-store" });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`videos status ${res.status}`);
-  const body = (await res.json()) as { status: VideoStatus };
+  const body = (await res.json()) as VideoStatusResponse;
   return body.status;
 }
 
@@ -76,13 +62,6 @@ export async function publishVideo(id: string | number): Promise<VideoDetail> {
   if (!res.ok) throw new Error(`videos publish ${res.status}`);
   return (await res.json()) as VideoDetail;
 }
-
-export type UploadResult = {
-  id: number;
-  title: string;
-  status: VideoStatus;
-  original_filename: string;
-};
 
 export async function uploadVideo(form: FormData): Promise<UploadResult> {
   const res = await fetch(`${apiBaseUrl()}/uploads`, {
@@ -96,14 +75,14 @@ export async function uploadVideo(form: FormData): Promise<UploadResult> {
   return (await res.json()) as UploadResult;
 }
 
-export function formatDuration(seconds: number | null): string {
+export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null) return "—";
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function formatPublishedAt(iso: string | null): string {
+export function formatPublishedAt(iso: string | null | undefined): string {
   if (!iso) return "未公開";
   const d = new Date(iso);
   const now = Date.now();

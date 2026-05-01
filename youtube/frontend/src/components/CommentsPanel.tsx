@@ -99,33 +99,36 @@ export default function CommentsPanel({ videoId }: { videoId: string | number })
       )}
 
       <ul className="flex flex-col gap-4">
-        {comments.map((c) => (
-          <li key={c.id} className="rounded-lg bg-white/5 p-3">
-            <div className="text-xs opacity-70">
-              {c.author.name} · {formatDate(c.created_at)}
-            </div>
-            <p className="mt-1 whitespace-pre-line text-sm">{c.body}</p>
-            <button
-              type="button"
-              onClick={() => setReplyTo(c.id)}
-              className="mt-1 text-[10px] uppercase tracking-wider opacity-60 hover:opacity-100"
-            >
-              返信
-            </button>
-            {c.replies.length > 0 && (
-              <ul className="mt-3 flex flex-col gap-2 border-l border-white/10 pl-4">
-                {c.replies.map((r) => (
-                  <li key={r.id} className="text-sm">
-                    <div className="text-xs opacity-70">
-                      {r.author.name} · {formatDate(r.created_at)}
-                    </div>
-                    <p className="whitespace-pre-line">{r.body}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
+        {comments.map((c) => {
+          const replies = c.replies ?? [];
+          return (
+            <li key={c.id} className="rounded-lg bg-white/5 p-3">
+              <div className="text-xs opacity-70">
+                {c.author.name} · {formatDate(c.created_at)}
+              </div>
+              <p className="mt-1 whitespace-pre-line text-sm">{c.body}</p>
+              <button
+                type="button"
+                onClick={() => setReplyTo(c.id)}
+                className="mt-1 text-[10px] uppercase tracking-wider opacity-60 hover:opacity-100"
+              >
+                返信
+              </button>
+              {replies.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-2 border-l border-white/10 pl-4">
+                  {replies.map((r) => (
+                    <li key={r.id} className="text-sm">
+                      <div className="text-xs opacity-70">
+                        {r.author.name} · {formatDate(r.created_at)}
+                      </div>
+                      <p className="whitespace-pre-line">{r.body}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

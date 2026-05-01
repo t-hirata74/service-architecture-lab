@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 3015",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gen:api": "openapi-typescript ../backend/docs/openapi.yml -o src/lib/api-types.ts"
   },
   "dependencies": {
     "next": "16.2.4",
@@ -21,6 +22,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "openapi-typescript": "^7.13.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
