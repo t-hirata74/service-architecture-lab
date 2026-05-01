@@ -34,6 +34,23 @@ module Types
       repo.issues.find_by(number: number)
     end
 
+    field :pull_request, Types::PullRequestType, null: true do
+      argument :owner, String, required: true
+      argument :name, String, required: true
+      argument :number, Integer, required: true
+    end
+
+    def pull_request(owner:, name:, number:)
+      org = Organization.find_by(login: owner)
+      return nil unless org
+
+      repo = org.repositories.find_by(name:)
+      return nil unless repo
+      return nil unless Pundit.policy(context[:current_user], repo).show?
+
+      repo.pull_requests.find_by(number: number)
+    end
+
     field :repository, Types::RepositoryType, null: true do
       argument :owner, String, required: true
       argument :name, String, required: true

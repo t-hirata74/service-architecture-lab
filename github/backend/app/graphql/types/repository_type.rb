@@ -15,6 +15,11 @@ module Types
       argument :first, Integer, required: false, default_value: 30
     end
 
+    field :pull_requests, [Types::PullRequestType], null: false do
+      argument :state, Types::PullRequestStateEnum, required: false
+      argument :first, Integer, required: false, default_value: 30
+    end
+
     field :labels, [Types::LabelType], null: false
 
     def owner
@@ -28,6 +33,12 @@ module Types
     def issues(state: nil, first: 30)
       scope = object.issues.order(number: :desc)
       scope = scope.where(state: Issue.states[state]) if state
+      scope.limit(first)
+    end
+
+    def pull_requests(state: nil, first: 30)
+      scope = object.pull_requests.order(number: :desc)
+      scope = scope.where(state: PullRequest.states[state]) if state
       scope.limit(first)
     end
 

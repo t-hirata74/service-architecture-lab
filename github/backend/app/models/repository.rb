@@ -5,6 +5,7 @@ class Repository < ApplicationRecord
   has_many :repository_collaborators, dependent: :destroy
   has_many :collaborators, through: :repository_collaborators, source: :user
   has_many :issues, dependent: :destroy
+  has_many :pull_requests, dependent: :destroy
   has_many :labels, dependent: :destroy
   has_one :repository_issue_number, dependent: :destroy
 

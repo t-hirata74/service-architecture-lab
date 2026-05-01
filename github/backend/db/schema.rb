@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_05_01_065046) do
+ActiveRecord::Schema[8.0].define(version: 2026_05_01_071019) do
   create_table "comments", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "commentable_type", null: false
     t.bigint "commentable_id", null: false
@@ -86,6 +86,25 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_01_065046) do
     t.index ["login"], name: "index_organizations_on_login", unique: true
   end
 
+  create_table "pull_requests", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "repository_id", null: false
+    t.bigint "author_id", null: false
+    t.integer "number", null: false
+    t.string "title", null: false
+    t.text "body", null: false
+    t.integer "state", default: 0, null: false
+    t.string "head_ref", null: false
+    t.string "base_ref", null: false
+    t.integer "mergeable_state", default: 0, null: false
+    t.string "head_sha", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["author_id"], name: "index_pull_requests_on_author_id"
+    t.index ["repository_id", "number"], name: "index_pull_requests_on_repository_id_and_number", unique: true
+    t.index ["repository_id", "state"], name: "index_pull_requests_on_repository_id_and_state"
+    t.index ["repository_id"], name: "index_pull_requests_on_repository_id"
+  end
+
   create_table "repositories", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.bigint "organization_id", null: false
     t.string "name", null: false
@@ -114,6 +133,28 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_01_065046) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["repository_id"], name: "index_repository_issue_numbers_on_repository_id", unique: true
+  end
+
+  create_table "requested_reviewers", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "pull_request_id", null: false
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["pull_request_id", "user_id"], name: "index_requested_reviewers_on_pull_request_id_and_user_id", unique: true
+    t.index ["pull_request_id"], name: "index_requested_reviewers_on_pull_request_id"
+    t.index ["user_id"], name: "index_requested_reviewers_on_user_id"
+  end
+
+  create_table "reviews", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "pull_request_id", null: false
+    t.bigint "reviewer_id", null: false
+    t.integer "state", default: 0, null: false
+    t.text "body", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["pull_request_id", "reviewer_id", "created_at"], name: "idx_on_pull_request_id_reviewer_id_created_at_29861f4c89"
+    t.index ["pull_request_id"], name: "index_reviews_on_pull_request_id"
+    t.index ["reviewer_id"], name: "index_reviews_on_reviewer_id"
   end
 
   create_table "team_members", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
@@ -168,10 +209,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_05_01_065046) do
   add_foreign_key "labels", "repositories"
   add_foreign_key "memberships", "organizations"
   add_foreign_key "memberships", "users"
+  add_foreign_key "pull_requests", "repositories"
+  add_foreign_key "pull_requests", "users", column: "author_id"
   add_foreign_key "repositories", "organizations"
   add_foreign_key "repository_collaborators", "repositories"
   add_foreign_key "repository_collaborators", "users"
   add_foreign_key "repository_issue_numbers", "repositories"
+  add_foreign_key "requested_reviewers", "pull_requests"
+  add_foreign_key "requested_reviewers", "users"
+  add_foreign_key "reviews", "pull_requests"
+  add_foreign_key "reviews", "users", column: "reviewer_id"
   add_foreign_key "team_members", "teams"
   add_foreign_key "team_members", "users"
   add_foreign_key "team_repository_roles", "repositories"

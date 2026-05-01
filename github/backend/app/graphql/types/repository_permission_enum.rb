@@ -1,5 +1,6 @@
 module Types
   class RepositoryPermissionEnum < Types::BaseEnum
+    graphql_name "RepositoryPermission"
     description "Effective permission level a viewer holds on a repository."
 
     value "NONE",     value: :none
