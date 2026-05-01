@@ -1,0 +1,5 @@
+# Claude Code のローカル実行時状態 (scheduled_tasks.lock など)
+.claude/
+
+# macOS
+.DS_Store
