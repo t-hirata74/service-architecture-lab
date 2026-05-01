@@ -87,7 +87,7 @@ npm run dev                              # http://localhost:3025
 | ディレクトリ scaffolding   | 🟢 backend / frontend / ai-worker / infra placeholder |
 | docker-compose             | 🟢 MySQL のみ (3309) |
 | Backend (Rails 8 + GraphQL) | 🟢 Phase 5a 完了: commit_checks + 集約 (PullRequest.checkStatus) + Internal ingress / RSpec 63 件 |
-| Frontend (Next.js + urql)   | ⚪ Phase 5b 未着手 |
+| Frontend (Next.js + urql)   | 🟢 Phase 5b 完了: organization / repository / PR 詳細 + checkStatus バッジ / lint / typecheck / build 通過 |
 | ai-worker (Python)          | 🟢 Phase 5a 完了: /review / /code-summary / /check/run 実装 + backend ingress 疎通 |
 | Solid Queue                 | ⚪ Phase 5b 未着手 |
 | E2E (Playwright)            | ⚪ Phase 5b 未着手 |
@@ -118,4 +118,5 @@ npm run dev                              # http://localhost:3025
 | 3 | Issue / Comment / Label + IssueNumberAllocator + Mutation `createIssue` / `closeIssue` / `assignIssue` / `addComment` | 🟢 完了 (RSpec 34 件) |
 | 4 | PullRequest / Review / RequestedReviewer + Mutation `createPullRequest` / `requestReview` / `submitReview` / `mergePullRequest` + Issue/PR 番号空間共有 | 🟢 完了 (RSpec 51 件) |
 | 5a | CI 集約 (commit_checks + PullRequest.checkStatus) + ai-worker (/review, /code-summary, /check/run) + backend Internal ingress | 🟢 完了 (RSpec 63 件 / 全層疎通) |
-| 5b | Frontend (Next.js + urql) + Playwright E2E + Terraform + CI workflows | ⚪ |
+| 5b | Frontend (Next.js 16 + urql + graphql-codegen) + viewer 切替 + repository / PR 詳細 + CI バッジ | 🟢 完了 (build / lint / typecheck 通過 / 3 ルート 200) |
+| 5c | Playwright E2E + Terraform 設計図 + CI workflows + MVP 化 | ⚪ |

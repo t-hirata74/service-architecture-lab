@@ -163,4 +163,5 @@ cd ../frontend && npm run dev      # http://localhost:3025
 | 3 | Issue / Comment / Label + IssueNumberAllocator + GraphQL Mutation (`createIssue` / `closeIssue` / `assignIssue` / `addComment`) | 🟢 完了 (RSpec 34 件) |
 | 4 | PullRequest / Review / RequestedReviewer + Mutation (`createPullRequest` / `requestReview` / `submitReview` / `mergePullRequest`) / Issue/PR 番号空間共有 | 🟢 完了 (RSpec 51 件 / Issue=#1, PR=#2 を実環境で確認) |
 | 5a | CI チェック集約 (commit_checks + PullRequest.checkStatus 派生) + ai-worker 統合 (`/review`, `/code-summary`, `/check/run`) + backend `/internal/commit_checks` ingress | 🟢 完了 (RSpec 63 件 / ai-worker → backend → GraphQL の全層疎通) |
-| 5b | Frontend (Next.js + urql) + Playwright E2E + Terraform + CI workflows | ⚪ 未着手 |
+| 5b | Frontend (Next.js 16 + urql + graphql-codegen) + viewer 切替 + repository / PR 詳細 + CI バッジ | 🟢 完了 (build / lint / typecheck 通過 / 3 ルート 200) |
+| 5c | Playwright E2E + Terraform 設計図 + CI workflows + MVP 化 | ⚪ 未着手 |

@@ -13,7 +13,7 @@
 | --- | --- | --- | --- | --- |
 | [`slack`](slack/) | Slack 風リアルタイムチャット | WebSocket fan-out / 既読 cursor 整合性 / Rails ↔ Python 境界 | 🟢 MVP 完成 (E2E 6 件通過) | [README](slack/README.md) ・ [Architecture](slack/docs/architecture.md) ・ [ADR (5)](slack/docs/adr/) |
 | [`youtube`](youtube/) | YouTube 風動画プラットフォーム | 非同期動画変換パイプライン / 状態機械 / Rails ↔ Python 境界 (タグ抽出 / サムネ / レコメンド) / FULLTEXT ngram 検索 / Solid Queue (Redis 不使用) | 🟢 MVP 完成 (RSpec 55 件 + Playwright 4 件通過) | [README](youtube/README.md) ・ [Architecture](youtube/docs/architecture.md) ・ [ADR (6)](youtube/docs/adr/) |
-| [`github`](github/) | GitHub 風 Issue Tracker | 権限グラフ / Issue・PR モデル / CI ステータス集約 / GraphQL field 認可 | 🟡 Phase 5a 完了 (CI 集約 + ai-worker 全層疎通 / RSpec 63 件) | [README](github/README.md) ・ [Architecture](github/docs/architecture.md) ・ [ADR (4)](github/docs/adr/) |
+| [`github`](github/) | GitHub 風 Issue Tracker | 権限グラフ / Issue・PR モデル / CI ステータス集約 / GraphQL field 認可 | 🟡 Phase 5b 完了 (Frontend Next.js + urql / RSpec 63 件 + 3 ルート 200) | [README](github/README.md) ・ [Architecture](github/docs/architecture.md) ・ [ADR (4)](github/docs/adr/) |
 
 ---
 
