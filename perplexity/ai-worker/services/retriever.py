@@ -47,24 +47,28 @@ class Retriever:
         )
 
     def _bm25(self, query_text: str, limit: int) -> dict[int, float]:
-        # MySQL FULLTEXT は + や " のような演算子が含まれるとクエリ意味が変わるので
-        # escape する. パラメタライズ済みなので SQL injection ではない.
-        boolean_query = to_boolean_query(query_text)
-        if not boolean_query:
+        # MySQL FULLTEXT BOOLEAN MODE は **空白を boolean separator** として扱うため、
+        # 日本語の連続したフレーズを 1 phrase として完全一致検索してしまう
+        # (例: "東京タワーはいつ完成した" だと 12 文字ぴったりの一致を要求).
+        # NATURAL LANGUAGE MODE なら ngram parser がクエリ側も 2-gram にトークナイズし、
+        # OR 検索として動くので長文クエリでも spread する.
+        # 安全性: BOOLEAN operator は to_boolean_query で剥がし済み.
+        sanitized = to_boolean_query(query_text)
+        if not sanitized:
             return {}
 
         with self._engine.connect() as conn:
             rows = conn.execute(
                 text(
                     """
-                    SELECT id, MATCH(body) AGAINST(:q IN BOOLEAN MODE) AS score
+                    SELECT id, MATCH(body) AGAINST(:q IN NATURAL LANGUAGE MODE) AS score
                     FROM chunks
-                    WHERE MATCH(body) AGAINST(:q IN BOOLEAN MODE)
+                    WHERE MATCH(body) AGAINST(:q IN NATURAL LANGUAGE MODE)
                     ORDER BY score DESC
                     LIMIT :lim
                     """
                 ),
-                {"q": boolean_query, "lim": limit},
+                {"q": sanitized, "lim": limit},
             ).fetchall()
         return {row.id: float(row.score) for row in rows}
 
