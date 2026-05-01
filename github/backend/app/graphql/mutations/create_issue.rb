@@ -13,7 +13,7 @@ module Mutations
     def resolve(owner:, name:, title:, body:)
       user = current_user!
       repository = Organization.find_by!(login: owner).repositories.find_by!(name:)
-      authorize!(repository, :show?) # ADR 0002 MIN_REQUIRED[:create_issue] == :read
+      return { issue: nil, errors: ["Forbidden"] } unless authorize!(repository, :create_issue?, strict: false)
 
       issue = Issue.new(
         repository: repository,

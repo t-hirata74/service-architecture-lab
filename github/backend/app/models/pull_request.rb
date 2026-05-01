@@ -10,6 +10,8 @@ class PullRequest < ApplicationRecord
   has_many :comments, as: :commentable, dependent: :destroy
 
   enum :state, { open: 0, closed: 1, merged: 2 }, prefix: :state
+  # `mergeable_state` のキーは Rails enum 制約上 `state` と衝突できないため `merged_state` / `closed_state` にしている。
+  # GraphQL 側 (`MergeableStateEnum`) では MERGED / CLOSED にマップしてユーザに見える値は `state` と揃える。
   enum :mergeable_state, { mergeable: 0, conflict: 1, merged_state: 2, closed_state: 3 }, prefix: :mergeable
 
   # ADR 0004: PR の集約 check 状態は head_sha 配下の最新行から派生

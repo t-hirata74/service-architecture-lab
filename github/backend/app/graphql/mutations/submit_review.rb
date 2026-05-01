@@ -14,8 +14,7 @@ module Mutations
       pr = PullRequest.find_by(id: pull_request_id)
       return { review: nil, errors: ["Pull request not found"] } unless pr
 
-      resolver = PermissionResolver.new(user, pr.repository)
-      return { review: nil, errors: ["Forbidden"] } unless resolver.can?(:submit_review)
+      return { review: nil, errors: ["Forbidden"] } unless authorize!(pr.repository, :submit_review?, strict: false)
 
       review = nil
       PullRequest.transaction do

@@ -26,19 +26,20 @@ module Types
       object.organization
     end
 
+    # ADR 0001: 一覧で N 件 repository を返すケースの N+1 を Dataloader で潰す。
     def viewer_permission
-      PermissionResolver.new(context[:current_user], object).effective_role
+      dataloader.with(Sources::ViewerPermissionSource, context[:current_user]).load(object)
     end
 
     def issues(state: nil, first: 30)
       scope = object.issues.order(number: :desc)
-      scope = scope.where(state: Issue.states[state]) if state
+      scope = scope.where(state: state) if state
       scope.limit(first)
     end
 
     def pull_requests(state: nil, first: 30)
       scope = object.pull_requests.order(number: :desc)
-      scope = scope.where(state: PullRequest.states[state]) if state
+      scope = scope.where(state: state) if state
       scope.limit(first)
     end
 

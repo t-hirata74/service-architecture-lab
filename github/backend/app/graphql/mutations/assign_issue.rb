@@ -11,10 +11,7 @@ module Mutations
       issue = Issue.find_by(id: issue_id)
       return { issue: nil, errors: ["Issue not found"] } unless issue
 
-      resolver = PermissionResolver.new(context[:current_user], issue.repository)
-      unless resolver.role_at_least?(:triage)
-        return { issue: nil, errors: ["Forbidden"] }
-      end
+      return { issue: nil, errors: ["Forbidden"] } unless authorize!(issue.repository, :assign_issue?, strict: false)
 
       users = User.where(login: assignee_logins).to_a
       missing = assignee_logins - users.map(&:login)

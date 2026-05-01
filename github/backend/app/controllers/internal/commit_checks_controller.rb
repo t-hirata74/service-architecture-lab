@@ -30,8 +30,15 @@ module Internal
 
     private
 
+    DEV_DEFAULT_TOKEN = "dev-internal-token".freeze
+
     def authenticate_internal!
-      expected = ENV.fetch("INTERNAL_INGRESS_TOKEN", "dev-internal-token")
+      expected = ENV["INTERNAL_INGRESS_TOKEN"].presence || DEV_DEFAULT_TOKEN
+      # 本番環境で開発用デフォルトトークンが残っていたら即座に拒否
+      if Rails.env.production? && expected == DEV_DEFAULT_TOKEN
+        head :service_unavailable
+        return
+      end
       provided = request.headers["X-Internal-Token"]
       head :unauthorized unless ActiveSupport::SecurityUtils.secure_compare(expected.to_s, provided.to_s)
     end

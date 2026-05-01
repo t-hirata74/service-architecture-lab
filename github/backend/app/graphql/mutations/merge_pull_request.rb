@@ -11,8 +11,7 @@ module Mutations
       pr = PullRequest.find_by(id: pull_request_id)
       return { pull_request: nil, errors: ["Pull request not found"] } unless pr
 
-      resolver = PermissionResolver.new(context[:current_user], pr.repository)
-      return { pull_request: nil, errors: ["Forbidden"] } unless resolver.can?(:merge)
+      return { pull_request: nil, errors: ["Forbidden"] } unless authorize!(pr.repository, :merge_pull_request?, strict: false)
 
       begin
         pr.merge!

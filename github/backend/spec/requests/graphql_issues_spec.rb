@@ -63,13 +63,14 @@ RSpec.describe "GraphQL issues / mutations", type: :request do
       expect(body["errors"].first["message"]).to eq("Unauthenticated")
     end
 
-    it "rejects outsider on private repository (404 hiding)" do
+    it "rejects outsider on private repository" do
       body = post_graphql(
         mutation,
         headers: { "X-User-Login" => outsider.login },
         variables: { o: "acme", n: "tools", t: "X", b: "" }
       )
-      expect(body["errors"].first["message"]).to eq("Forbidden")
+      expect(body.dig("data", "createIssue", "errors")).to eq(["Forbidden"])
+      expect(body.dig("data", "createIssue", "issue")).to be_nil
     end
   end
 

@@ -12,8 +12,7 @@ module Mutations
       pr = PullRequest.find_by(id: pull_request_id)
       return { pull_request: nil, errors: ["Pull request not found"] } unless pr
 
-      resolver = PermissionResolver.new(context[:current_user], pr.repository)
-      return { pull_request: nil, errors: ["Forbidden"] } unless resolver.can?(:request_review)
+      return { pull_request: nil, errors: ["Forbidden"] } unless authorize!(pr.repository, :request_review?, strict: false)
 
       users = User.where(login: reviewer_logins).to_a
       missing = reviewer_logins - users.map(&:login)

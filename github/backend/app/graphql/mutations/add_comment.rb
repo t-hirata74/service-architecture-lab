@@ -11,10 +11,7 @@ module Mutations
       issue = Issue.find_by(id: issue_id)
       return { comment: nil, errors: ["Issue not found"] } unless issue
 
-      resolver = PermissionResolver.new(context[:current_user], issue.repository)
-      unless resolver.role_at_least?(:read)
-        return { comment: nil, errors: ["Forbidden"] }
-      end
+      return { comment: nil, errors: ["Forbidden"] } unless authorize!(issue.repository, :comment?, strict: false)
 
       comment = issue.comments.create(author: user, body: body)
       if comment.persisted?

@@ -10,11 +10,7 @@ module Mutations
       issue = Issue.find_by(id: issue_id)
       return { issue: nil, errors: ["Issue not found"] } unless issue
 
-      # ADR 0002 MIN_REQUIRED[:assign_issue] == :triage; close も :triage 以上
-      resolver = PermissionResolver.new(context[:current_user], issue.repository)
-      unless resolver.role_at_least?(:triage)
-        return { issue: nil, errors: ["Forbidden"] }
-      end
+      return { issue: nil, errors: ["Forbidden"] } unless authorize!(issue.repository, :close_issue?, strict: false)
 
       issue.close!
       { issue: issue, errors: [] }

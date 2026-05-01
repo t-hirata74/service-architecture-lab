@@ -1,10 +1,42 @@
 class RepositoryPolicy < ApplicationPolicy
+  # ADR 0002: 認可は GraphQL resolver / mutation から **Pundit policy 経由**で呼ぶ。
+  # 役割の最大値解決は PermissionResolver、verb への束縛はここに集約する。
+  # Mutation 側で `PermissionResolver.new(user, repo).role_at_least?(:write)` を直書きしない。
+
   def show?
     resolver.role_at_least?(:read)
   end
 
-  def push?
-    resolver.can?(:push)
+  def create_issue?
+    resolver.can?(:create_issue)
+  end
+
+  def comment?
+    resolver.can?(:comment)
+  end
+
+  def assign_issue?
+    resolver.can?(:assign_issue)
+  end
+
+  def close_issue?
+    resolver.can?(:assign_issue) # close と assign は同じ triage 階層 (ADR 0002 MIN_REQUIRED)
+  end
+
+  def create_pull_request?
+    resolver.role_at_least?(:read)
+  end
+
+  def request_review?
+    resolver.can?(:request_review)
+  end
+
+  def submit_review?
+    resolver.can?(:submit_review)
+  end
+
+  def merge_pull_request?
+    resolver.can?(:merge)
   end
 
   def admin?

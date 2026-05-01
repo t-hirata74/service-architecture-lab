@@ -15,7 +15,7 @@ module Mutations
     def resolve(owner:, name:, title:, body:, head_ref:, base_ref:, head_sha:)
       user = current_user!
       repository = Organization.find_by!(login: owner).repositories.find_by!(name:)
-      authorize!(repository, :show?)
+      return { pull_request: nil, errors: ["Forbidden"] } unless authorize!(repository, :create_pull_request?, strict: false)
 
       pr = PullRequest.new(
         repository: repository,
