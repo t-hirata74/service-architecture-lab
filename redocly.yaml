@@ -1,0 +1,10 @@
+extends:
+  - minimal
+
+rules:
+  # 学習用途では認証スコープが薄いプロジェクトもあるため緩める
+  security-defined: off
+  # operation_id は今回 path + method で十分一意 (将来クライアント生成で必要になったら有効化)
+  operation-operationId: off
+  operation-4xx-response: warn
+  no-unused-components: warn

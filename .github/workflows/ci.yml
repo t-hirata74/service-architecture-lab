@@ -283,3 +283,24 @@ jobs:
           sleep 3
           curl -fsS http://localhost:8010/health
           kill $PID
+
+  openapi-lint:
+    name: openapi (lint slack + youtube schemas)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Redocly CLI
+        run: npm install -g @redocly/cli
+
+      - name: Lint slack OpenAPI
+        run: redocly lint slack/backend/docs/openapi.yml
+
+      - name: Lint youtube OpenAPI
+        run: redocly lint youtube/backend/docs/openapi.yml
