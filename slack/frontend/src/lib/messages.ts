@@ -1,18 +1,8 @@
 import { api } from "./api";
+import type { components } from "./api-types";
 
-export type Message = {
-  id: number;
-  body: string;
-  parent_message_id: number | null;
-  edited_at: string | null;
-  created_at: string;
-  user: { id: number; display_name: string };
-};
-
-export type MessagesPage = {
-  messages: Message[];
-  next_cursor: number | null;
-};
+export type Message = components["schemas"]["Message"];
+export type MessagesPage = components["schemas"]["MessagesPage"];
 
 export async function fetchMessages(channelId: number, before?: number, limit: number = 50): Promise<MessagesPage> {
   const params = new URLSearchParams();

@@ -24,6 +24,7 @@ class MessagesBroadcastTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :created
+    assert_schema_conform(201)
     body = JSON.parse(@response.body)
     assert_equal "hello over websocket", body["body"]
     assert_equal @user.id, body["user"]["id"]
@@ -39,6 +40,7 @@ class MessagesBroadcastTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :success
+    assert_schema_conform(200)
   end
 
   test "POST /channels/:id/read does not broadcast when cursor cannot advance" do

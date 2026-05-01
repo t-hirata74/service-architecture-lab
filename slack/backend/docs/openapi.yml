@@ -1,0 +1,362 @@
+openapi: 3.0.3
+info:
+  title: slack-backend
+  description: |
+    Slack 風プロジェクトの REST API。WebSocket (ActionCable) は別契約で
+    `mount ActionCable.server => "/cable"` 経由。
+    詳細は `docs/api-style.md` および `slack/docs/architecture.md` を参照。
+
+    認証 (login / create-account / logout) は rodauth が JSON モードで
+    `/login`, `/create-account`, `/logout` を提供する。レスポンス形は
+    rodauth-jwt の標準形に準拠。
+  version: 0.1.0
+servers:
+  - url: http://localhost:3010
+    description: Local development
+
+tags:
+  - name: auth
+  - name: me
+  - name: channels
+  - name: messages
+  - name: summary
+
+paths:
+  /me:
+    get:
+      tags: [me]
+      summary: 認証中ユーザー情報
+      security:
+        - jwt: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "401":
+          description: 未認証
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /channels:
+    get:
+      tags: [channels]
+      summary: 自分が所属するチャンネル一覧 (既読 / 最新メッセージ ID 同梱)
+      security:
+        - jwt: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChannelList"
+    post:
+      tags: [channels]
+      summary: チャンネル作成 (作成者は自動で admin として join)
+      security:
+        - jwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChannelCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Channel"
+
+  /channels/{id}/read:
+    post:
+      tags: [channels]
+      summary: 既読 cursor を進める (ADR 0002 - 単調増加ガード)
+      security:
+        - jwt: []
+      parameters:
+        - $ref: "#/components/parameters/ChannelId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message_id]
+              properties:
+                message_id:
+                  type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadResponse"
+
+  /channels/{id}/join:
+    post:
+      tags: [channels]
+      summary: public チャンネルに参加 (idempotent)
+      security:
+        - jwt: []
+      parameters:
+        - $ref: "#/components/parameters/ChannelId"
+      responses:
+        "200":
+          description: 既にメンバー / 新規参加どちらでも 200
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JoinResponse"
+        "403":
+          description: public 以外のチャンネル
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /channels/{id}/summary:
+    get:
+      tags: [summary]
+      summary: ai-worker による直近メッセージの要約 (モック)
+      security:
+        - jwt: []
+      parameters:
+        - $ref: "#/components/parameters/ChannelId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Summary"
+        "502":
+          description: ai-worker 通信失敗 (graceful degradation 改修候補)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /channels/{channel_id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ChannelIdInPath"
+    get:
+      tags: [messages]
+      summary: チャンネルのメッセージ (cursor ページング、新しい順)
+      security:
+        - jwt: []
+      parameters:
+        - in: query
+          name: before
+          schema:
+            type: integer
+          required: false
+          description: この ID 未満を返す
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            maximum: 100
+            default: 50
+          required: false
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessagesPage"
+    post:
+      tags: [messages]
+      summary: メッセージ投稿 (ActionCable で fan-out)
+      security:
+        - jwt: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageCreateRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+components:
+  securitySchemes:
+    jwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "rodauth-jwt が Authorization: <token> 形式で発行する"
+
+  parameters:
+    ChannelId:
+      in: path
+      name: id
+      schema:
+        type: integer
+      required: true
+    ChannelIdInPath:
+      in: path
+      name: channel_id
+      schema:
+        type: integer
+      required: true
+
+  schemas:
+    Me:
+      type: object
+      required: [id, display_name, email]
+      properties:
+        id:
+          type: integer
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+
+    Channel:
+      type: object
+      required: [id, name, kind, topic]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [public, private, dm]
+        topic:
+          type: string
+          nullable: true
+        last_read_message_id:
+          type: integer
+          nullable: true
+        latest_message_id:
+          type: integer
+          nullable: true
+
+    ChannelList:
+      type: object
+      required: [channels]
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: "#/components/schemas/Channel"
+
+    ChannelCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [public, private, dm]
+          default: public
+        topic:
+          type: string
+
+    ReadResponse:
+      type: object
+      required: [last_read_message_id, advanced]
+      properties:
+        last_read_message_id:
+          type: integer
+          nullable: true
+        advanced:
+          type: boolean
+
+    JoinResponse:
+      type: object
+      required: [id, channel]
+      properties:
+        id:
+          type: integer
+        channel:
+          $ref: "#/components/schemas/Channel"
+
+    Message:
+      type: object
+      required: [id, body, parent_message_id, edited_at, created_at, user]
+      properties:
+        id:
+          type: integer
+        body:
+          type: string
+        parent_message_id:
+          type: integer
+          nullable: true
+        edited_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        user:
+          type: object
+          required: [id, display_name]
+          properties:
+            id:
+              type: integer
+            display_name:
+              type: string
+              nullable: true
+
+    MessagesPage:
+      type: object
+      required: [messages, next_cursor]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        next_cursor:
+          type: integer
+          nullable: true
+
+    MessageCreateRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+        parent_message_id:
+          type: integer
+          nullable: true
+
+    Summary:
+      type: object
+      required: [channel_name, message_count, participants, summary]
+      properties:
+        channel_name:
+          type: string
+        message_count:
+          type: integer
+        participants:
+          type: array
+          items:
+            type: string
+        summary:
+          type: string
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

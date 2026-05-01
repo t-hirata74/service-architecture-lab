@@ -1,11 +1,7 @@
 import { api } from "./api";
+import type { components } from "./api-types";
 
-export type Summary = {
-  channel_name: string;
-  message_count: number;
-  participants: string[];
-  summary: string;
-};
+export type Summary = components["schemas"]["Summary"];
 
 export async function fetchChannelSummary(channelId: number): Promise<Summary> {
   const res = await api(`/channels/${channelId}/summary`);

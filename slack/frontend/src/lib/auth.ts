@@ -1,11 +1,8 @@
 import { api, setToken, clearToken } from "./api";
 import { disconnectCable } from "./cable";
+import type { components } from "./api-types";
 
-export type Me = {
-  id: number;
-  display_name: string;
-  email: string;
-};
+export type Me = components["schemas"]["Me"];
 
 function extractToken(res: Response): string {
   const token = res.headers.get("Authorization");
