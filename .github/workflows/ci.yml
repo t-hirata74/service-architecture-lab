@@ -284,6 +284,146 @@ jobs:
           curl -fsS http://localhost:8010/health
           kill $PID
 
+  github-backend:
+    name: github / backend (Rails RSpec + GraphQL)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: github_test
+          MYSQL_USER: github
+          MYSQL_PASSWORD: github
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: github/backend
+
+    env:
+      RAILS_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USERNAME: github
+      DB_PASSWORD: github
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.1"
+          bundler-cache: true
+          working-directory: github/backend
+
+      - name: Grant github_* DB privileges
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot \
+            -e "GRANT ALL PRIVILEGES ON \`github\_%\`.* TO 'github'@'%'; FLUSH PRIVILEGES;"
+
+      - name: Database create + migrate
+        run: bundle exec rails db:create db:migrate
+
+      - name: RSpec
+        run: bundle exec rspec
+
+      - name: GraphQL schema export is up to date
+        run: |
+          bundle exec rake graphql:dump_schema
+          git diff --exit-code docs/schema.graphql
+
+  github-frontend:
+    name: github / frontend (Next.js + urql)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: github/frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: github/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  github-ai-worker:
+    name: github / ai-worker (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: github/ai-worker
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: github/ai-worker/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Import smoke test
+        run: python -c "import main; print('main import OK')"
+
+      - name: Boot smoke test
+        run: |
+          uvicorn main:app --port 8020 &
+          PID=$!
+          sleep 3
+          curl -fsS http://localhost:8020/health
+          kill $PID
+
+  github-terraform:
+    name: github / infra (terraform validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: github/infra/terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init (no backend)
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        run: terraform validate
+
   openapi-lint:
     name: openapi (lint slack + youtube schemas)
     runs-on: ubuntu-latest

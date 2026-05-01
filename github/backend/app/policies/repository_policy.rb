@@ -19,7 +19,9 @@ class RepositoryPolicy < ApplicationPolicy
     def resolve
       return scope.where(visibility: Repository.visibilities[:public_visibility]) if user.nil?
 
-      org_ids = Membership.where(user_id: user.id).pluck(:organization_id)
+      # ADR 0002: outside_collaborator は org base 継承を持たない (= 個別付与だけが視認の根拠)
+      inheriting_roles = [Membership.roles[:member], Membership.roles[:admin]]
+      org_ids = Membership.where(user_id: user.id, role: inheriting_roles).pluck(:organization_id)
       collaborator_repo_ids = RepositoryCollaborator.where(user_id: user.id).pluck(:repository_id)
       team_repo_ids = TeamRepositoryRole.where(team_id: user.team_members.pluck(:team_id)).pluck(:repository_id)
 

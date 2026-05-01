@@ -1,5 +1,5 @@
 Rails.application.routes.draw do
-  post "/graphql", to: "graphql#execute"
+  match "/graphql", to: "graphql#execute", via: %i[get post]
 
   namespace :internal do
     post "commit_checks", to: "commit_checks#create"

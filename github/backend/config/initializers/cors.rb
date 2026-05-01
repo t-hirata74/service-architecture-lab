@@ -4,7 +4,7 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
 
     resource "/graphql",
              headers: :any,
-             methods: %i[post options],
+             methods: %i[get post options],
              expose: %w[Authorization]
 
     resource "/health",

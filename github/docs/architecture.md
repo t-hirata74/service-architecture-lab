@@ -164,4 +164,4 @@ cd ../frontend && npm run dev      # http://localhost:3025
 | 4 | PullRequest / Review / RequestedReviewer + Mutation (`createPullRequest` / `requestReview` / `submitReview` / `mergePullRequest`) / Issue/PR 番号空間共有 | 🟢 完了 (RSpec 51 件 / Issue=#1, PR=#2 を実環境で確認) |
 | 5a | CI チェック集約 (commit_checks + PullRequest.checkStatus 派生) + ai-worker 統合 (`/review`, `/code-summary`, `/check/run`) + backend `/internal/commit_checks` ingress | 🟢 完了 (RSpec 63 件 / ai-worker → backend → GraphQL の全層疎通) |
 | 5b | Frontend (Next.js 16 + urql + graphql-codegen) + viewer 切替 + repository / PR 詳細 + CI バッジ | 🟢 完了 (build / lint / typecheck 通過 / 3 ルート 200) |
-| 5c | Playwright E2E + Terraform 設計図 + CI workflows + MVP 化 | ⚪ 未着手 |
+| 5c | Playwright E2E + Terraform 設計図 + CI workflows + MVP 化 | 🟢 MVP 完成 (Playwright 4 件通過 / `terraform validate` / CI 4 ジョブ追加) |
