@@ -50,7 +50,7 @@ group :development, :test do
 
   # 共通方針: Rails backend のテストは RSpec + FactoryBot
   # (docs/coding-rules/rails.md / docs/testing-strategy.md)
-  gem "rspec-rails", "~> 7.1"
+  gem "rspec-rails", "~> 8.0"
   gem "factory_bot_rails"
 end
 
