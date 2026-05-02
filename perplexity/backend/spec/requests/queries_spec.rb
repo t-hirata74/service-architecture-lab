@@ -58,6 +58,32 @@ RSpec.describe "Queries API", type: :request do
       end
     end
 
+    context "with non-integer X-User-Id" do
+      it "returns 401 (defensive integer cast)" do
+        post "/queries",
+             params: { text: "x" }.to_json,
+             headers: { "X-User-Id" => "abc", "Content-Type" => "application/json" }
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
+    context "in production environment" do
+      around do |example|
+        original = Rails.env
+        Rails.env = "production"
+        example.run
+      ensure
+        Rails.env = original
+      end
+
+      it "rejects X-User-Id with 401 (operating-patterns §7: dev-only auth)" do
+        post "/queries",
+             params: { text: "x" }.to_json,
+             headers: { "X-User-Id" => user.id.to_s, "Content-Type" => "application/json" }
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
     context "when ai-worker /retrieve returns 0 hits" do
       before do
         stub_request(:post, "http://localhost:8030/retrieve")
