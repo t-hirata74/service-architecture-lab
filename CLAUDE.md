@@ -230,6 +230,147 @@ Python側：
 
 ---
 
+### 4. Instagram（Python 主体 / Django）
+
+> 例外的に **バックエンドを Python(Django) で実装** する。Django/DRF の実務感覚と、巨大スケール事例（実際の Instagram は Django ベース）の追体験が目的。
+
+Backend（Django / DRF）：
+
+* ユーザー / フォロー関係（有向グラフ）
+* 投稿（画像メタデータ・キャプション）
+* タイムライン（フォロー中ユーザーの投稿フィード）
+* いいね / コメント
+* 認証（最小1経路）
+
+Python(ai-worker)：
+
+* タイムライン生成（fan-out on write / read のどちらかを検証）
+* レコメンド（発見タブ相当・モック）
+* 画像タグ抽出（モック）
+
+技術課題の中核：
+
+* **タイムライン生成戦略**（push 型 vs pull 型）
+* フォローグラフの DB 設計
+* Django ORM での N+1 回避とインデックス設計
+
+---
+
+### 5. Reddit（Python 主体 / FastAPI）
+
+> 例外的に **バックエンドを Python(FastAPI) で実装** する。FastAPI + 非同期 I/O + Pydantic の実務感覚を獲得することが目的。
+
+Backend（FastAPI）：
+
+* サブレディット（コミュニティ）
+* 投稿 / コメント（**ツリー構造**）
+* Upvote / Downvote
+* スコアリング（Hot / Top / New）
+* 認証（最小1経路）
+
+Python(ai-worker)：
+
+* ランキング再計算バッチ（Hot スコアの定期更新）
+* スパム判定（モック）
+* 関連サブレディットレコメンド（モック）
+
+技術課題の中核：
+
+* **コメントツリーの DB 設計**（Adjacency List / Materialized Path / Nested Set の比較）
+* 投票スコアのリアルタイム反映と整合性
+* ランキングアルゴリズム（Hot/Best）の実装
+
+---
+
+### 6. Uber（Go 主体 / 配車マッチング）
+
+> 例外的に **バックエンドを Go で実装** する。goroutine による高並行処理と、地理空間インデックスを用いたリアルタイムマッチングを学ぶことが目的。
+
+Backend（Go）：
+
+* ドライバー位置の継続更新（WebSocket / gRPC streaming）
+* 乗車リクエストとドライバーのマッチング
+* 配車状態の状態機械（requested → matched → on_trip → completed）
+* 料金計算（距離 × 時間 × サージ係数）
+* 認証（最小1経路）
+
+Python(ai-worker)：
+
+* ETA 推定（モック）
+* サージプライシング推定（モック）
+* 需要予測バッチ
+
+技術課題の中核：
+
+* **地理空間インデックス**（S2 / Geohash / H3 のいずれかで近傍検索）
+* goroutine + channel による並行マッチングループ
+* 状態機械の整合性（重複マッチ防止）
+
+---
+
+### 7. Discord（Go 主体 / リアルタイムチャット）
+
+> 例外的に **バックエンドを Go で実装** する。WebSocket fan-out とサーバ／チャンネル単位のシャーディングを学ぶことが目的。
+
+Backend（Go）：
+
+* ギルド（サーバ）／チャンネル／メッセージ
+* WebSocket ゲートウェイ（pub/sub fan-out）
+* プレゼンス（オンライン状態）
+* ロール／権限（チャンネル単位の overwrite）
+* 認証（最小1経路）
+
+Python(ai-worker)：
+
+* メッセージ要約（モック）
+* スパム／NSFW 検知（モック）
+
+技術課題の中核：
+
+* **WebSocket fan-out** とギルド単位のシャーディング設計
+* goroutine + channel での購読者管理
+* プレゼンス情報の整合性（ハートビート設計）
+
+> Slack プロジェクトと用途が近いが、こちらは **Go × ギルド単位シャーディング** に焦点を置き、Slack(Rails) との実装比較を学習素材にする。
+
+---
+
+## 学習方針：言語別プロジェクトと Rails リプレイス
+
+本リポジトリのオーナーは **Rails エンジニア** を主軸としつつ、Python / Go のナレッジ獲得を目的に上記プロジェクトを並走させる。
+
+### 各プロジェクトの言語役割（再掲）
+
+| # | プロジェクト | バックエンド | 主な学習対象 |
+| --- | --- | --- | --- |
+| 1 | Slack | Rails | WebSocket / fan-out（Rails 視点） |
+| 2 | YouTube | Rails | 非同期ワーカー / 状態機械 |
+| 3 | GitHub | Rails | 権限グラフ / 状態管理 |
+| 4 | Instagram | **Python(Django/DRF)** | Django ORM / タイムライン生成 |
+| 5 | Reddit | **Python(FastAPI)** | 非同期 I/O / コメントツリー |
+| 6 | Uber | **Go** | goroutine / 地理空間インデックス |
+| 7 | Discord | **Go** | WebSocket fan-out / シャーディング |
+
+### Rails リプレイス学習
+
+Python / Go で実装したプロジェクト（4〜7）は、**完成後に Rails で再実装する別プロジェクト**を作ることを学習オプションとして許容する。
+
+```txt
+service-architecture-lab/
+  instagram/          # Django/DRF 版（オリジナル）
+  instagram-rails/    # Rails 再実装版（学習用リプレイス）
+```
+
+目的：
+
+* 同じドメインを **言語/FW を変えて実装し直す**ことで、各 FW の思想・ORM・非同期モデルの違いを体感する
+* Rails への置き換え時に「Django/FastAPI/Go の何が代替しづらいか」を ADR に残す（例：Django Admin、FastAPI の型駆動、Go の並行性 など）
+* リプレイス版は **オリジナル版の完成後に着手**する。同時並行で進めない（混乱と未完を避ける）
+
+リプレイス版でも ADR 最低3本・README・CI 追加など「完成の定義」は同じ基準を満たすこと。
+
+---
+
 ## インフラ設計（任意）
 
 Terraformで以下を定義（実行はしない）
