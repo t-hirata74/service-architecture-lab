@@ -8,10 +8,14 @@ class AiWorkerClient
 
   DEFAULT_BASE_URL = "http://localhost:8030".freeze
   DEFAULT_TIMEOUT = 5.0
+  DEFAULT_STREAM_TIMEOUT = 30.0  # SSE 用 read_timeout (Phase 4 で長時間化想定)
 
-  def initialize(base_url: ENV.fetch("AI_WORKER_URL", DEFAULT_BASE_URL), timeout: DEFAULT_TIMEOUT)
+  def initialize(base_url: ENV.fetch("AI_WORKER_URL", DEFAULT_BASE_URL),
+                 timeout: DEFAULT_TIMEOUT,
+                 stream_timeout: DEFAULT_STREAM_TIMEOUT)
     @base_url = base_url
     @timeout = timeout
+    @stream_timeout = stream_timeout
   end
 
   # POST /corpus/embed
@@ -76,8 +80,7 @@ class AiWorkerClient
     uri = URI.parse(@base_url + path)
     http = Net::HTTP.new(uri.host, uri.port)
     http.open_timeout = @timeout
-    # SSE は long-lived。Phase 3 の合成は数 chunk なので read_timeout は緩めに
-    http.read_timeout = 30.0
+    http.read_timeout = @stream_timeout
 
     request = Net::HTTP::Post.new(uri.path,
                                   "Content-Type" => "application/json",
@@ -99,28 +102,39 @@ class AiWorkerClient
           events << parsed unless parsed.nil?
         end
       end
+      # 末尾 \n\n がない場合の取りこぼし対策 (proxy トリミング / ai-worker bug 対策).
+      # buffer が空ならスキップ.
+      unless buffer.strip.empty?
+        parsed = parse_sse_block(buffer)
+        events << parsed unless parsed.nil?
+      end
     end
     events
   rescue Errno::ECONNREFUSED, Net::OpenTimeout, Net::ReadTimeout, SocketError => e
     raise Error, "ai-worker unreachable: #{e.message}"
   end
 
+  # SSE block (event:/data:/comment 行を含む 1 event 分) を parse.
+  # SSE 仕様準拠 (W3C EventSource):
+  # - 複数の data: 行は \n で join (multi-line payload 対応)
+  # - event: が無ければ "message" (default event type)
+  # - ":" で始まる行はコメント (keepalive 等) として無視
   def parse_sse_block(block)
     event_name = nil
-    data_str = nil
+    data_lines = []
     block.each_line do |raw_line|
       line = raw_line.chomp
+      next if line.empty?
+      next if line.start_with?(":") # comment / keepalive
       if line.start_with?("event:")
         event_name = line.sub(/^event:\s*/, "")
       elsif line.start_with?("data:")
-        # 1 イベント = 1 data: 行 (本プロジェクトの規約)
-        data_str = line.sub(/^data:\s*/, "")
+        data_lines << line.sub(/^data:\s*/, "")
       end
-      # ":" で始まるコメント行 / 空行は無視
     end
-    return nil if event_name.nil? || data_str.nil?
+    return nil if data_lines.empty?
 
-    { event: event_name, data: JSON.parse(data_str) }
+    { event: event_name || "message", data: JSON.parse(data_lines.join("\n")) }
   rescue JSON::ParserError => e
     raise Error, "malformed SSE data: #{e.message}"
   end
