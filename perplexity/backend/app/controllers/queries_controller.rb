@@ -22,7 +22,8 @@ class QueriesController < ApplicationController
 
   # GET /queries/:id
   def show
-    query = current_user.queries.find_by(id: params[:id])
+    # N+1 防止: answer + citations を eager load (本数が増えても 1 SQL).
+    query = current_user.queries.includes(answer: :citations).find_by(id: params[:id])
     return render json: { error: "not_found" }, status: :not_found if query.nil?
 
     render json: serialize_query(query, query.answer)

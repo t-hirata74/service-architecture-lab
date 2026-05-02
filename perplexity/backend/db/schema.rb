@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_01_140029) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_02_050550) do
   create_table "answers", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.text "body", size: :medium, null: false
     t.datetime "created_at", null: false
@@ -42,6 +42,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_01_140029) do
     t.string "marker", limit: 64, null: false
     t.integer "position", null: false
     t.bigint "source_id", null: false
+    t.index ["answer_id", "marker"], name: "idx_citations_answer_marker_unique", unique: true
     t.index ["answer_id", "position"], name: "index_citations_on_answer_id_and_position"
     t.index ["answer_id"], name: "index_citations_on_answer_id"
     t.index ["source_id"], name: "index_citations_on_source_id"

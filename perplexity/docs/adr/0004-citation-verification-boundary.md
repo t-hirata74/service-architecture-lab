@@ -121,6 +121,14 @@ LLM 出力の典型的な失敗モードとして:
 
 - **Rails 側で SSE chunk 毎に regex スキャン**: 1 chunk あたり数十文字 × 数十 chunk なので CPU は問題にならない。observability で per-chunk のスキャン時間を計測できるよう logger.tagged を入れる
 - **partial buffering の複雑度**: chunk 境界をまたぐ marker のため Rails 側に未確定 tail バッファ。バグ温床になりやすい → unit-test で「marker が `[#src_` の後で chunk 終わり、次 chunk で `3]`」「不完全 marker のまま done が来る」「marker らしき文字列が code block 内にある (escape)」を網羅
+
+> **Phase 3 と Phase 4 の境界 (実装注)**:
+> Phase 3 (同期 RAG) では `RagOrchestrator#assemble_from_events` が **完成 body から事後に**
+> citation を組み立てる。chunk 単位の partial buffering / regex incremental parse は **Phase 3 では不要**.
+> Phase 4 (SSE proxy) では Rails が ai-worker からの chunked stream を消費しながら **chunk 単位で**
+> regex で marker を抽出し、frontend へ event:chunk を流す前に検証して event:citation_invalid を
+> 注入する形に書き直す。Phase 3 の assemble_from_events は **捨てる前提**で書かれており、
+> Phase 4 で再利用しない (ADR 0005 の「synthesize_stream 同期消費は Phase 4 で捨てる」と整合).
 - **二重 assert (ai-worker 警告 + Rails 検証)**: コード重複だが **意図的**: ai-worker の単体テストでも assert が走り、Rails の境界が ai-worker のバグを素通りさせない保険になる
 - **本文に invalid marker が残る**: UX 上はキレイではないが、本文改変より監査整合性を優先 (citations テーブルが clean な方が価値が高い)
 - **ai-worker のテストの責務**: ai-worker は assert を warn で出すので、テストは「warn が出ること」までに留める。assert を panic にしない判断は本 ADR で固定

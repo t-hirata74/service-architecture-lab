@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import AsyncIterator
 
@@ -100,3 +101,28 @@ def test_no_passages_still_emits_intro_and_done():
     events = _events_from(synthesize_stream("query", [], []))
     names = [e["event"] for e in events]
     assert names == ["chunk", "done"]
+
+
+# ADR 0004: ai-worker self-defense として allowed 外 source_id を吐いた場合 logger.warning.
+# Rails 側で再検証されるので panic ではなく warn のみだが、warn が出ること自体は縛る.
+def test_warns_when_emitting_source_id_outside_allowed_set(caplog, passages):
+    with caplog.at_level(logging.WARNING, logger="services.synthesizer"):
+        list(_events_from(synthesize_stream("query", passages, [10])))  # source_id=20 が allowed 外
+    warning_msgs = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("not in allowed_source_ids" in m or "out-of-allowed" in m for m in warning_msgs), \
+        f"expected ADR 0004 self-defense warning, got: {warning_msgs}"
+
+
+def test_does_not_warn_when_all_source_ids_are_allowed(caplog, passages):
+    with caplog.at_level(logging.WARNING, logger="services.synthesizer"):
+        list(_events_from(synthesize_stream("query", passages, [10, 20])))
+    warning_msgs = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    assert warning_msgs == [], f"unexpected warning when all allowed: {warning_msgs}"
+
+
+def test_warns_under_fixture_invalid_mode(monkeypatch, caplog, passages):
+    monkeypatch.setenv("SYNTHESIZER_FIXTURE", "invalid")
+    with caplog.at_level(logging.WARNING, logger="services.synthesizer"):
+        list(_events_from(synthesize_stream("query", passages, [10, 20])))
+    warning_msgs = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("fixture=invalid" in m for m in warning_msgs)
