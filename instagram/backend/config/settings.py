@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework.authtoken",
+    "corsheaders",
     "accounts",
     "follows",
     "posts",
@@ -30,6 +31,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -129,3 +131,15 @@ CELERY_TASK_ROUTES = {
 }
 
 AI_WORKER_URL = config("AI_WORKER_URL", default="http://127.0.0.1:8040")
+
+# CORS: frontend (Next.js :3045) からの dev cross-origin を許可。
+# production では allowed origin を明示的に絞る (Phase 5 で Terraform 側に移す)。
+CORS_ALLOWED_ORIGINS = [
+    o.strip()
+    for o in config(
+        "CORS_ALLOWED_ORIGINS",
+        default="http://localhost:3045,http://127.0.0.1:3045",
+    ).split(",")
+    if o.strip()
+]
+CORS_ALLOW_CREDENTIALS = False  # Token 認証なので不要

@@ -8,4 +8,6 @@ urlpatterns = [
     path("posts/<int:pk>/like", views.like, name="post-like"),
     path("posts/<int:pk>/comments", views.comment_list_create, name="post-comments"),
     path("users/<str:username>/posts", views.user_posts, name="user-posts"),
+    path("discover", views.discover, name="discover"),
+    path("tags/suggest", views.suggest_tags, name="tags-suggest"),
 ]

@@ -120,10 +120,10 @@ cd ../playwright && npm test
 | --- | --- |
 | ADR (0001-0004)             | 🟢 全 Accepted |
 | architecture.md             | 🟢 ER / fan-out シーケンス / API 概観 / 起動順序まで記述 |
-| Backend (Django/DRF)        | 🟢 Phase 3 完了 — accounts / follows / posts / timeline + Celery fan-out + soft delete (pytest 40 件 pass) |
+| Backend (Django/DRF)        | 🟢 Phase 4 完了 — `/discover` / `/tags/suggest` で ai-worker 経由口 + django-cors-headers (pytest 44 件 pass) |
 | Celery worker               | 🟢 Phase 3 完了 — fan-out / backfill / unfollow remove / soft delete propagation の 4 task |
-| ai-worker (FastAPI)         | ⚪ Phase 4 で着手 |
-| Frontend (Next.js 16)       | ⚪ Phase 4 で着手 |
+| ai-worker (FastAPI)         | 🟢 Phase 4 完了 — `/recommend` (Discovery feed mock) + `/tags` (deterministic mock) (pytest 8 件 pass) |
+| Frontend (Next.js 16)       | 🟢 Phase 4 完了 — login/register/timeline/discover/post-new/profile + Tailwind v4 + useSyncExternalStore (typecheck + lint + build pass) |
 | 認証 (DRF TokenAuthentication) | 🟢 Phase 2 完了 — register / login / logout / IsAuthenticated default |
 | E2E (Playwright)            | ⚪ Phase 5 で着手 |
 | インフラ設計図 (Terraform)  | ⚪ Phase 5 で着手 |
@@ -152,5 +152,5 @@ cd ../playwright && npm test
 | 1 | scaffolding + ADR 4 本 + architecture.md + docker-compose | 🟢 設計フェーズ完了 |
 | 2 | Django scaffold (users / posts / follows / likes / comments) + DRF Token 認証 + 基本 CRUD + N+1 ガード | 🟢 完了 (pytest 23 件 / curl 経由で auth + CRUD smoke) |
 | 3 | Celery + Redis 統合 + `timeline_entries` モデル + fan-out / backfill / unfollow / delete 4 task + `/timeline` endpoint + soft delete | 🟢 完了 (pytest 40 件 pass / `CELERY_TASK_ALWAYS_EAGER` で chain を結合検証) |
-| 4 | ai-worker (FastAPI) `/recommend` `/tags` + frontend (Next.js timeline + プロフィール + 投稿フォーム) | ⚪ 未着手 |
+| 4 | ai-worker (FastAPI) `/recommend` `/tags` + frontend (Next.js timeline + プロフィール + 投稿フォーム) | 🟢 完了 (ai-worker pytest 8 件 / Django pytest 44 件 / Next.js build pass) |
 | 5 | Playwright E2E + Terraform 設計図 + GitHub Actions CI workflows | ⚪ 未着手 |
