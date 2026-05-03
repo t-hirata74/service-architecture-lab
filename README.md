@@ -3,7 +3,7 @@
 有名 SaaS のアーキテクチャを **ローカル完結のミニマム実装** で再現し、設計理解と技術力を実装で示す検証用プロジェクト群。
 
 > 単なるクローンではなく **「サービスが解いている技術課題を、小さく動く形で再現する」** ことを目的とする。
-> 機能網羅は除外（CLAUDE.md のスコープ判定基準を参照）、外部 SaaS 依存は禁止 (LLM や決済 / 動画コーデックも全部モック)。
+> 機能網羅は除外（[スコープ判定基準](docs/service-architecture-lab-policy.md#scope)）、外部 SaaS 依存は禁止 (LLM や決済 / 動画コーデックも全部モック)。
 > 設計判断はすべて **ADR (Architecture Decision Record)** で残し、後から「なぜそう作ったか」が読み取れる状態を保つ。
 
 ---
@@ -185,7 +185,8 @@ service-architecture-lab/
     testing-strategy.md   # 各プロジェクトのテスト方針
     git-workflow.md       # ブランチ / コミット規約
     adr-template.md       # ADR の雛形
-  CLAUDE.md               # 設計方針・スコープ・ADR 運用
+    service-architecture-lab-policy.md  # 完成定義・ADR 運用・スコープ・プロジェクト一覧（詳細）
+  CLAUDE.md               # エージェント向け要約（詳細は docs/service-architecture-lab-policy.md）
   Makefile                # 各サービスの起動 / テスト / lint のショートカット (`make help`)
   .github/workflows/      # CI (GitHub Actions)
 ```

@@ -1,7 +1,7 @@
 # Django (DRF) と Rails の比較メモ
 
 本リポは Rails 主軸のオーナーが Python / Go の知識を並走で獲得することを
-方針とする ([CLAUDE.md「言語別バックエンド方針」](../CLAUDE.md#学習方針言語別プロジェクトと-rails-リプレイス))。
+方針とする（[リポジトリ方針ドキュメント「学習方針」](./service-architecture-lab-policy.md#learning-roadmap-rails-replace)）。
 `instagram` プロジェクトを Django/DRF + Celery で実装した結果、
 **「Rails と比べて何が違ったか」**「**いつ Django を選ぶか**」を半年後の
 自分が読み返せるよう整理した一次資料。

@@ -2,7 +2,7 @@
 
 Instagram のアーキテクチャを参考に、**「フォロー中ユーザの投稿を、タイムライン上で時系列順に表示する」** をローカル環境で再現するプロジェクト。
 
-slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue 状態機械) / github (Rails / GraphQL + 権限グラフ) / perplexity (Rails / SSE + RAG) に続く 5 つ目のプロジェクトとして、**バックエンドを意図的に Django/DRF + Celery + Python に切り替え** ([CLAUDE.md「言語別プロジェクト」](../CLAUDE.md#学習方針言語別プロジェクトと-rails-リプレイス)) し、**タイムライン生成戦略 / フォローグラフ DB 設計 / Django ORM N+1 / 非同期 fan-out worker** の 4 つを正面から扱う。
+slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue 状態機械) / github (Rails / GraphQL + 権限グラフ) / perplexity (Rails / SSE + RAG) に続く 5 つ目のプロジェクトとして、**バックエンドを意図的に Django/DRF + Celery + Python に切り替え** ([リポジトリ方針「学習方針」](../docs/service-architecture-lab-policy.md#learning-roadmap-rails-replace)) し、**タイムライン生成戦略 / フォローグラフ DB 設計 / Django ORM N+1 / 非同期 fan-out worker** の 4 つを正面から扱う。
 
 外部 SaaS / LLM / 画像認識 API は使用せず、ai-worker 側で deterministic な mock を実装することでローカル完結を保つ。
 

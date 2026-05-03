@@ -2,7 +2,7 @@
 
 Discord のアーキテクチャを参考に、**「ギルド (server) / チャンネル / メッセージ + WebSocket gateway + プレゼンス」** をローカル環境で再現するプロジェクト。
 
-slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue) / github (Rails / GraphQL) / perplexity (Rails / SSE) / instagram (Django / Celery fan-out) に続く 6 つ目のプロジェクトとして、**バックエンドを意図的に Go で実装** ([CLAUDE.md「言語別プロジェクト」](../CLAUDE.md#学習方針言語別プロジェクトと-rails-リプレイス)) し、**Go の goroutine + channel × WebSocket fan-out × ギルド単位シャーディング × プレゼンスハートビート** の 4 つを正面から扱う。
+slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue) / github (Rails / GraphQL) / perplexity (Rails / SSE) / instagram (Django / Celery fan-out) に続く 6 つ目のプロジェクトとして、**バックエンドを意図的に Go で実装** ([リポジトリ方針「学習方針」](../docs/service-architecture-lab-policy.md#learning-roadmap-rails-replace)) し、**Go の goroutine + channel × WebSocket fan-out × ギルド単位シャーディング × プレゼンスハートビート** の 4 つを正面から扱う。
 
 外部 SaaS / LLM は使用せず、ai-worker 側で deterministic な mock を実装することでローカル完結を保つ。
 

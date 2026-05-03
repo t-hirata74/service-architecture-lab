@@ -390,7 +390,8 @@ def _ai_post(path, payload):
 
 ## 関連ドキュメント
 
-- [CLAUDE.md](../CLAUDE.md) — 全体方針 / スコープ / ADR の意義
+- [CLAUDE.md](../CLAUDE.md) — エージェント向け要約
+- [service-architecture-lab-policy.md](service-architecture-lab-policy.md) — 完成定義・スコープ・ADR・プロジェクト詳細
 - [api-style.md](api-style.md) — REST/GraphQL の選定方針
 - [framework-django-vs-rails.md](framework-django-vs-rails.md) — Django ↔ Rails 比較
 - [coding-rules/rails.md](coding-rules/rails.md) — Service オブジェクト / ai-worker 境界 / job 原子性
