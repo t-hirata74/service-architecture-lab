@@ -114,15 +114,15 @@ cd ../playwright && npm test
 
 | コンポーネント | ステータス |
 | --- | --- |
-| ADR (0001-0006)             | 🟢 全 Accepted (設計確定 / 独立レビュー通過済み) |
+| ADR (0001-0007)             | 🟢 全 Accepted (Phase 5 で 0007 認証方式を追加) |
 | architecture.md             | 🟢 RAG パイプライン / ER / SSE イベント形式 / degradation 規律まで記述 |
-| Backend (Rails 8)           | 🟢 Phase 4 完了 — `ActionController::Live` で SSE proxy + CitationValidator + SseProxy + 三段階 degradation (RSpec 101 件) |
+| Backend (Rails 8)           | 🟢 Phase 5 完了 — SSE proxy + CitationValidator + SseProxy + rodauth-rails JWT bearer (RSpec 105 件) |
 | ai-worker (FastAPI + numpy) | 🟢 Phase 3 完了 — /extract + /synthesize/stream (mock LLM SSE) + ADR 0004 self-defense (pytest 70 件) |
-| Frontend (Next.js 16)       | 🟢 Phase 4 完了 — QueryConsole (fetch + ReadableStream で SSE 受信 / 引用ハイライト / invalid は薄字) / lint+typecheck+build pass |
-| 認証 (rodauth-rails)        | ⏳ Phase 5 に繰り越し (Phase 4 は X-User-Id 維持 / production env ガード済み) |
-| E2E (Playwright)            | ⏳ Phase 5 で着手 |
-| インフラ設計図 (Terraform)  | ⏳ Phase 5 で追加 (本番想定で OpenSearch を描く想定 / ADR 0002 と整合) |
-| CI (GitHub Actions)         | ⏳ Phase 5 で追加 (16 ジョブ目以降 / ADR 0005) |
+| Frontend (Next.js 16)       | 🟢 Phase 5 完了 — QueryConsole + Authorization ヘッダ (JWT) / X-User-Id fallback / lint+typecheck pass |
+| 認証 (rodauth-rails)        | 🟢 Phase 5 完了 — JWT bearer + accounts/users 共有 PK (ADR 0007). login UI は派生タスクで実装 |
+| E2E (Playwright)            | 🟢 Phase 5 完了 — `perplexity/playwright/` で SSE 駆動 spec を scaffold (`webServer` で 3 サービス起動) |
+| インフラ設計図 (Terraform)  | 🟢 Phase 5 完了 — `infra/terraform/` (network/alb/ecs/rds/opensearch/s3/iam/cloudwatch/secrets/cloudfront) `validate` pass |
+| CI (GitHub Actions)         | 🟢 Phase 5 完了 — `.github/workflows/ci.yml` に perplexity-{backend,frontend,ai-worker,terraform} を追加 |
 
 ---
 
@@ -136,6 +136,7 @@ cd ../playwright && npm test
   - [0004 引用整合性の検証境界](docs/adr/0004-citation-verification-boundary.md)
   - [0005 テスト戦略](docs/adr/0005-testing-strategy.md)
   - [0006 チャンク分割戦略](docs/adr/0006-chunk-strategy.md)
+  - [0007 認証方式 (rodauth-rails + JWT bearer)](docs/adr/0007-auth-rodauth-jwt-bearer.md)
 - リポジトリ全体方針: [../CLAUDE.md](../CLAUDE.md)
 - API スタイル選定: [../docs/api-style.md](../docs/api-style.md)
 - 共通ルール: [../docs/](../docs/) (coding-rules / operating-patterns / testing-strategy)
@@ -150,4 +151,4 @@ cd ../playwright && npm test
 | 2 | コーパス取り込み (Source / Chunk + chunker + 擬似 encoder + embedding 永続化) + ai-worker `/retrieve` の hybrid 実装 + cold start ロード | 🟢 完了 (RSpec 19 件 + pytest 24 件 / curl `/retrieve` で hybrid 動作確認) |
 | 3 | Query / Answer / Citation モデル + Rails オーケストレーター + ai-worker `/extract` `/synthesize/stream` | 🟢 完了 (RSpec 64 件 + pytest 67 件 / `POST /queries` で 引用付き回答が同期返却) |
 | 4 | SSE streaming endpoint (Rails proxy) + 引用整合性検証 (CitationValidator + SseProxy) + Frontend (Next.js 16 + fetch ReadableStream + 引用ハイライト) | 🟢 完了 (RSpec 101 件 + pytest 70 件 / e2e で SSE → typewriter → 引用 valid/invalid 確認) |
-| 5 | rodauth-rails で X-User-Id を cookie auth に置換 + Playwright E2E + Terraform 設計図 + CI workflows | ⏳ 未着手 (認証は Phase 4 から繰り越し) |
+| 5 | rodauth-rails 導入 (JWT bearer / ADR 0007) + Playwright E2E + Terraform 設計図 + CI workflows | 🟢 完了 (RSpec 105 件 + terraform validate pass + ci.yml に 4 ジョブ追加) |
