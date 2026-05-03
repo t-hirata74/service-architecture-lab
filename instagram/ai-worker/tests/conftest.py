@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
-from main import app, get_engine
+from main import app, get_engine, require_internal_token
 
 
 @pytest.fixture
@@ -66,6 +66,16 @@ def seeded_engine():
 
 @pytest.fixture
 def client(seeded_engine):
+    app.dependency_overrides[get_engine] = lambda: seeded_engine
+    # tests は内部 token を bypass する (token 単体のテストは別途追加)
+    app.dependency_overrides[require_internal_token] = lambda: None
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def raw_client(seeded_engine):
+    """token bypass しない素のクライアント (401 動作確認用)。"""
     app.dependency_overrides[get_engine] = lambda: seeded_engine
     yield TestClient(app)
     app.dependency_overrides.clear()

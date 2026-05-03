@@ -1,13 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ApiPost, likePost, unlikePost } from "@/lib/api";
+import { ApiPost, deletePost, likePost, unlikePost } from "@/lib/api";
+import { useStoredUser } from "@/lib/hooks";
 
-export function PostCard({ post }: { post: ApiPost }) {
+export function PostCard({
+  post,
+  onDeleted,
+}: {
+  post: ApiPost;
+  onDeleted?: (id: number) => void;
+}) {
+  const router = useRouter();
+  const me = useStoredUser();
   const [liked, setLiked] = useState(post.liked_by_me);
   const [count, setCount] = useState(post.likes_count);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const isMine = me?.id === post.user.id;
 
   async function toggle() {
     if (busy) return;
@@ -19,11 +31,22 @@ export function PostCard({ post }: { post: ApiPost }) {
       if (willLike) await likePost(post.id);
       else await unlikePost(post.id);
     } catch {
-      // revert on failure
       setLiked(!willLike);
       setCount((c) => c - (willLike ? 1 : -1));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function onDelete() {
+    if (deleting || !confirm("この post を削除しますか？")) return;
+    setDeleting(true);
+    try {
+      await deletePost(post.id);
+      if (onDeleted) onDeleted(post.id);
+      else router.refresh();
+    } catch {
+      setDeleting(false);
     }
   }
 
@@ -60,7 +83,22 @@ export function PostCard({ post }: { post: ApiPost }) {
           >
             {liked ? "♥" : "♡"} {count}
           </button>
-          <span>💬 {post.comments_count}</span>
+          <Link
+            href={`/post/${post.id}`}
+            className="hover:underline"
+          >
+            💬 {post.comments_count}
+          </Link>
+          {isMine ? (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={deleting}
+              className="ml-auto text-black/40 hover:text-red-600 dark:text-white/40"
+            >
+              {deleting ? "..." : "delete"}
+            </button>
+          ) : null}
         </div>
       </div>
     </article>

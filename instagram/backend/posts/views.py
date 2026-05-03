@@ -90,17 +90,23 @@ def like(request: Request, pk: int) -> Response:
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+def _ai_post(path: str, payload: dict, timeout: int = 5):
+    """ai-worker への内部呼び出し共通関数。X-Internal-Token を付与。"""
+    return requests.post(
+        f"{settings.AI_WORKER_URL}{path}",
+        json=payload,
+        headers={"X-Internal-Token": settings.AI_WORKER_INTERNAL_TOKEN},
+        timeout=timeout,
+    )
+
+
 @api_view(["GET"])
 def discover(request: Request) -> Response:
     """ai-worker /recommend を呼び、返ってきた post_ids を hydrate する。
     architecture.md: ai-worker は read-only / Django が単一の書き込み窓口。
     """
     try:
-        ai_res = requests.post(
-            f"{settings.AI_WORKER_URL}/recommend",
-            json={"user_id": request.user.id, "top_k": 20},
-            timeout=5,
-        )
+        ai_res = _ai_post("/recommend", {"user_id": request.user.id, "top_k": 20})
         ai_res.raise_for_status()
         post_ids = ai_res.json().get("post_ids", [])
     except requests.RequestException:
@@ -119,11 +125,7 @@ def suggest_tags(request: Request) -> Response:
     if not image_url:
         return Response({"detail": "image_url is required"}, status=400)
     try:
-        ai_res = requests.post(
-            f"{settings.AI_WORKER_URL}/tags",
-            json={"image_url": image_url},
-            timeout=5,
-        )
+        ai_res = _ai_post("/tags", {"image_url": image_url})
         ai_res.raise_for_status()
         return Response(ai_res.json())
     except requests.RequestException:

@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import os
-from typing import Iterable
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import Engine, create_engine, text
 
@@ -40,11 +39,27 @@ def get_engine() -> Engine:
 app = FastAPI(title="instagram-ai-worker", version="0.1.0")
 
 
+# ─── shared secret ────────────────────────────────────────────────────────────
+# Django (経由口) のみ ai-worker を呼ぶ前提。直接アクセスを防御するための
+# defense-in-depth として X-Internal-Token を要求する。production では
+# 強い値に上書き、ローカルは default を Django 側と揃える。
+
+INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
+
+
+def require_internal_token(
+    x_internal_token: str | None = Header(default=None, alias="X-Internal-Token"),
+) -> None:
+    if x_internal_token != INTERNAL_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid internal token")
+
+
 # ─── /health ─────────────────────────────────────────────────────────────────
 
 
 @app.get("/health")
 def health() -> dict:
+    """疎通確認は token 不要 (Service Discovery / ALB health check 用)。"""
     return {"ok": True}
 
 
@@ -75,7 +90,11 @@ _RECOMMEND_SQL = text(
 )
 
 
-@app.post("/recommend", response_model=RecommendResponse)
+@app.post(
+    "/recommend",
+    response_model=RecommendResponse,
+    dependencies=[Depends(require_internal_token)],
+)
 def recommend(req: RecommendRequest, engine: Engine = Depends(get_engine)) -> RecommendResponse:
     with engine.connect() as conn:
         rows = conn.execute(
@@ -112,18 +131,26 @@ class TagsResponse(BaseModel):
 
 
 def _deterministic_tags(image_url: str) -> list[str]:
+    """SHA-256 digest 全 32 byte を走査して n 個の unique tag を返す。
+    digest を使い切るまで衝突しても拾い続けるので、12 種 pool で
+    n=5 上限なら確率的に必ず n 個取れる。
+    """
     digest = hashlib.sha256(image_url.encode("utf-8")).digest()
     n = 3 + (digest[0] % 3)  # 3 〜 5 個
     seen: list[str] = []
-    for i in range(n + 4):  # 重複を避けるための余裕
+    for byte in digest:
         if len(seen) >= n:
             break
-        tag = _TAG_POOL[digest[i] % len(_TAG_POOL)]
+        tag = _TAG_POOL[byte % len(_TAG_POOL)]
         if tag not in seen:
             seen.append(tag)
     return seen
 
 
-@app.post("/tags", response_model=TagsResponse)
+@app.post(
+    "/tags",
+    response_model=TagsResponse,
+    dependencies=[Depends(require_internal_token)],
+)
 def tags(req: TagsRequest) -> TagsResponse:
     return TagsResponse(tags=_deterministic_tags(req.image_url))

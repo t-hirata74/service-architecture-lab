@@ -131,6 +131,7 @@ CELERY_TASK_ROUTES = {
 }
 
 AI_WORKER_URL = config("AI_WORKER_URL", default="http://127.0.0.1:8040")
+AI_WORKER_INTERNAL_TOKEN = config("AI_WORKER_INTERNAL_TOKEN", default="dev-internal-token")
 
 # CORS: frontend (Next.js :3045) からの dev cross-origin を許可。
 # production では allowed origin を明示的に絞る (Phase 5 で Terraform 側に移す)。

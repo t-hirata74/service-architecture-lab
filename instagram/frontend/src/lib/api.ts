@@ -95,6 +95,20 @@ async function apiFetch<T>(
       ...(init.headers ?? {}),
     },
   });
+  // ADR 0004: token 失効 / DRF 側削除でアクセス不能になったら login へ戻す。
+  // /auth/login と /auth/register は token を取りに行く経路なので除外。
+  if (
+    res.status === 401 &&
+    typeof window !== "undefined" &&
+    !path.startsWith("/auth/login") &&
+    !path.startsWith("/auth/register")
+  ) {
+    if (window.localStorage.getItem(TOKEN_STORAGE_KEY)) {
+      clearAuth();
+      window.location.href = "/login";
+    }
+    throw new ApiError(401, "unauthorized");
+  }
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   const body = text ? JSON.parse(text) : null;
@@ -147,6 +161,35 @@ export async function fetchUserPosts(
 
 export async function fetchUser(username: string): Promise<ApiUser> {
   return apiFetch(`/users/${encodeURIComponent(username)}`);
+}
+
+export async function fetchPost(id: number): Promise<ApiPost> {
+  return apiFetch(`/posts/${id}`);
+}
+
+// ─── comments ─────────────────────────────────────────────────────────────────
+
+export type ApiComment = {
+  id: number;
+  user: ApiUser;
+  body: string;
+  created_at: string;
+};
+
+export async function fetchComments(
+  postId: number,
+): Promise<Paginated<ApiComment>> {
+  return apiFetch(`/posts/${postId}/comments`);
+}
+
+export async function createComment(
+  postId: number,
+  body: string,
+): Promise<ApiComment> {
+  return apiFetch(`/posts/${postId}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
 }
 
 export async function createPost(

@@ -125,9 +125,43 @@ cd ../playwright && npm test
 | ai-worker (FastAPI)         | 🟢 Phase 4 完了 — `/recommend` (Discovery feed mock) + `/tags` (deterministic mock) (pytest 8 件 pass) |
 | Frontend (Next.js 16)       | 🟢 Phase 4 完了 — login/register/timeline/discover/post-new/profile + Tailwind v4 + useSyncExternalStore (typecheck + lint + build pass) |
 | 認証 (DRF TokenAuthentication) | 🟢 Phase 2 完了 — register / login / logout / IsAuthenticated default |
-| E2E (Playwright)            | 🟢 Phase 5 完了 — `instagram/playwright/` に register→post / fan-out / like の 3 spec scaffold (`webServer` で 3 サービス + EAGER Celery) |
+| E2E (Playwright)            | 🟢 Phase 5 完了 — `instagram/playwright/` で register→post / fan-out / like の 3 spec が **実機 chromium で 3/3 pass (11.5s)** |
 | インフラ設計図 (Terraform)  | 🟢 Phase 5 完了 — `infra/terraform/` (network/alb/ecs(4 service)/rds/elasticache/s3/cloudfront/iam/cloudwatch/secrets) `validate` pass |
 | CI (GitHub Actions)         | 🟢 Phase 5 完了 — `.github/workflows/ci.yml` に instagram-{backend,frontend,ai-worker,terraform} 4 ジョブ追加 |
+
+---
+
+## 運用 / メンテナンス
+
+### counter drift の修復
+
+ADR 0002 / 0003 で denormalize した `users.followers_count / following_count / posts_count` が signal 例外で狂った場合は以下で修復する:
+
+```bash
+python manage.py recount_user_stats --dry-run    # 差分確認
+python manage.py recount_user_stats              # 書き戻し
+```
+
+夜間 batch (cron / EventBridge Scheduler) からこのコマンドを叩く想定。
+
+### ai-worker shared secret
+
+ai-worker (`/recommend`, `/tags`) は `X-Internal-Token` を要求する (defense in depth)。Django は `settings.AI_WORKER_INTERNAL_TOKEN` から自動付与。本番では `INTERNAL_TOKEN` (ai-worker) と `AI_WORKER_INTERNAL_TOKEN` (Django) を Secrets Manager 経由の同じ強い値にする。`/health` だけは ALB / Service Discovery の health check 用に open。
+
+---
+
+## Future work (派生 ADR / 派生実装の余地)
+
+「完成の定義」は満たしたが、以下は意図的に派生として切り出した:
+
+- **hybrid timeline (celebrity 対応)** — 現状 fan-out on write のみ。フォロワー数 ≥ 10K で write amplification が破綻する。push と pull の混合は派生 ADR ([ADR 0001](docs/adr/0001-timeline-fanout-on-write.md))
+- **timeline cache layer (Redis ZSET)** — ホットユーザの timeline を Redis に置く案。永続化二系統の整合性管理コストとセットで派生 ADR
+- **block / mute / 非公開アカウント** — 現状は公開のみの follow。`follow_requests` テーブル + `accept` 経路は派生 ADR ([ADR 0002](docs/adr/0002-follow-graph.md))
+- **likes_count / comments_count を `posts` に denormalize** — 現状 `annotate(Count(... distinct=True))`。スケール時は denormalize する派生 ADR
+- **token rotation / Knox 移行** — DRF Token は無期限。TTL / rotation は派生 ADR ([ADR 0004](docs/adr/0004-auth-drf-token.md))
+- **画像アップロード経路** — 現状 `image_url` 文字列のみ。S3 pre-signed PUT + 画像変換は別プロジェクト相当
+- **検索 (FULLTEXT ngram)** — caption / username の全文検索。youtube プロジェクトと同じ仕組みで足せる
+- **通知** — フォロー / いいね / コメントの通知 (Celery + email / WebSocket) は別スコープ
 
 ---
 
@@ -154,3 +188,4 @@ cd ../playwright && npm test
 | 3 | Celery + Redis 統合 + `timeline_entries` モデル + fan-out / backfill / unfollow / delete 4 task + `/timeline` endpoint + soft delete | 🟢 完了 (pytest 40 件 pass / `CELERY_TASK_ALWAYS_EAGER` で chain を結合検証) |
 | 4 | ai-worker (FastAPI) `/recommend` `/tags` + frontend (Next.js timeline + プロフィール + 投稿フォーム) | 🟢 完了 (ai-worker pytest 8 件 / Django pytest 44 件 / Next.js build pass) |
 | 5 | Playwright E2E + Terraform 設計図 + GitHub Actions CI workflows | 🟢 完了 (Playwright 3 spec / Terraform validate / ci.yml に 4 ジョブ) |
+| 5+ | 後レビュー反映 (ai-worker shared secret / 401 redirect / tags pathological / comment UI / delete UI / counter drift 修復) | 🟢 完了 (Playwright **実機 3/3 pass** / pytest 51 + 12 / 派生 ADR 候補は Future work セクションに整理) |
