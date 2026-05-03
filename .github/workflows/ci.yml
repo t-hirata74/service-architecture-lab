@@ -577,6 +577,149 @@ jobs:
       - name: Validate
         run: terraform validate
 
+  instagram-backend:
+    name: instagram / backend (Django + DRF + pytest)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: instagram_test
+          MYSQL_USER: instagram
+          MYSQL_PASSWORD: instagram
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: instagram/backend
+
+    env:
+      DJANGO_DEBUG: "True"
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: "3306"
+      MYSQL_USER: instagram
+      MYSQL_PASSWORD: instagram
+      MYSQL_DATABASE: instagram_test
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: instagram/backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Grant test_instagram_* DB privileges (pytest-django creates test_* DB)
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot \
+            -e "GRANT ALL PRIVILEGES ON \`test\_instagram\_%\`.* TO 'instagram'@'%'; \
+                GRANT CREATE, DROP ON *.* TO 'instagram'@'%'; FLUSH PRIVILEGES;"
+
+      - name: Migrate
+        run: python manage.py migrate
+
+      - name: pytest
+        run: pytest -q
+
+  instagram-frontend:
+    name: instagram / frontend (Next.js 16)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: instagram/frontend
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: instagram/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  instagram-ai-worker:
+    name: instagram / ai-worker (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: instagram/ai-worker
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: instagram/ai-worker/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: pytest (sqlite + StaticPool で MySQL 不要)
+        run: pytest -q
+
+      - name: Boot smoke test
+        run: |
+          uvicorn main:app --port 8040 &
+          PID=$!
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://localhost:8040/health > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8040/health
+          kill $PID
+
+  instagram-terraform:
+    name: instagram / infra (terraform validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: instagram/infra/terraform
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init (no backend)
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        run: terraform validate
+
   openapi-lint:
     name: openapi (lint slack + youtube schemas)
     runs-on: ubuntu-latest
