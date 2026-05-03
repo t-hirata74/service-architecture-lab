@@ -48,9 +48,21 @@ src/
 
 ## API 通信
 
-- `lib/api.ts` の wrapper を経由する（JWT を localStorage から取得して `Authorization` ヘッダに自動付与）
+- `lib/api.ts` の wrapper を経由する（JWT / Token を localStorage から取得して `Authorization` ヘッダに自動付与）
 - 認証エラー / バリデーションエラーは `error` / `field-error` フィールドに従って `lib/auth.ts` のような形でパースして throw
 - リアルタイム購読は `lib/cable.ts` の singleton consumer を使う（複数生成しない）
+- **401 を受けたら自動 logout + `/login` に redirect** (instagram で確立): token 失効・サーバ側削除でアクセス不能になったら無限ループせずに login 画面へ戻す。`/auth/login` `/auth/register` は除外:
+  ```tsx
+  if (res.status === 401 && typeof window !== "undefined" &&
+      !path.startsWith("/auth/login") && !path.startsWith("/auth/register")) {
+    if (window.localStorage.getItem(TOKEN_KEY)) {
+      clearAuth();
+      window.location.href = "/login";   // hard navigate で in-flight effect を中断
+    }
+    throw new ApiError(401, "unauthorized");
+  }
+  ```
+  実例: `instagram/frontend/src/lib/api.ts:apiFetch`。
 
 ### REST + OpenAPI のプロジェクト
 

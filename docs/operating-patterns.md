@@ -246,10 +246,154 @@ await expect(page.getByText("FAILURE").first()).toBeVisible();
 
 ---
 
+## 10. fan-out on write — 非同期ワーカー + 同期 self entry + soft delete (instagram)
+
+タイムライン / 通知 / 検索 index 等、**read が write より圧倒的に多い**領域では「投稿時に follower / 購読者全員の事前展開先に書き込んでおく」パターンが効く。slack の WebSocket fan-out (リアルタイム) / youtube の Solid Queue (state machine) と並ぶ非同期ワーカーの 3 番目の典型例。instagram プロジェクト ([ADR 0001](../instagram/docs/adr/0001-timeline-fanout-on-write.md)) で確立した規律:
+
+### 規律 1: 投稿者本人の self entry は **同期 INSERT**
+
+```python
+# instagram/backend/timeline/signals.py
+@receiver(post_save, sender=Post)
+def on_post_created(sender, instance, created, **kwargs):
+    if not created:
+        return
+    # self entry: 投稿者は即座に自分の post を timeline で見られる UX
+    TimelineEntry.objects.get_or_create(
+        user_id=instance.user_id, post_id=instance.pk,
+        defaults={"created_at": instance.created_at},
+    )
+    pk = instance.pk
+    transaction.on_commit(lambda: fanout_post_to_followers.delay(pk))
+```
+
+「自分の post が自分の timeline に映るまで Celery 待ち」では UX が壊れる。**self だけ同期 INSERT、他 follower は async fan-out** という非対称が答え。
+
+### 規律 2: `transaction.on_commit` で enqueue 経路を統一
+
+`save()` 直後に `.delay()` すると、`ATOMIC_REQUESTS=True` のときに **transaction commit 前にタスクが走り Post を SELECT できない**事故が起きる。`transaction.on_commit(lambda: ...)` で「commit 後に enqueue」を強制すれば、auto-commit でも atomic でも等価に動く。Rails の `enqueue_after_transaction_commit` ([coding-rules/rails.md](coding-rules/rails.md)) と等価のパターン。
+
+### 規律 3: at-least-once + UNIQUE で冪等化
+
+```python
+@shared_task
+def fanout_post_to_followers(post_id):
+    follower_ids = Follow.objects.filter(followee_id=post.user_id) \
+                                  .values_list("follower_id", flat=True)
+    entries = [TimelineEntry(user_id=fid, post_id=post.pk, ...)
+               for fid in follower_ids if fid != post.user_id]
+    TimelineEntry.objects.bulk_create(entries, ignore_conflicts=True)
+```
+
+- `UNIQUE (user_id, post_id)` を `timeline_entries` に張る
+- `bulk_create(ignore_conflicts=True)` で再実行を吸収
+- self を `if fid != post.user_id` で除外 (UNIQUE で吸収はされるが無駄を避ける)
+
+### 規律 4: **soft delete + 非同期削除 fan-out**
+
+hard delete + DB CASCADE は **非同期 fan-out 先と競合**する。Post 作成直後に Celery が走っている状態でユーザが即削除すると、fan-out 先テーブルが先に消えて INSERT が `IntegrityError` で死ぬケース。
+解決: Post を soft delete (`deleted_at` セット) + `on_commit` で非同期削除タスクを enqueue する経路に統一する。read 側は `posts.deleted_at IS NULL` で必ず除外。
+
+実例: `instagram/backend/posts/models.py:Post.soft_delete()`、`instagram/backend/timeline/tasks.py:remove_post_from_timelines`。
+
+### 規律 5: 新規 follow / unfollow も同じ経路で **backfill / unwind**
+
+- follow 作成 → followee の直近 N 件を follower の timeline に backfill
+- unfollow → follower の timeline から followee の post を一括削除
+
+これも `Follow` の `post_save` / `post_delete` signal で `on_commit` → Celery task で処理する。**fan-out / backfill / unwind / delete propagation の 4 task に責務を分けて命名**すると、各 task が「この event のためだけのハンドラ」になり、テストも書きやすい。
+
+---
+
+## 11. denormalized counter + 自動修復 management command (instagram)
+
+`User.followers_count / following_count / posts_count` のような **「常時表示で `SELECT COUNT(*)` するには高すぎる」counter** は denormalize して `users` テーブルに持つのが定石。読み取りは速いが、signal が落ちて真値とズレる事故が起きうる。
+
+### 規律 1: `F("count") ± 1` で原子更新
+
+```python
+User.objects.filter(pk=instance.follower_id).update(
+    following_count=F("following_count") + 1,
+)
+```
+
+`User.objects.get(pk=...).following_count += 1; save()` は read-modify-write で race する。`F()` で DB 側の 1 文に落とすのが必須。Rails AR の `increment_counter` 相当だが、`F()` の方が複雑な式 / 条件 update に拡張可能。
+
+### 規律 2: `manage.py recount_<model>_stats` を最初から用意
+
+```python
+# instagram/backend/accounts/management/commands/recount_user_stats.py
+class Command(BaseCommand):
+    def add_arguments(self, parser):
+        parser.add_argument("--dry-run", action="store_true")
+
+    def handle(self, *args, dry_run=False, **opts):
+        users = User.objects.annotate(
+            true_followers=Count("follower_edges", distinct=True),
+            true_posts=Count("posts",
+                             filter=Q(posts__deleted_at__isnull=True),
+                             distinct=True),
+            ...
+        )
+        # 真値 vs 現在値 を比較、差分があれば update
+```
+
+夜間 batch (cron / EventBridge) から呼ぶ前提。**`--dry-run` で差分だけ表示できる**ようにしておくと運用での恐怖が減る (本番で「いきなり書き戻す」は怖い)。Rails の `rake task` 相当だが、Django の `BaseCommand` は argparse 統合と stdout/style helper が標準で付く。
+
+### 規律 3: 「signal 落ちは起きる前提」で書く
+
+signal は transaction の中で発火するが、Celery task が転んで再投入忘れだったり、デプロイ中の race だったりで drift する。「絶対ズレない」を目指すより「**ズレを定期的に検知 + 修復する経路を持つ**」方が運用が楽。**eventual consistency の精神**そのもの。
+
+実例: `instagram/backend/accounts/management/commands/recount_user_stats.py`。
+
+---
+
+## 12. 内部 ingress shared secret の言語横断パターン (Django ↔ FastAPI)
+
+§7 で github の Rails ↔ Python ai-worker の **内部 trusted ingress** を扱ったが、instagram では **Django ↔ FastAPI** で同じ pattern を逆向きに適用した (Django が呼ぶ側、ai-worker が受ける側)。
+
+```python
+# instagram/ai-worker/main.py
+INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
+
+def require_internal_token(
+    x_internal_token: str | None = Header(default=None, alias="X-Internal-Token"),
+):
+    if x_internal_token != INTERNAL_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid internal token")
+
+@app.post("/recommend", dependencies=[Depends(require_internal_token)])
+def recommend(...): ...
+```
+
+Django 側は呼び出し共通関数で `X-Internal-Token` を自動付与:
+
+```python
+def _ai_post(path, payload):
+    return requests.post(
+        f"{settings.AI_WORKER_URL}{path}",
+        json=payload,
+        headers={"X-Internal-Token": settings.AI_WORKER_INTERNAL_TOKEN},
+        timeout=5,
+    )
+```
+
+**意図** (§7 と共通):
+- ai-worker は VPC 内 / loopback 前提だが defense in depth として token を持つ
+- 本番では Secrets Manager 経由の同じ強い値、ローカルは default literal `dev-internal-token`
+- `/health` だけは ALB / Service Discovery health check 用に open
+- timing attack を気にするなら `secrets.compare_digest(...)` (Python) / `ActiveSupport::SecurityUtils.secure_compare` (Ruby) を使うのが筋
+
+実例: `instagram/ai-worker/main.py` + `instagram/backend/posts/views.py:_ai_post`。
+
+---
+
 ## 関連ドキュメント
 
 - [CLAUDE.md](../CLAUDE.md) — 全体方針 / スコープ / ADR の意義
 - [api-style.md](api-style.md) — REST/GraphQL の選定方針
+- [framework-django-vs-rails.md](framework-django-vs-rails.md) — Django ↔ Rails 比較
 - [coding-rules/rails.md](coding-rules/rails.md) — Service オブジェクト / ai-worker 境界 / job 原子性
-- [testing-strategy.md](testing-strategy.md) — RSpec / FactoryBot / OpenAPI 契約検証
+- [coding-rules/python.md](coding-rules/python.md) — Django/DRF + ai-worker (FastAPI) のコーディング規約
+- [testing-strategy.md](testing-strategy.md) — RSpec / pytest-django / OpenAPI 契約検証
 - [git-workflow.md](git-workflow.md) — ブランチ戦略 / コミット規約

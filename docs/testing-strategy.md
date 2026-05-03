@@ -201,6 +201,151 @@ npx playwright test --ui              # デバッグ
 - ロジックを足したら `pytest` を導入し、CI に追加する
 - 導入時は同時に `requirements-dev.txt` を分割
 
+### sqlite + StaticPool で MySQL 不要にする
+
+ai-worker が MySQL を読む構成 (instagram の `/recommend`) では、テストで本物の MySQL を立てずに **sqlite::memory: + StaticPool で同じ SQL を試験**できる:
+
+```python
+# instagram/ai-worker/tests/conftest.py
+from sqlalchemy.pool import StaticPool
+
+@pytest.fixture
+def seeded_engine():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,    # 1 connection 共有でないと :memory: が別 DB になる
+    )
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE posts (...)"))
+        conn.execute(text("INSERT INTO posts VALUES ..."))
+    return engine
+
+@pytest.fixture
+def client(seeded_engine):
+    app.dependency_overrides[get_engine] = lambda: seeded_engine
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+```
+
+SQL が SELECT/JOIN/LIMIT 中心であれば sqlite と MySQL で互換。FULLTEXT (ngram) のような MySQL 固有機能を使うときは別アプローチ ([RSpec FULLTEXT](#mysql-fulltext-ngram-は-transactional-fixtures-だと検索ヒットしない) と同じ問題)。
+
+---
+
+## Django backend (pytest-django)
+
+`instagram/backend/` で確立したパターン。Rails の RSpec と並ぶ位置づけ。
+
+### 書くもの
+
+- **モデルの不変条件** (counter denormalize / soft delete / UNIQUE)
+- **Request 仕様** (DRF の認証 / 権限 / バリデーション / pagination)
+- **Signal 連鎖** (`Post.save` → fan-out task → `TimelineEntry` 作成)
+- **Celery task の冪等性** (`bulk_create(ignore_conflicts=True)` で 2 度呼んでも増えない)
+- **N+1 不変条件試験** (下記の専用パターン)
+
+### N+1 不変条件試験 — Django/DRF の核
+
+**「件数で固定する」より「N に依存しない」を不変条件にする**:
+
+```python
+# instagram/backend/posts/tests/test_query_count.py
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
+
+def test_post_list_query_count_is_constant(authed_client, alice, bob):
+    seed_posts(bob, 5, liker=alice)
+    with CaptureQueriesContext(connection) as ctx_5:
+        res = authed_client.get("/posts")
+    count_5 = len(ctx_5.captured_queries)
+
+    seed_posts(bob, 15, liker=alice)
+    with CaptureQueriesContext(connection) as ctx_20:
+        res = authed_client.get("/posts")
+    count_20 = len(ctx_20.captured_queries)
+
+    assert count_5 == count_20, (
+        f"post list must not N+1; got {count_5} for N=5, {count_20} for N=20"
+    )
+```
+
+**規律**:
+
+- 固定値 (`assertNumQueries(7)`) で書くと Django/DRF バージョン差で揺れる
+- `count_5 == count_20` は **「N に依存しない」という構造的不変条件**
+- list endpoint を増やす PR では **必ずこの試験を 1 本書く** ([coding-rules/python.md](coding-rules/python.md))
+- `posts.queries.posts_for_viewer()` のような **N+1-safe queryset 関数** + serializer 側の `hasattr` 必須化と組み合わせて、prefetch 漏れを構造的に防ぐ
+
+### `transaction.on_commit` を **テストでは eager 実行する**
+
+pytest-django のデフォルト transaction wrapper は各テストを atomic で囲み rollback で巻き戻す。**この内側では `on_commit` callback が発火しない** (commit が起きないため)。
+
+`monkeypatch` 経由の autouse fixture は pytest-django の処理順で効かないので、**直書き setattr + yield/finally で復元**する:
+
+```python
+# conftest.py
+@pytest.fixture(autouse=True)
+def _on_commit_runs_eagerly():
+    """on_commit hook を test 中だけ即時実行する。"""
+    from django.db import transaction as dj_tx
+    original = dj_tx.on_commit
+    dj_tx.on_commit = lambda func, *args, **kwargs: func()
+    try:
+        yield
+    finally:
+        dj_tx.on_commit = original
+```
+
+これで `Post.save()` → signal → `on_commit(lambda: fanout.delay(pk))` の chain が **同一テスト transaction 内で完結**する。
+
+### Celery `task_always_eager` を **Django settings 側で書き換える**罠
+
+`app.config_from_object("django.conf:settings", namespace="CELERY")` の挙動上、**`celery_app.conf.task_always_eager = True` を直接書いても効かない**:
+
+```python
+# ❌ 効かない
+celery_app.conf.task_always_eager = True
+
+# ✅ 効く
+from django.conf import settings
+settings.CELERY_TASK_ALWAYS_EAGER = True
+```
+
+Celery は conf アクセス時に毎回 settings から読みに行くため。`os.environ.setdefault("CELERY_TASK_ALWAYS_EAGER", "True")` を conftest top に書く方法は **pytest-django が settings をすでに load した後で**間に合わないこともある。**確実なのは settings 属性の直接代入** (conftest.py の module top で実施)。
+
+### MySQL の test DB 権限を init script で付与する
+
+`pytest-django` は `test_<DATABASE>` を自動 CREATE するが、デフォルトの app ユーザには **`CREATE`/`DROP` 権限がない**。docker-compose の `mysql-init/01-grant-test-db.sql` で grant を init script 化:
+
+```sql
+GRANT ALL PRIVILEGES ON `test\_instagram\_%`.* TO 'instagram'@'%';
+GRANT CREATE, DROP ON *.* TO 'instagram'@'%';
+FLUSH PRIVILEGES;
+```
+
+実例: `instagram/infra/mysql-init/01-grant-test-db.sql`。CI では同等の grant ステップをワークフローに直書きする (`instagram-backend` ジョブを参照)。
+
+### Playwright + Django の起動 (Celery worker を立てずに済ませる)
+
+Playwright の `webServer` で Django を起動するとき、**`CELERY_TASK_ALWAYS_EAGER=True` env で起動**すれば fan-out task が Django プロセス内で同期実行される。Celery worker を別プロセスで立てなくて済むので test 安定性が高い:
+
+```ts
+// instagram/playwright/playwright.config.ts
+const DJANGO_ENV =
+  "CELERY_TASK_ALWAYS_EAGER=True DJANGO_DEBUG=True " +
+  "CORS_ALLOWED_ORIGINS=http://localhost:3045,http://127.0.0.1:3045";
+
+webServer: [{
+  command: `bash -lc 'source .venv/bin/activate && ${DJANGO_ENV} python manage.py runserver 0.0.0.0:3050'`,
+  cwd: "../backend",
+  url: `${BACKEND_URL}/health`,
+  reuseExistingServer: true,
+  timeout: 60_000,
+}, ...]
+```
+
+**trade-off**: production 構成 (Celery worker 別プロセス) と乖離するが、E2E は「ブラウザから golden path が踏めるか」が目的。Celery worker のプロセス分離自体は `instagram-backend` ジョブの pytest で踏まれるので二重保証になる。
+
 ---
 
 ## Frontend (Next.js)
