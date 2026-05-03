@@ -1,4 +1,6 @@
 Rails.application.routes.draw do
+  # ADR 0007: rodauth-rails (JWT bearer) は middleware として auto-mount される.
+  # /login, /logout, /create-account, /change-password, /close-account は middleware 経由.
   get "up" => "rails/health#show", as: :rails_health_check
 
   # ai-worker 疎通含む / Phase 4 で SSE endpoint も追加

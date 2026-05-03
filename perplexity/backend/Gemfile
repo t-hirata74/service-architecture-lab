@@ -17,6 +17,14 @@ gem "thruster", require: false
 # CORS (frontend Next.js とクロスオリジン)
 gem "rack-cors"
 
+# Authentication: rodauth-rails + JWT bearer (ADR 0007)
+gem "rodauth-rails"
+gem "jwt"
+gem "argon2"
+gem "tilt", "~> 2.4", require: false
+gem "sequel-activerecord_connection", "~> 2.0", require: false
+gem "bcrypt", "~> 3.1", require: false
+
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 
