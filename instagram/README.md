@@ -76,40 +76,207 @@ flowchart LR
 
 ---
 
-## ローカル起動 (Phase 2 以降で動作)
+## ローカル起動 / 動作確認ガイド
+
+> Django/Celery/FastAPI/Next.js が **5 プロセス並走**する構成のため、最初は
+> 「どこで何が動いているか」が分かりづらい。下の順番でセットアップすれば
+> ターミナル 4-5 個でフル機能を試せる。
 
 ### 前提
 
 - Docker / Docker Compose / Node.js 20+ / Python 3.12+
+- macOS / Linux 想定 (Windows は WSL2 推奨)
 
-### 起動
+---
+
+### 0. 一括セットアップ (初回のみ)
+
+リポジトリ root の `Makefile` にショートカットがある:
 
 ```bash
-# 1. インフラ
-docker compose up -d mysql redis           # 3311 / 6380
+make instagram-setup
+# 内訳:
+#   docker compose up -d mysql redis        (3311 / 6380)
+#   backend で venv + pip install + migrate
+#   ai-worker で venv + pip install
+#   frontend / playwright で npm install
+```
 
-# 2. backend
-cd backend && python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py seed                      # users / posts / follows 投入 (Phase 2 で実装)
-python manage.py runserver 0.0.0.0:3050
+セットアップが終わると以下のディレクトリ構造になっている:
 
-# 3. Celery worker (別タブ)
-cd backend && source .venv/bin/activate
-celery -A config worker -Q fanout,default -l info
+```
+instagram/
+  backend/.venv/            # Django 用 venv
+  ai-worker/.venv/          # FastAPI 用 venv (別物)
+  frontend/node_modules/
+  playwright/node_modules/
+```
 
-# 4. ai-worker (別タブ)
-cd ../ai-worker && python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --port 8040
+---
 
-# 5. frontend (別タブ)
-cd ../frontend && npm install
-npm run dev                                # http://localhost:3045
+### 1. 4 つのターミナルで起動 (各タブを開きっぱなしにする)
 
-# 6. E2E (Phase 5 で追加)
-cd ../playwright && npm test
+| Tab | 起動するもの | コマンド | ポート |
+| --- | --- | --- | --- |
+| 1 | **Django backend** (DRF) | `make instagram-backend` | :3050 |
+| 2 | **Celery worker** (fan-out) | `make instagram-celery` | (broker 経由) |
+| 3 | **ai-worker** (FastAPI) | `make instagram-ai` | :8040 |
+| 4 | **frontend** (Next.js) | `make instagram-frontend` | :3045 |
+
+#### Celery worker を立てる理由
+
+タイムラインの fan-out (ADR 0001) は本来 **非同期 Celery タスク**で実行される。
+worker を立てない場合、`Post` 作成は成功するが **フォロワーの timeline に
+反映されるのが永遠に遅延** する (broker にタスクが積まれたまま)。
+- 自分の timeline には自分の post が同期 INSERT で即座に映る (signal)
+- フォロワーの timeline / unfollow 後の削除は worker 必須
+
+> **時短したい時 (UI 触るだけ)**: Tab 2 を立てる代わりに Tab 1 を
+> `CELERY_TASK_ALWAYS_EAGER=True make instagram-backend` で起動すれば、
+> Django プロセス内で fan-out を同期実行する。Playwright が使っているのと
+> 同じ手法。
+
+---
+
+### 2. 疎通確認 (curl)
+
+各サービスが立ったら順番に health を叩く:
+
+```bash
+curl -s http://localhost:3050/health           # → {"ok": true}      Django
+curl -s http://localhost:8040/health           # → {"ok": true}      ai-worker
+curl -sI http://localhost:3045 | head -1       # → HTTP/1.1 200 OK   Next.js
+```
+
+3 つとも 200 が返れば準備完了。
+
+---
+
+### 3. ブラウザで動作確認 (golden path)
+
+http://localhost:3045 を開いて以下の流れを試す:
+
+1. **register**: `/register` で `alice` / `password123!` を登録
+   - 自動で `/` (timeline) にリダイレクト、空タイムラインが表示される
+2. **post**: ナビの `post` をクリック → image_url + caption を入れて submit
+   - timeline に自分の post が出る (self entry 同期 INSERT)
+   - **「ai-worker でタグを提案」**ボタンで `/tags` の動作も確認できる
+3. **2 人目を作る**: シークレットウィンドウ or 別ブラウザで `/register` から `bob` を登録
+4. **bob が alice を follow**: bob 側で `/users/alice` を開いて follow ボタン
+5. **alice の post が bob の timeline に出るか確認**:
+   - bob 側で `/` を開く
+   - 「alice の post が見える」= **fan-out が動いている**
+   - もし見えなければ → Celery worker が走っていない (Tab 2 を確認)
+6. **like / comment**: bob 側で alice の post の ♡ を押す → count + 1
+   - 💬 リンクで `/post/[id]` 詳細ページに遷移、コメントを書く
+7. **discover**: ナビの `discover` で **フォローしていないユーザの post** が出る (ai-worker `/recommend` 経由)
+8. **logout**: 右上 logout で localStorage の token がクリアされる
+
+---
+
+### 4. Django ならではの確認手段
+
+#### 4-1. Django Admin で生データを見る
+
+```bash
+cd instagram/backend && source .venv/bin/activate
+python manage.py createsuperuser    # username / email / password を対話で入力
+```
+
+http://localhost:3050/admin/ にログインすると、`User` / `Post` / `Like` /
+`Comment` / `Follow` / `TimelineEntry` を Web UI で CRUD できる。
+**fan-out のデバッグに最も役立つ**:
+- 「bob の post 作成 → TimelineEntry テーブルに alice 行ができたか」を直接確認
+- counter denormalize の値を直接見られる
+- 投稿を soft delete (deleted_at セット) する操作も可能
+
+#### 4-2. Django shell (ORM REPL)
+
+```bash
+python manage.py shell
+```
+
+```python
+>>> from accounts.models import User
+>>> from posts.models import Post
+>>> from timeline.models import TimelineEntry
+>>> alice = User.objects.get(username='alice')
+>>> alice.followers_count, alice.following_count, alice.posts_count
+(0, 1, 3)
+>>> Post.objects.filter(user=alice).count()
+3
+>>> TimelineEntry.objects.filter(user=alice).order_by('-created_at')[:5]
+<QuerySet [<TimelineEntry: ...>, ...]>
+```
+
+#### 4-3. MySQL に直接繋ぐ
+
+```bash
+python manage.py dbshell
+# または:
+docker exec -it instagram-mysql-1 mysql -uinstagram -pinstagram instagram_development
+```
+
+```sql
+SELECT id, username, followers_count, following_count, posts_count FROM users;
+SELECT * FROM follow_edges;
+SELECT user_id, post_id, created_at FROM timeline_entries ORDER BY created_at DESC LIMIT 10;
+```
+
+#### 4-4. counter drift の修復
+
+signal が落ちて denormalized counter が真値とずれた場合:
+
+```bash
+python manage.py recount_user_stats --dry-run    # 差分だけ表示
+python manage.py recount_user_stats              # 書き戻し
+```
+
+#### 4-5. テストを動かす
+
+```bash
+make instagram-backend-test    # pytest (Django + DRF) - 51 件
+make instagram-ai-test         # pytest (FastAPI)      - 12 件
+make instagram-frontend-lint   # lint + typecheck + build
+make instagram-test            # 上記 3 つを一括
+```
+
+#### 4-6. Playwright で全自動 E2E
+
+```bash
+cd instagram/playwright && npx playwright install chromium    # 初回のみ
+npm test
+```
+
+`webServer` で backend / ai-worker / frontend を自動起動 → register / post /
+fan-out / like を chromium 実機で踏む。所要 ~12 秒。Celery を立てなくても
+`CELERY_TASK_ALWAYS_EAGER=True` で eager 実行されるので Tab 2 不要。
+
+---
+
+### 5. トラブルシューティング
+
+| 症状 | 原因 / 対処 |
+| --- | --- |
+| `python manage.py migrate` で `Access denied` | mysql コンテナの初期化前。`docker compose ps` で `healthy` を確認、init script (`infra/mysql-init/01-grant-test-db.sql`) が走り終わってから再実行。 |
+| backend 起動時 `Can't connect to MySQL server on '127.0.0.1:3311'` | `make instagram-deps-up` を忘れている。`docker compose ps` で確認。 |
+| Celery worker 起動時 `Connection refused (redis)` | Redis コンテナが立っていない。`make instagram-deps-up`。 |
+| frontend が `CORS error` | `CORS_ALLOWED_ORIGINS` env を Django 側に設定 (default は localhost:3045 だけ)。 |
+| frontend で操作後 `/login` に飛ばされる | token が 401 を食った。`apiFetch` が自動 logout した動作 (ADR 0004 仕様)。 |
+| Post 作成しても follower の timeline に反映されない | Celery worker が動いていない。Tab 2 を確認するか EAGER mode で起動。 |
+| follow しても followers_count が 0 のまま | signal が落ちた可能性。`python manage.py recount_user_stats --dry-run` で差分を見る。 |
+| Playwright 実行時 `port 3050 already in use` | Tab 1 の Django dev server を止める (Playwright は自分で起動するため)。 |
+| ai-worker `/recommend` が 401 | `X-Internal-Token` 不一致。Django 経由 (`/discover`) で叩けばトークンは自動付与される。直接叩きたいときは `-H 'X-Internal-Token: dev-internal-token'` を付与。 |
+
+---
+
+### 6. 終了
+
+各タブで `Ctrl-C` で止めて、Docker は:
+
+```bash
+make instagram-deps-down       # mysql / redis 停止 (データは volume に残る)
+docker compose -f instagram/docker-compose.yml down -v   # データごと消す
 ```
 
 ---
