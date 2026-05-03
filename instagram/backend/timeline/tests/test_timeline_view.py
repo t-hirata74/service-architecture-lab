@@ -5,12 +5,14 @@
 - 時系列降順 (created_at desc)
 - soft delete された post は除外される
 """
-import time
+from datetime import timedelta
 
 import pytest
+from django.utils import timezone
 
 from follows.models import Follow
 from posts.models import Post
+from timeline.models import TimelineEntry
 
 
 @pytest.mark.django_db
@@ -38,17 +40,26 @@ def test_timeline_excludes_unfollowed_user_posts(authed_client, alice, bob):
 
 @pytest.mark.django_db
 def test_timeline_is_chronological_descending(authed_client, alice, bob):
+    """`auto_now_add` 任せの sleep 駆動だと CI ホスト時刻精度に依存して fragile。
+    Post と TimelineEntry の created_at を明示的に setだ する形で時系列を固定。"""
     Follow.objects.create(follower=alice, followee=bob)
     p1 = Post.objects.create(user=bob, caption="first")
-    time.sleep(0.01)  # auto_now_add の精度を分けるため
     p2 = Post.objects.create(user=bob, caption="second")
-    time.sleep(0.01)
     p3 = Post.objects.create(user=alice, caption="third (self)")
+
+    base = timezone.now()
+    times = {
+        p1.pk: base - timedelta(seconds=20),
+        p2.pk: base - timedelta(seconds=10),
+        p3.pk: base,
+    }
+    for pk, ts in times.items():
+        Post.objects.filter(pk=pk).update(created_at=ts)
+        TimelineEntry.objects.filter(post_id=pk).update(created_at=ts)
 
     res = authed_client.get("/timeline")
     ids = [item["id"] for item in res.data["results"]]
-    # 新しい順
-    assert ids[: len(ids)] == [p3.pk, p2.pk, p1.pk] or ids == [p3.pk, p2.pk, p1.pk]
+    assert ids == [p3.pk, p2.pk, p1.pk]
 
 
 @pytest.mark.django_db

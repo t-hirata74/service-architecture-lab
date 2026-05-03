@@ -146,7 +146,7 @@ erDiagram
   - **(A) Post 作成時**: self への `timeline_entries` INSERT は同期 (作成 transaction 内)。これが失敗したら 500 を返し、Post も rollback
   - **(B) Celery fan-out**: at-least-once。`UNIQUE (user_id, post_id)` + `INSERT IGNORE` で冪等。task が n 回 retry しても重複は出ない
   - **(C) Celery dead-letter**: max_retries 超過後は `posts.fanout_status = 'failed'` を立て、夜間 batch (`recover_failed_fanouts`) で再実行
-- **削除の伝播**: Post 削除も非同期 fan-out。delete されるまで follower の timeline に残るが、read 時に `JOIN posts WHERE deleted_at IS NULL` で除外
+- **削除の伝播**: Post 削除も非同期 fan-out。`/timeline` は `posts.queries.posts_by_ids_in_order` を経由する 2 段階クエリ (timeline_entries で post_id 列挙 → posts.deleted_at IS NULL を条件にした SELECT で hydrate) なので、Celery 削除 task が走り終わる前でも soft-deleted post は結果から落ちる
 - **counter の整合性**: `F('followers_count') ± 1` で race を回避。signal 例外時のズレは `manage.py recount_follows` で夜間修復 ([ADR 0002](adr/0002-follow-graph.md))
 
 ---
