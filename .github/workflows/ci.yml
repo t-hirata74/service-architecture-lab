@@ -433,6 +433,150 @@ jobs:
       - name: Validate
         run: terraform validate
 
+  perplexity-backend:
+    name: perplexity / backend (Rails RSpec + SSE)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: perplexity_test
+          MYSQL_USER: perplexity
+          MYSQL_PASSWORD: perplexity
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: perplexity/backend
+
+    env:
+      RAILS_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USERNAME: perplexity
+      DB_PASSWORD: perplexity
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.1"
+          bundler-cache: true
+          working-directory: perplexity/backend
+
+      - name: Grant perplexity_* DB privileges
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot \
+            -e "GRANT ALL PRIVILEGES ON \`perplexity\_%\`.* TO 'perplexity'@'%'; FLUSH PRIVILEGES;"
+
+      - name: Database create + migrate
+        run: bundle exec rails db:create db:migrate
+
+      - name: RSpec
+        run: bundle exec rspec
+
+  perplexity-frontend:
+    name: perplexity / frontend (Next.js 16)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: perplexity/frontend
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: perplexity/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  perplexity-ai-worker:
+    name: perplexity / ai-worker (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: perplexity/ai-worker
+
+    # MySQL を立てないため、tests/conftest.py の seeded_corpus を使う
+    # test_retriever_integration は接続失敗で `pytest.skip` される (ADR 0005).
+    # それ以外の unit test (encoder / score_fusion / synthesizer / extractor) は DB なしで通る.
+    env:
+      MYSQL_TEST_URL: "mysql+pymysql://perplexity:perplexity@127.0.0.1:65535/perplexity_test"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: perplexity/ai-worker/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: pytest (integration tests skip if MySQL unreachable)
+        run: pytest -q
+
+      - name: Boot smoke test
+        run: |
+          uvicorn main:app --port 8030 &
+          PID=$!
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://localhost:8030/health > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:8030/health
+          kill $PID
+
+  perplexity-terraform:
+    name: perplexity / infra (terraform validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: perplexity/infra/terraform
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.15.0"
+
+      - name: Format check
+        run: terraform fmt -check -recursive
+
+      - name: Init (no backend)
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        run: terraform validate
+
   openapi-lint:
     name: openapi (lint slack + youtube schemas)
     runs-on: ubuntu-latest
