@@ -720,6 +720,60 @@ jobs:
       - name: Validate
         run: terraform validate
 
+  discord-backend:
+    name: discord / backend (Go + migrate + smoke)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: discord_test
+          MYSQL_USER: discord
+          MYSQL_PASSWORD: discord
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: discord/backend
+
+    env:
+      DATABASE_URL: discord:discord@tcp(127.0.0.1:3306)/discord_test?parseTime=true&multiStatements=true
+      JWT_SECRET: ci-test-secret-for-discord-phase2
+      HTTP_ADDR: 127.0.0.1:3060
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: discord/backend/go.sum
+
+      - name: Migrate
+        run: go run ./cmd/server/migrate
+
+      - name: vet + build
+        run: |
+          go vet ./...
+          go build -o bin/server ./cmd/server
+
+      - name: Smoke /health
+        run: |
+          ./bin/server &
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+            if curl -fsS "http://${HTTP_ADDR}/health" >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://${HTTP_ADDR}/health"
+
   openapi-lint:
     name: openapi (lint slack + youtube schemas)
     runs-on: ubuntu-latest
