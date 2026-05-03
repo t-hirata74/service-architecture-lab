@@ -69,9 +69,9 @@ data: {"answer_id": 7, "citations": [{"marker":"src_3","source_id":42}]}\n\n
 ### Frontend (Next.js)
 
 - **`fetch` + ReadableStream を採用、`EventSource` は使わない**
-- 採用理由は **「`AbortController` で明示的に中断できる」「将来 Authorization header が要る場合 (rodauth-rails 以外の auth に切り替えた場合) に困らない」「ストリーム消費フックを汎用化しやすい」** の 3 点
-- (rodauth-rails の cookie auth で済むので EventSource でも auth は通るが、UX 制御 / 将来性 / 学習価値で fetch を選ぶ)
-- `fetch('/queries/123/stream', { credentials: 'include', signal: controller.signal })` の `response.body` を `getReader().read()` でループ
+- 採用理由は **「`AbortController` で明示的に中断できる」「`Authorization` header (rodauth-rails JWT bearer / ADR 0007) を SSE 接続に乗せられる」「ストリーム消費フックを汎用化しやすい」** の 3 点
+- `EventSource` は header をリクエストに付与できない仕様のため、JWT bearer 認証 (ADR 0007) と原理的に相性が悪い。fetch 経路はこの制約を回避する
+- `fetch('/queries/123/stream', { headers: { Authorization: jwt }, signal: controller.signal })` の `response.body` を `getReader().read()` でループ
 - 受け取った Uint8Array を TextDecoder でデコード、SSE フォーマットを自前パース (区切り `\n\n`、`event:` / `data:`)
 - **失敗時は再接続せず即終了**: `event: error` を受け取ったら stream を close、ユーザに「再生成」ボタンを提示。answer は `status: failed` で永続化済み
   - `Last-Event-ID` ベースの自動再接続は **本プロジェクトでは扱わない**: ADR 0001 の「失敗即終了 / 再生成は再リクエスト」と整合する形で、本 ADR からも削除する判断
