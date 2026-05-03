@@ -48,4 +48,9 @@ def me(request: Request) -> Response:
 @api_view(["GET"])
 def user_detail(request: Request, username: str) -> Response:
     user = get_object_or_404(User, username=username)
-    return Response(UserSerializer(user).data)
+    return Response(
+        UserSerializer(
+            user,
+            context={"request": request, "include_follow_status": True},
+        ).data
+    )

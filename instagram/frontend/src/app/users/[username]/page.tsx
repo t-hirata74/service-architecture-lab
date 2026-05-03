@@ -42,6 +42,8 @@ function Profile({ username }: { username: string }) {
     Promise.all([fetchUser(username), fetchUserPosts(username)])
       .then(([u, page]) => {
         setUser(u);
+        // ADR 0004 の `is_followed_by_viewer` で初期 follow 状態を確定
+        setFollowing(u.is_followed_by_viewer === true);
         setPosts(page.results);
       })
       .catch((e) => setError((e as Error).message));

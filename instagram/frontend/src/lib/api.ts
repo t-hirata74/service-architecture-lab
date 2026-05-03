@@ -12,6 +12,7 @@ export type ApiUser = {
   followers_count: number;
   following_count: number;
   posts_count: number;
+  is_followed_by_viewer?: boolean | null;
 };
 
 export type ApiPost = {
@@ -47,14 +48,24 @@ export function getStoredUser(): ApiUser | null {
   }
 }
 
+function _notifyAuthChange(): void {
+  // W3C 仕様: native StorageEvent は他タブにしか飛ばない。
+  // 同一タブの useSyncExternalStore subscriber を起こすため synthetic event を発火する。
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"));
+  }
+}
+
 export function storeAuth(token: string, user: ApiUser): void {
   window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
   window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  _notifyAuthChange();
 }
 
 export function clearAuth(): void {
   window.localStorage.removeItem(TOKEN_STORAGE_KEY);
   window.localStorage.removeItem(USER_STORAGE_KEY);
+  _notifyAuthChange();
 }
 
 function authHeaders(): Record<string, string> {

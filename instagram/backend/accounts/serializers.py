@@ -32,7 +32,34 @@ class LoginSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    """`is_followed_by_viewer` はコンテキストで明示的に要求された時だけ計算する。
+    timeline の埋め込み user 等で毎件 follow 探索する N+1 を避けるため、
+    `/users/<username>` の view だけが context に `include_follow_status=True` を渡す。
+    """
+
+    is_followed_by_viewer = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ("id", "username", "bio", "followers_count", "following_count", "posts_count")
+        fields = (
+            "id",
+            "username",
+            "bio",
+            "followers_count",
+            "following_count",
+            "posts_count",
+            "is_followed_by_viewer",
+        )
         read_only_fields = fields
+
+    def get_is_followed_by_viewer(self, obj: User) -> bool | None:
+        if not self.context.get("include_follow_status"):
+            return None
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return None
+        if request.user.pk == obj.pk:
+            return False
+        from follows.models import Follow
+
+        return Follow.objects.filter(follower=request.user, followee=obj).exists()
