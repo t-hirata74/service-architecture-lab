@@ -1,5 +1,7 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import F
+from django.utils import timezone
 
 
 class Post(models.Model):
@@ -21,6 +23,21 @@ class Post(models.Model):
             models.Index(fields=("user", "-created_at"), name="posts_user_created_idx"),
             models.Index(fields=("-created_at",), name="posts_created_idx"),
         ]
+
+    def soft_delete(self) -> None:
+        """ADR 0001: hard delete + CASCADE は非同期 fan-out 削除と競合するので
+        soft delete + Celery で timeline_entries を遅延削除する経路を採る。
+        view は本メソッドを呼ぶだけ。
+        """
+        if self.deleted_at is not None:
+            return
+        from accounts.models import User
+
+        self.deleted_at = timezone.now()
+        self.save(update_fields=["deleted_at"])
+        User.objects.filter(pk=self.user_id, posts_count__gt=0).update(
+            posts_count=F("posts_count") - 1
+        )
 
 
 class Like(models.Model):

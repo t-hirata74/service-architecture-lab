@@ -30,10 +30,13 @@ class PostSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "user", "created_at", "likes_count", "comments_count", "liked_by_me")
 
     def get_liked_by_me(self, obj: Post) -> bool:
-        # view 側で Prefetch(to_attr='liked_by_me_list') を流す前提
-        # prefetch していなければ False fallback (ad hoc fetch を避ける)
-        liked_list = getattr(obj, "liked_by_me_list", None)
-        return bool(liked_list)
+        # ADR 0003: prefetch 必須。silent fallback は N+1 を隠す。
+        if not hasattr(obj, "liked_by_me_list"):
+            raise AssertionError(
+                "Post.liked_by_me_list が prefetch されていない (ADR 0003)。"
+                "list/detail view では posts.queries.posts_for_viewer() を使うこと。"
+            )
+        return bool(obj.liked_by_me_list)
 
 
 class PostCreateSerializer(serializers.ModelSerializer):

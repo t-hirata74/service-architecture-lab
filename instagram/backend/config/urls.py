@@ -14,4 +14,5 @@ urlpatterns = [
     path("", include("accounts.urls_users")),
     path("", include("posts.urls")),
     path("", include("follows.urls")),
+    path("", include("timeline.urls")),
 ]

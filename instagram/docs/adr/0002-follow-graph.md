@@ -20,7 +20,8 @@ Accepted（2026-05-03）
 **「Adjacency List 型の `follow_edges` テーブル + 双方向 index + denormalized counter」** を採用する。
 
 - **`follow_edges (follower_id, followee_id, created_at)`** 単一テーブル
-- **PK = `(follower_id, followee_id)`** 複合 (重複フォロー防止 + following 列挙の高速化)
+- **auto-id PK + `UNIQUE (follower_id, followee_id)`** 複合 (重複フォロー防止 + following 列挙の高速化)
+  - Django は ForeignKey と複合 PK の組み合わせに 5.2 まで native 対応がなかったため、`UniqueConstraint` で代替する。アクセスパターン上は `(follower_id, followee_id)` の B-tree index が張られて等価
 - **逆引き index `(followee_id, follower_id)`** を別途定義 (followers 列挙の高速化)
 - **denormalized counter**: `users.followers_count` / `users.following_count` を保持し、`Follow` の create/destroy signal で `F('count') + 1` / `- 1` で更新 (race condition 回避)
 - **soft delete はしない**: `unfollow` は物理 DELETE。「過去にフォローしていた」を残す要件は無い (block 機能は別テーブルで設計予定 / 本 ADR スコープ外)
@@ -30,10 +31,11 @@ Accepted（2026-05-03）
 
 ### 1. Adjacency List + 双方向 index + denormalized counter ← 採用
 
-- 利点: PK と secondary index で **followers / following の両方向**が O(log N) で引ける
+- 利点: UNIQUE 制約 + secondary index で **followers / following の両方向**が O(log N) で引ける
 - 利点: フォロー / アンフォローが INSERT / DELETE 1 行で済む
 - 利点: counter は denormalize で `SELECT COUNT(*)` を回避
 - 欠点: 2-hop クエリ (FoF 推薦) は self-join になり、N+1 が出やすい → ADR 0003 で対処
+- 欠点: 厳密な「複合 PK」ではなく auto-id + UNIQUE になる (Django の制約)。クエリ性能は同等だが PK 概念とは差がある旨を本 ADR 内で明記
 
 ### 2. Adjacency Matrix (`follows[user_id][followee_id]` 想定)
 

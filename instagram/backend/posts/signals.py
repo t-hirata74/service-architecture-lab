@@ -19,6 +19,10 @@ def increment_posts_count(sender, instance: Post, created: bool, **kwargs) -> No
 
 @receiver(post_delete, sender=Post)
 def decrement_posts_count(sender, instance: Post, **kwargs) -> None:
+    # soft delete 経路は Post.soft_delete() で既に decrement 済み。
+    # 二重 decrement を避けるため deleted_at 立ちの post は skip する。
+    if instance.deleted_at is not None:
+        return
     User.objects.filter(pk=instance.user_id, posts_count__gt=0).update(
         posts_count=F("posts_count") - 1
     )

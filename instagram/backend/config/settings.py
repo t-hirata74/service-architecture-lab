@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "accounts",
     "follows",
     "posts",
+    "timeline",
 ]
 
 MIDDLEWARE = [
