@@ -1,0 +1,87 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: instagram_development
+      MYSQL_USER: instagram
+      MYSQL_PASSWORD: instagram
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3311:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "instagram", "-pinstagram"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # backend / frontend / ai-worker / celery worker は Phase 2 以降で uncomment して起動する
+  # backend:
+  #   build: ./backend
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3050:8000"
+  #   environment:
+  #     DATABASE_URL: mysql://instagram:instagram@mysql:3306/instagram_development
+  #     REDIS_URL: redis://redis:6379/0
+  #     AI_WORKER_URL: http://ai-worker:8000
+  #   volumes:
+  #     - ./backend:/app
+
+  # celery-worker:
+  #   build: ./backend
+  #   command: celery -A config worker -Q fanout,default -l info
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: mysql://instagram:instagram@mysql:3306/instagram_development
+  #     REDIS_URL: redis://redis:6379/0
+  #   volumes:
+  #     - ./backend:/app
+
+  # frontend:
+  #   build: ./frontend
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3045:3000"
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:3050
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+
+  # ai-worker:
+  #   build: ./ai-worker
+  #   ports:
+  #     - "8040:8000"
+  #   environment:
+  #     DATABASE_URL: mysql+pymysql://instagram:instagram@mysql:3306/instagram_development
+  #   volumes:
+  #     - ./ai-worker:/app
+
+volumes:
+  mysql_data:
