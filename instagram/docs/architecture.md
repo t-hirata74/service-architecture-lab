@@ -195,7 +195,7 @@ cd backend && python manage.py seed
 | Phase | 範囲 | 状態 |
 | --- | --- | --- |
 | 1 | scaffolding + ADR 4 本 + architecture.md + docker-compose | 🟢 設計フェーズ完了 |
-| 2 | Django scaffold (users / posts / follows / likes / comments) + DRF Token 認証 + 基本 CRUD + N+1 ガード (`assertNumQueries`) | ⚪ 未着手 |
+| 2 | Django scaffold (users / posts / follows / likes / comments) + DRF Token 認証 + 基本 CRUD + N+1 ガード (`assertNumQueries`) | 🟢 完了 (pytest 23 件 pass / curl smoke) |
 | 3 | Celery + Redis 統合 + `timeline_entries` モデル + fan-out task + `/timeline` endpoint + 削除伝播 | ⚪ 未着手 |
 | 4 | ai-worker (FastAPI) `/recommend` `/tags` + frontend (Next.js timeline + プロフィール + 投稿フォーム) | ⚪ 未着手 |
 | 5 | Playwright E2E + Terraform 設計図 + GitHub Actions CI workflows | ⚪ 未着手 |
