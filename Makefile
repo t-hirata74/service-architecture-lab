@@ -27,7 +27,7 @@ openapi-lint: ## OpenAPI スキーマを Redocly CLI で lint (slack / youtube)
 	npx -y @redocly/cli@latest lint --config redocly.yaml
 
 .PHONY: ci-local
-ci-local: openapi-lint slack-test youtube-test github-test perplexity-test instagram-test ## CI 相当のチェックをローカルで一通り実行
+ci-local: openapi-lint slack-test youtube-test github-test perplexity-test instagram-test discord-test ## CI 相当のチェックをローカルで一通り実行
 
 # ─── slack ────────────────────────────────────────────────────────────────────
 
@@ -254,3 +254,51 @@ instagram-e2e: ## instagram E2E (Playwright)
 
 .PHONY: instagram-test
 instagram-test: instagram-backend-test instagram-ai-test instagram-frontend-lint ## instagram の backend + ai-worker + frontend をまとめて実行
+
+# ─── discord ──────────────────────────────────────────────────────────────────
+
+.PHONY: discord-deps-up
+discord-deps-up: ## discord 依存コンテナ (mysql:3312) を起動
+	cd discord && docker compose up -d mysql
+
+.PHONY: discord-deps-down
+discord-deps-down: ## discord 依存コンテナを停止
+	cd discord && docker compose down
+
+.PHONY: discord-setup
+discord-setup: discord-deps-up ## discord 全コンポーネントの初期セットアップ
+	cd discord/backend  && go mod download
+	cd discord/ai-worker && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+	cd discord/frontend  && npm install
+	cd discord/playwright && npm install
+
+.PHONY: discord-backend
+discord-backend: ## discord backend (Go gateway) を :3060 で起動
+	cd discord/backend && go run ./cmd/server
+
+.PHONY: discord-backend-test
+discord-backend-test: ## discord backend テスト (go test -race)
+	cd discord/backend && go test -race ./...
+
+.PHONY: discord-ai
+discord-ai: ## discord ai-worker (FastAPI) を :8050 で起動
+	cd discord/ai-worker && .venv/bin/uvicorn main:app --port 8050
+
+.PHONY: discord-ai-test
+discord-ai-test: ## discord ai-worker テスト (pytest)
+	cd discord/ai-worker && .venv/bin/python -m pytest
+
+.PHONY: discord-frontend
+discord-frontend: ## discord frontend (Next.js) を :3055 で起動
+	cd discord/frontend && npm run dev
+
+.PHONY: discord-frontend-lint
+discord-frontend-lint: ## discord frontend lint + typecheck + build
+	cd discord/frontend && npm run lint && npm run typecheck && npm run build
+
+.PHONY: discord-e2e
+discord-e2e: ## discord E2E (Playwright)
+	cd discord/playwright && npm test
+
+.PHONY: discord-test
+discord-test: discord-backend-test discord-ai-test discord-frontend-lint ## discord の backend + ai-worker + frontend をまとめて実行

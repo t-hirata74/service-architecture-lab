@@ -1,0 +1,53 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: discord_development
+      MYSQL_USER: discord
+      MYSQL_PASSWORD: discord
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3312:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "discord", "-pdiscord"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # backend / frontend / ai-worker は Phase 2 以降で uncomment
+  # backend:
+  #   build: ./backend
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3060:8080"
+  #   environment:
+  #     DATABASE_URL: discord:discord@tcp(mysql:3306)/discord_development?parseTime=true
+  #     JWT_SECRET: dev-secret-do-not-use-in-prod
+  #     AI_WORKER_URL: http://ai-worker:8000
+
+  # frontend:
+  #   build: ./frontend
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3055:3000"
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:3060
+  #     NEXT_PUBLIC_WS_URL: ws://localhost:3060/gateway
+
+  # ai-worker:
+  #   build: ./ai-worker
+  #   ports:
+  #     - "8050:8000"
+
+volumes:
+  mysql_data:
