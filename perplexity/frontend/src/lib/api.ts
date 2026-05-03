@@ -1,7 +1,17 @@
-// 簡易 API 設定. Phase 1-4 は X-User-Id ヘッダで dev 認証 (operating-patterns §7 整合).
-// Phase 5+ で rodauth-rails の cookie auth に差し替え予定.
+// ADR 0007: rodauth-rails JWT bearer.
+// localStorage に "perplexity-jwt" があれば Authorization ヘッダで送る.
+// 無ければ X-User-Id (dev/test fallback) を送る. login UI は派生タスクで実装.
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3040";
 export const DEV_USER_ID = process.env.NEXT_PUBLIC_DEV_USER_ID ?? "1";
+export const JWT_STORAGE_KEY = "perplexity-jwt";
+
+function authHeaders(): Record<string, string> {
+  if (typeof window !== "undefined") {
+    const jwt = window.localStorage.getItem(JWT_STORAGE_KEY);
+    if (jwt) return { Authorization: jwt };
+  }
+  return { "X-User-Id": DEV_USER_ID };
+}
 
 export type CreateQueryResponse = {
   query_id: number;
@@ -14,7 +24,7 @@ export async function createQuery(text: string): Promise<CreateQueryResponse> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-User-Id": DEV_USER_ID,
+      ...authHeaders(),
     },
     body: JSON.stringify({ text }),
   });
@@ -53,7 +63,7 @@ export type QueryDetailResponse = {
 
 export async function getQuery(id: number): Promise<QueryDetailResponse> {
   const res = await fetch(`${API_BASE}/queries/${id}`, {
-    headers: { "X-User-Id": DEV_USER_ID },
+    headers: authHeaders(),
   });
   if (!res.ok) {
     throw new Error(`GET /queries/${id} failed: ${res.status}`);
