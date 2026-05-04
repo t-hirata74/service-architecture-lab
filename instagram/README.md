@@ -19,6 +19,19 @@ slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue 状態機械) /
 
 ---
 
+## E2E デモ (Playwright で録画)
+
+`cd instagram/playwright && npm run capture` で再生成。仕組みは [docs/testing-strategy.md キャプチャ節](../docs/testing-strategy.md#キャプチャ-gif-を-readme-に埋め込む仕組み)。
+
+| # | シナリオ | キャプチャ |
+| --- | --- | --- |
+| 01 | register → post 投稿 → 自分の timeline に出る | ![register-post-timeline](playwright/captures/01-register-post-self-timeline.gif) |
+| 03 | post の like ボタンで count が増える / 戻すと減る | ![like-toggle](playwright/captures/03-like-toggle-counter.gif) |
+
+> 02 (alice → bob follow による fan-out) は `browser.newContext()` を使った 2 ブラウザ協調テストで、Playwright の `use.video` 設定が伝播しないため gif 化していない (派生として `recordVideo` 個別指定すれば可能)。
+
+---
+
 ## アーキテクチャ概要
 
 ```mermaid
