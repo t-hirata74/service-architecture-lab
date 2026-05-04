@@ -45,7 +45,16 @@ func NewHub(guildID int64, hbInterval time.Duration, log *slog.Logger) *Hub {
 }
 
 // RequestRegister enqueues a register event for the Hub goroutine.
-func (h *Hub) RequestRegister(c *Client) { h.register <- c }
+// Returns false if the Hub queue is full or the Hub has stopped; the caller
+// should treat this as a failed handshake and close the client.
+func (h *Hub) RequestRegister(c *Client) bool {
+	select {
+	case h.register <- c:
+		return true
+	default:
+		return false
+	}
+}
 
 // RequestUnregister enqueues an unregister event. Safe from any goroutine.
 // Falls back to a non-blocking send so a stopped Hub won't deadlock callers.
@@ -92,14 +101,17 @@ func (h *Hub) Run(ctx context.Context) {
 			return
 
 		case c := <-h.register:
-			h.clients[c] = struct{}{}
+			// Broadcast PRESENCE_UPDATE(online) to *existing* clients before
+			// adding c. The new client will get presence state via READY-side
+			// flows and doesn't need its own online event.
 			entry, ok := h.presence[c.UserID]
 			if !ok {
-				h.presence[c.UserID] = &presenceEntry{username: c.Username, conns: 1}
 				h.fanoutPresence(c.UserID, c.Username, "online")
+				h.presence[c.UserID] = &presenceEntry{username: c.Username, conns: 1}
 			} else {
 				entry.conns++
 			}
+			h.clients[c] = struct{}{}
 
 		case c := <-h.unregister:
 			h.removeClient(c)
@@ -148,6 +160,10 @@ func (h *Hub) removeClient(c *Client) {
 	}
 }
 
+// fanout enqueues payload to every client. Slow consumers (Send buffer full)
+// are collected and removed AFTER iteration so we never mutate clients during
+// range. removeClient triggers fanoutPresence, which recursively calls fanout —
+// safe because by then the original iteration has finished.
 func (h *Hub) fanout(payload []byte) {
 	var slow []*Client
 	for c := range h.clients {

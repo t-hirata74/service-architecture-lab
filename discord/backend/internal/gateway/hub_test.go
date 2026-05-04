@@ -53,8 +53,9 @@ func TestHubBroadcastReachesRegisteredClient(t *testing.T) {
 
 	a := fakeClient(hub, 10, "alice", 0)
 	b := fakeClient(hub, 11, "bob", 0)
-	hub.RequestRegister(a)
-	hub.RequestRegister(b)
+	if !hub.RequestRegister(a) || !hub.RequestRegister(b) {
+		t.Fatal("register should not be full")
+	}
 
 	// Allow Run to process register events.
 	time.Sleep(50 * time.Millisecond)
@@ -161,11 +162,11 @@ func TestHubMultiTabPresence(t *testing.T) {
 	hub := NewHub(1, time.Second, discardLogger())
 	go hub.Run(ctx)
 
-	// observer watches presence broadcasts.
+	// observer watches presence broadcasts. Hub no longer broadcasts a
+	// client's own online event to itself, so no drain needed here.
 	obs := fakeClient(hub, 99, "observer", 0)
 	hub.RequestRegister(obs)
 	time.Sleep(20 * time.Millisecond)
-	_ = drainKind(obs, EventPresenceUpdate) // observer's own online event
 
 	tab1 := fakeClient(hub, 10, "alice", 0)
 	tab2 := fakeClient(hub, 10, "alice", 0)

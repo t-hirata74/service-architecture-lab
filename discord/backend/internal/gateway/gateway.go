@@ -143,11 +143,12 @@ func (s *Service) handshake(conn *websocket.Conn, user *store.User, originalToke
 	hub := s.Registry.GetOrCreate(id.GuildID)
 	client := NewClient(hub, conn, user.ID, user.Username)
 
-	// Start writePump first so READY/PRESENCE_UPDATE can drain.
+	// Start writePump so READY can drain.
 	go client.WritePump()
 
-	hub.RequestRegister(client)
-
+	// Enqueue READY *before* registering. The Hub register handler broadcasts
+	// PRESENCE_UPDATE(online) to existing clients (not c itself), so the new
+	// client's first frame after HELLO is always READY.
 	ready, err := MarshalFrame(OpDispatch, EventReady, ReadyData{
 		User:     ReadyUser{ID: user.ID, Username: user.Username},
 		Guild:    ReadyGuild{ID: guild.ID, Name: guild.Name},
@@ -155,6 +156,13 @@ func (s *Service) handshake(conn *websocket.Conn, user *store.User, originalToke
 	})
 	if err == nil {
 		client.trySend(ready)
+	}
+
+	if !hub.RequestRegister(client) {
+		s.Log.Warn("hub register queue full; closing connection",
+			slog.Int64("guild_id", id.GuildID), slog.Int64("user_id", user.ID))
+		client.Close()
+		return errors.New("hub register queue full")
 	}
 
 	client.ReadPump() // blocks until disconnect
