@@ -1034,3 +1034,114 @@ jobs:
 
       - name: Lint youtube OpenAPI
         run: redocly lint youtube/backend/docs/openapi.yml
+
+  shopify-backend:
+    name: shopify / backend (Rails + RSpec)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: shopify_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: shopify/backend
+
+    env:
+      RAILS_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.1"
+          bundler-cache: true
+          working-directory: shopify/backend
+      - name: DB create + migrate
+        run: bundle exec rails db:create db:migrate
+      - name: RSpec (backend + apps + multi-tenancy + concurrent decrement)
+        run: bundle exec rspec
+
+  shopify-packwerk:
+    name: shopify / packwerk (modular monolith dependency direction)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shopify/backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.1"
+          bundler-cache: true
+          working-directory: shopify/backend
+      - name: packwerk validate
+        run: bundle exec packwerk validate
+      - name: packwerk check (0 violations expected — ADR 0001)
+        run: bin/packwerk check
+
+  shopify-ai-worker:
+    name: shopify / ai-worker (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shopify/ai-worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: shopify/ai-worker/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Pytest
+        run: pytest -q
+
+  shopify-frontend:
+    name: shopify / frontend (Next.js typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shopify/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: shopify/frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+
+  shopify-terraform:
+    name: shopify / terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: shopify/infra/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate

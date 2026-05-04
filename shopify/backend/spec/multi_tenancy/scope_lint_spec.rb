@@ -13,8 +13,11 @@ RSpec.describe "Tenant-owned models lint" do
     Orders::Cart,
     Orders::CartItem,
     Orders::Order,
-    Orders::OrderItem
-    # Phase 5+: Apps::App, Apps::AppInstallation, Apps::WebhookSubscription, ...
+    Orders::OrderItem,
+    Apps::AppInstallation,
+    Apps::WebhookSubscription,
+    Apps::WebhookDelivery
+    # Apps::App は global table (shop に属さない 3rd-party アプリ定義)
   ].freeze
 
   TENANT_OWNED_MODELS.each do |klass|

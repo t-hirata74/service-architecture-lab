@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_05_100004) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_05_100008) do
   create_table "account_login_change_keys", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
     t.datetime "deadline", null: false
     t.string "key", null: false
@@ -39,6 +39,58 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_05_100004) do
     t.string "password_hash"
     t.integer "status", default: 1, null: false
     t.index ["email"], name: "index_accounts_on_email", unique: true
+  end
+
+  create_table "apps_app_installations", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.string "api_token_digest", null: false
+    t.bigint "app_id", null: false
+    t.datetime "created_at", null: false
+    t.string "scopes", default: "", null: false
+    t.bigint "shop_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["api_token_digest"], name: "index_apps_app_installations_on_api_token_digest", unique: true
+    t.index ["app_id"], name: "index_apps_app_installations_on_app_id"
+    t.index ["shop_id", "app_id"], name: "index_apps_app_installations_on_shop_id_and_app_id", unique: true
+    t.index ["shop_id"], name: "index_apps_app_installations_on_shop_id"
+  end
+
+  create_table "apps_apps", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.string "secret", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_apps_apps_on_name", unique: true
+  end
+
+  create_table "apps_webhook_deliveries", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.integer "attempts", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "delivered_at"
+    t.string "delivery_id", null: false
+    t.text "last_error"
+    t.datetime "next_attempt_at"
+    t.text "payload", null: false
+    t.bigint "shop_id", null: false
+    t.integer "status", default: 0, null: false
+    t.bigint "subscription_id", null: false
+    t.string "topic", null: false
+    t.datetime "updated_at", null: false
+    t.index ["delivery_id"], name: "index_apps_webhook_deliveries_on_delivery_id", unique: true
+    t.index ["shop_id"], name: "index_apps_webhook_deliveries_on_shop_id"
+    t.index ["status", "next_attempt_at"], name: "index_apps_webhook_deliveries_on_status_and_next_attempt_at"
+    t.index ["subscription_id"], name: "index_apps_webhook_deliveries_on_subscription_id"
+  end
+
+  create_table "apps_webhook_subscriptions", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.bigint "app_installation_id", null: false
+    t.datetime "created_at", null: false
+    t.string "endpoint", null: false
+    t.bigint "shop_id", null: false
+    t.string "topic", null: false
+    t.datetime "updated_at", null: false
+    t.index ["app_installation_id"], name: "index_apps_webhook_subscriptions_on_app_installation_id"
+    t.index ["shop_id", "topic"], name: "index_apps_webhook_subscriptions_on_shop_id_and_topic"
+    t.index ["shop_id"], name: "index_apps_webhook_subscriptions_on_shop_id"
   end
 
   create_table "catalog_products", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
@@ -180,6 +232,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_05_100004) do
   add_foreign_key "account_password_reset_keys", "accounts", column: "id"
   add_foreign_key "account_remember_keys", "accounts", column: "id"
   add_foreign_key "account_verification_keys", "accounts", column: "id"
+  add_foreign_key "apps_app_installations", "apps_apps", column: "app_id"
+  add_foreign_key "apps_app_installations", "core_shops", column: "shop_id"
+  add_foreign_key "apps_webhook_deliveries", "apps_webhook_subscriptions", column: "subscription_id"
+  add_foreign_key "apps_webhook_deliveries", "core_shops", column: "shop_id"
+  add_foreign_key "apps_webhook_subscriptions", "apps_app_installations", column: "app_installation_id"
+  add_foreign_key "apps_webhook_subscriptions", "core_shops", column: "shop_id"
   add_foreign_key "catalog_products", "core_shops", column: "shop_id"
   add_foreign_key "catalog_variants", "catalog_products", column: "product_id"
   add_foreign_key "catalog_variants", "core_shops", column: "shop_id"

@@ -10,7 +10,7 @@ slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue 状態機械) /
 
 ## 見どころハイライト (設計フェーズ)
 
-> 🟡 Phase 4 完了 (Phase 3 + orders Engine + **`Orders::CheckoutService`** で在庫減算と Order 作成を同一トランザクションで実行 / 在庫不足は 409 で全件 rollback / storefront REST API (`/storefront/products`, `/storefront/cart/items`, `/storefront/checkout`) / ai-worker (FastAPI) /recommend /summarize-reviews /forecast-demand mock + X-Internal-Token / Next.js 16 frontend (build pass) / RSpec **56 件通過** + pytest **7 件通過** / packwerk 0 violation)。Phase 5 で apps Engine + Webhook + Playwright + Terraform + CI 5 ジョブ。
+> 🟢 **MVP 完成 (Phase 1-5 完了)**: Phase 4 + apps Engine + Webhook 配信 (HMAC + delivery_id idempotency + at-least-once retry) / **ActiveSupport::Notifications で `orders → apps` の dependency inversion** (orders は apps を直接参照しない / packwerk で fixate) / Terraform validate pass / GitHub Actions **5 ジョブ追加** / RSpec **71 件通過** + pytest 7 件 + packwerk 0 violation。
 
 - **モジュラーモノリス: Rails Engine + packwerk** — `core / catalog / inventory / orders / apps` の 5 Engine、依存方向を packwerk で CI 失敗にする ([ADR 0001](docs/adr/0001-modular-monolith-rails-engine.md))
 - **マルチテナント: `shop_id` row-level scoping** — サブドメイン解決 + 明示 scope (`current_shop.products.find`)、`default_scope` は意図的に却下 ([ADR 0002](docs/adr/0002-multi-tenancy-row-level-shop-scoping.md))
@@ -121,14 +121,13 @@ cd ../playwright && npm test
 | --- | --- |
 | ADR (0001-0004)             | 🟢 全 Accepted |
 | architecture.md             | 🟢 ER / 在庫減算シーケンス / Engine 構成 / Phase ロードマップまで記述 |
-| Backend (Rails 8 + 5 Engine) | 🟢 Phase 4 完了 (Phase 3 + Orders::{Cart,CartItem,Order,OrderItem} + Orders::CheckoutService + storefront REST API + ApplicationController を core Engine に移動) |
+| Backend (Rails 8 + 5 Engine) | 🟢 Phase 5 完了 (Phase 4 + Apps::{App,AppInstallation,WebhookSubscription,WebhookDelivery} + EventBus + Signer (HMAC-SHA256) + DeliveryJob (at-least-once retry / max 8 attempts) / ApplicationJob を core Engine に移動) |
 | ai-worker (FastAPI)          | 🟢 Phase 4 完了 (FastAPI + /recommend /summarize-reviews /forecast-demand mock + X-Internal-Token / pytest 7 件通過) |
 | Frontend (Next.js 16)        | 🟢 Phase 4 完了 (Next.js 16 + Tailwind v4 / storefront 商品一覧ページ / build + typecheck pass) |
 | 認証 (rodauth-rails + JWT)   | 🟢 Phase 2 完了 (RodauthMain JSON+JWT mode / before_create_account で shop_id bind / 共有 PK で Account ↔ Core::User) |
-| App プラットフォーム + Mock receiver | 🟡 Phase 5 で着手予定 |
-| E2E (Playwright)             | 🟡 Phase 5 で着手予定 |
-| インフラ設計図 (Terraform)   | 🟡 Phase 5 で着手予定 |
-| CI (GitHub Actions)          | 🟡 Phase 5 で着手予定 |
+| App プラットフォーム         | 🟢 Phase 5 完了 (orders → apps の dependency inversion を ActiveSupport::Notifications で実装 / `orders.order_created` を apps Engine の after_initialize subscriber が拾って配信予約) |
+| インフラ設計図 (Terraform)   | 🟢 Phase 5 完了 (VPC / ALB / ECS Fargate / RDS MySQL / Secrets / CloudWatch、`terraform validate` pass) |
+| CI (GitHub Actions)          | 🟢 Phase 5 完了 (5 ジョブ: backend / packwerk / ai-worker / frontend / terraform) |
 
 ---
 
@@ -154,4 +153,4 @@ cd ../playwright && npm test
 | 2 | Rails 8 + 5 Engine + packwerk 0 violation + core (Shop / User / Auth) + tenant resolver middleware | 🟢 完了 (RSpec 20 件: shop / user / tenant_resolver / auth (rodauth) / cross_tenant_isolation / scope_lint / dependency) |
 | 3 | catalog + inventory + 条件付き UPDATE + concurrent decrement spec + stock_movements ledger | 🟢 完了 (RSpec 40 件: + product / variant / stock_movement / deduct_service / **concurrent_deduct (100 thread × initial 60 で 60 成功 / 40 失敗 / on_hand=0 / SUM(delta)=-60**)) |
 | 4 | orders + checkout + ai-worker proxy + frontend (merchant 画面 + storefront) | 🟢 完了 (RSpec 56 件: + Orders::CheckoutService 6 件 (在庫不足時の全件 rollback) / storefront API request 6 件 / pytest 7 件 / Next.js build pass) |
-| 5 | apps Engine + WebhookSubscription/Delivery + Mock receiver + Playwright + Terraform + CI 5 ジョブ | 🟡 |
+| 5 | apps Engine + WebhookSubscription/Delivery + Terraform + CI 5 ジョブ | 🟢 完了 (RSpec 71 件: + Signer 2 / EventBus 3 / DeliveryJob 5 (HMAC + retry + 4xx 即 fail + idempotency) / order_created notification cross-engine 2 件 / Terraform validate / CI 5 ジョブ追加) |

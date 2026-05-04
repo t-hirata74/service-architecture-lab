@@ -31,8 +31,27 @@ module Orders
 
         @cart.update!(status: :completed)
 
+        publish_order_created(order, cart_items)
+
         order
       end
+    end
+
+    # ADR 0001 (依存方向 apps → orders): orders は apps を直接参照できない。
+    # ActiveSupport::Notifications で dependency inversion を行い、
+    # apps Engine は initializer で `orders.order_created` を subscribe する。
+    def publish_order_created(order, cart_items)
+      ActiveSupport::Notifications.instrument(
+        "orders.order_created",
+        shop: @cart.shop,
+        payload: {
+          order_id: order.id,
+          number: order.number,
+          total_cents: order.total_cents,
+          currency: order.currency,
+          items: cart_items.map { |ci| { variant_id: ci.variant_id, quantity: ci.quantity } }
+        }
+      )
     end
 
     private
