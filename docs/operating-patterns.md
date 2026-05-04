@@ -388,6 +388,128 @@ def _ai_post(path, payload):
 
 ---
 
+## 13. single-process Hub goroutine + CSP fan-out (discord)
+
+slack の **ActionCable + Redis pub/sub** (Rails / 規律 §2 + §10 と同じ「fan-out」だが realtime 寄り) と並ぶ、**3 番目の fan-out 実装パターン** を Go で確立した。Discord プロジェクト ([ADR 0001](../discord/docs/adr/0001-guild-sharding-single-process-hub.md) / [0002](../discord/docs/adr/0002-hub-goroutine-channel-pattern.md)) の運用知。
+
+「**realtime fan-out を Redis pub/sub なしで書きたい**」ときに使う。Slack/Discord/Reddit の chat 系領域では、**プロセスを跨ぐ pub/sub の代わりに「per-shard Hub goroutine」で十分**になることが多い。
+
+### 規律 1: shard キー = ドメインの自然な境界
+
+global Hub にせず、**ドメインの自然な境界 (Discord ならギルド ID / slack ならワークスペース ID)** で Hub を分ける。`HubRegistry` (`map[shardKey]*Hub` + lazy 起動) で管理する。
+
+```go
+type Registry struct {
+    mu   sync.Mutex
+    hubs map[int64]*Hub      // guild_id -> Hub
+    ctx  context.Context
+}
+func (r *Registry) GetOrCreate(guildID int64) *Hub {
+    r.mu.Lock(); defer r.mu.Unlock()
+    if h, ok := r.hubs[guildID]; ok { return h }
+    h := NewHub(guildID, ...)
+    go h.Run(r.ctx)
+    r.hubs[guildID] = h
+    return h
+}
+```
+
+**意図**: 「1 broadcast = 1 ギルド分の subscriber 全員」が業務上の自然な単位。global Hub は他ギルドへの fan-out に巻き込まれて O(全 online user) で重くなる。per-channel まで切ると Hub 数が爆発するので **ギルド粒度がバランス点**。
+
+### 規律 2: Hub goroutine が状態の唯一の owner (mutex なし)
+
+`clients map` / `presence map` は **Hub.Run goroutine 専有**。外部からは `register chan` / `unregister chan` / `broadcast chan` 経由でしか触らせない。
+
+```go
+func (h *Hub) Run(ctx context.Context) {
+    for {
+        select {
+        case c := <-h.register:    h.clients[c] = struct{}{}; h.fanoutPresence(c.UserID, "online")
+        case c := <-h.unregister:  h.removeClient(c)
+        case msg := <-h.broadcast: h.fanout(msg)
+        case <-ticker.C:           h.checkHeartbeats()
+        case <-ctx.Done():         return
+        }
+    }
+}
+```
+
+**意図**: Rails ActionCable は thread + Redis subscribe が `clients` 集合を共有するが、Go では **CSP (`select` で全イベントを 1 goroutine に集約)** で書けるので **mutex を 1 つも持たずに race-free**。テスト時は `hub.RequestRegister(c) → time.Sleep(50ms) → assertion` で同期できる。
+
+### 規律 3: non-blocking send + drop で slow consumer を吸収
+
+`fanout` ループで `c.Send <- payload` を blocking で書くと **遅い 1 client が Hub 全体を止める**。`select { case ...: default: }` で drop し、後追いで unregister する。
+
+```go
+func (h *Hub) fanout(payload []byte) {
+    var slow []*Client
+    for c := range h.clients {
+        if !c.trySend(payload) { slow = append(slow, c) }
+    }
+    for _, c := range slow { h.removeClient(c) }   // iterate 後に消す
+}
+```
+
+**意図**: at-least-once は **保証しない** (再接続 + REST GET で取り直す前提)。WebSocket は再接続が前提なので、blocking で頑張るより **drop して unregister + 再接続誘導**のほうが Hub 全体のスループットを守れる。**fanout iterate 中に map を変更しない** ため、削除は iterate 後に遅延する規律も合わせて守る。
+
+### 規律 4: heartbeat は **app 層 op + Hub 内 ticker**
+
+WebSocket の ping/pong frame は **ブラウザ JS から送れない** (W3C WebSocket API の制限)。TCP keepalive は ALB / proxy で吸収されてアプリに見えない。**app 層で `op: 1` HEARTBEAT を定義し、Hub 内 ticker で最終受信時刻を見て evict** する形が一番素直。
+
+```go
+func (h *Hub) checkHeartbeats() {
+    cutoff := time.Now().Add(-h.HeartbeatInterval * 3 / 2).UnixNano()
+    for c := range h.clients {
+        if c.LastHB.Load() < cutoff { h.removeClient(c) }   // presence offline 連動
+    }
+}
+```
+
+**意図**: ADR 0003。`LastHB` は `atomic.Int64` で readPump (write) と Hub goroutine (read) の cross-goroutine read を許容。`HeartbeatInterval * 1.5` の cutoff で「1 回 missed なら待つ、2 回連続なら殺す」の余裕。
+
+### 規律 5: presence の同一 user 複数タブは **counted-conns**
+
+同じ user が 2 タブ開いたとき、**「1 タブ閉じただけで offline」になると体感が壊れる**。Hub の `presence map` は `user_id -> {username, conns}` として **接続数を数え**、`conns == 0` になった瞬間だけ offline broadcast する。
+
+```go
+type presenceEntry struct { username string; conns int }
+
+// register
+if entry, ok := h.presence[c.UserID]; ok {
+    entry.conns++                           // 既に online、broadcast しない
+} else {
+    h.fanoutPresence(c.UserID, "online")    // 初接続のみ
+    h.presence[c.UserID] = &presenceEntry{username: c.Username, conns: 1}
+}
+// unregister: entry.conns--; if entry.conns <= 0 { delete + offline broadcast }
+```
+
+**意図**: ADR 0003。テストは `TestHubMultiTabPresence` で「2 タブ→ 1 タブ閉じても offline 0 件、2 タブ目閉じて offline 1 件」を縛る。
+
+### この規律を守るテスト (Go の流儀)
+
+「state owner が 1 goroutine」だと **chan に送る → 観測** で同期テストが書ける。`go test -race` を必須化して mutex を持たない設計の正しさを CI で検証する:
+
+| テスト | 検証内容 |
+| --- | --- |
+| `TestHubBroadcastReachesRegisteredClient` | fan-out: 全 client に DISPATCH が届く |
+| `TestHubUnregisterStopsBroadcast` | unregister 後に届かない |
+| `TestHubHeartbeatTimeoutEvictsClient` | LastHB を過去にして ticker で evict (規律 4) |
+| `TestHubSlowConsumerDropped` | buffer=1 + flood で drop + close (規律 3) |
+| `TestHubMultiTabPresence` | counted-conns (規律 5) |
+
+実例: `discord/backend/internal/gateway/hub.go` + `hub_test.go`、`discord/backend/internal/gateway/registry.go`。
+
+### 派生 ADR で扱う候補 (本パターンの拡張点)
+
+- **multi-process shard 化**: 1 万 guild が active になったら 1 プロセスで持ちきれない → consistent hashing + Redis pub/sub (slack ActionCable 寄りの形に戻る)
+- **inactive Hub の lazy 停止**: 空 client が一定時間続いたら Hub 自身が registry から自分を抜く
+- **at-least-once delivery**: drop の代わりに transactional outbox + replay token
+
+「**いつ goroutine + channel で足りなくなるか**」を ADR で先に書いておくと、shard 化が必要になったときに迷わない。
+
+---
+
 ## 関連ドキュメント
 
 - [CLAUDE.md](../CLAUDE.md) — エージェント向け要約

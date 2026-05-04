@@ -141,7 +141,10 @@ cd ../playwright && npm test
 - リポジトリ全体方針: [../CLAUDE.md](../CLAUDE.md)
 - API スタイル選定: [../docs/api-style.md](../docs/api-style.md)
 - 共通ルール: [../docs/](../docs/) (coding-rules / operating-patterns / testing-strategy)
-- フレームワーク比較: [../docs/framework-django-vs-rails.md](../docs/framework-django-vs-rails.md) (本プロジェクト完成後に **Go vs Rails** 比較を追加予定)
+- **Go コーディング規約 + Go 選定判断: [../docs/coding-rules/go.md](../docs/coding-rules/go.md)** (本プロジェクトで確立)
+- **single-process Hub goroutine + CSP fan-out 運用知: [../docs/operating-patterns.md § 13](../docs/operating-patterns.md)**
+- **Go テスト戦略: [../docs/testing-strategy.md § Go backend](../docs/testing-strategy.md#go-backend-discord)**
+- フレームワーク比較: [../docs/framework-django-vs-rails.md](../docs/framework-django-vs-rails.md) (本プロジェクトの知見は `coding-rules/go.md` の「Rails / Django との対比」表に集約)
 
 ---
 

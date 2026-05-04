@@ -12,7 +12,9 @@
 
 | レイヤー | フレームワーク | カバーする範囲 |
 | --- | --- | --- |
-| Backend 単体 / 結合 | **RSpec (rspec-rails) + FactoryBot** | モデル不変条件、controller の入出力、ActionCable 購読 / broadcast |
+| Backend 単体 / 結合 (Rails) | **RSpec (rspec-rails) + FactoryBot** | モデル不変条件、controller の入出力、ActionCable 購読 / broadcast |
+| Backend 単体 / 結合 (Django) | **pytest-django** | モデル / DRF request / signal / Celery task / N+1 不変条件 |
+| Backend 単体 / 結合 (Go) | **標準 `testing` + `go test -race`** | Hub goroutine の concurrency 不変条件 (CSP fan-out / heartbeat eviction / slow consumer drop) |
 | Frontend 単体 | （現状なし） | 必要になれば Vitest + React Testing Library を追加 |
 | Python 単体 | （現状なし） | ロジックが増えたら pytest を追加 |
 | ブラウザ E2E | Playwright | ログインから複数ユーザー / 複数タブを跨ぐ実シナリオ |
@@ -345,6 +347,134 @@ webServer: [{
 ```
 
 **trade-off**: production 構成 (Celery worker 別プロセス) と乖離するが、E2E は「ブラウザから golden path が踏めるか」が目的。Celery worker のプロセス分離自体は `instagram-backend` ジョブの pytest で踏まれるので二重保証になる。
+
+---
+
+## Go backend (discord) <a id="go-backend-discord"></a>
+
+`discord/backend/` で確立したパターン。Rails RSpec / Django pytest と並ぶ位置づけ。**設計の見どころ (per-guild Hub の goroutine + channel 設計、ADR 0002 / 0003) を 1 ケースずつ縛る**のが中心で、CRUD ハンドラの単体テストは書かない (Playwright E2E が事実上の積分テスト)。
+
+### 書くもの
+
+- **Concurrency 不変条件** — Hub goroutine が `clients` map を専有している前提が壊れていないか
+  - register → broadcast で全 client に届く (CSP fan-out)
+  - unregister 後は届かない (close 順序)
+  - heartbeat timeout で evict される (ADR 0003)
+  - slow consumer (Send buffer 満杯) は drop + unregister される (ADR 0002)
+  - 同一 user の複数タブで online/offline broadcast が 1 回ずつ (counted-conns)
+- **`go test -race ./...` を CI 必須** — 「mutex を持たない設計」の race 不在を構造的に検証
+- 純関数の単体テスト (JWT sign/verify など) は **コスト対効果が高ければ追加** する
+
+### 書かないもの
+
+- HTTP handler の入出力試験 — Playwright E2E (`discord/playwright/tests/fanout.spec.ts`) が同等以上を踏む
+- DB CRUD — `database/sql` + 生 SQL の Exec/Query は ORM の "framework 自体の挙動" 試験と同じで、書く価値が薄い
+- 標準ライブラリの再検証 (chi router の path match / json.Decoder の挙動 等)
+
+### ディレクトリ
+
+```text
+discord/backend/
+  internal/
+    gateway/
+      hub.go
+      hub_test.go      # Hub の concurrency 不変条件 5 ケース
+      client.go
+      ...
+```
+
+Go の規約として **`*_test.go` は対象ファイルと同じパッケージに置く** (テスト対象の unexported 名にアクセスしたいので `package gateway` のままにする)。
+
+### `*websocket.Conn` を fake する代わりに、Client を直接組み立てる
+
+WebSocket 接続を実際に張ってテストすると、port / handshake / read deadline で flaky になりやすい。Hub から見れば「Client は `Send chan []byte` を持っているだけ」なので、**`Conn = nil` のまま `Client` を直接組み立てて Hub に register する**:
+
+```go
+// discord/backend/internal/gateway/hub_test.go
+func fakeClient(hub *Hub, userID int64, username string, buf int) *Client {
+    if buf <= 0 { buf = clientSendBuffer }
+    c := &Client{
+        Hub: hub, UserID: userID, Username: username,
+        Send: make(chan []byte, buf),
+        Stop: make(chan struct{}),
+    }
+    c.LastHB.Store(time.Now().UnixNano())
+    return c
+}
+
+func TestHubBroadcastReachesRegisteredClient(t *testing.T) {
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+    hub := NewHub(1, 200*time.Millisecond, discardLogger())
+    go hub.Run(ctx)
+
+    a := fakeClient(hub, 10, "alice", 0)
+    hub.RequestRegister(a)
+    time.Sleep(50 * time.Millisecond)             // Run が register を消化する待ち
+
+    payload, _ := MarshalFrame(OpDispatch, EventMessageCreate, MessageCreateData{...})
+    hub.Broadcast(payload)
+    time.Sleep(50 * time.Millisecond)
+
+    if got := drainKind(a, EventMessageCreate); got != 1 {
+        t.Errorf("alice MESSAGE_CREATE = %d, want 1", got)
+    }
+}
+```
+
+**意図**: WritePump を起動しないので `Send chan` を test 側が直接 drain できる。Hub goroutine の `select` が回るだけ待てば検証可能で、**WebSocket protocol を再現せずに Hub の振る舞いだけを縛れる**。
+
+### `time.Sleep` で待つのは妥協、ただし測れる範囲で
+
+「Hub goroutine が register を消化したか」は外から観測できない (chan に送ったら戻るだけ)。`time.Sleep(50ms)` で待つのは必要悪。代わりに:
+
+- **timeout deadline + polling** で「最終的に発火する」イベントを縛る (heartbeat eviction / slow consumer drop は `<-c.Stop` を `select` で待つ)
+- **register/broadcast の同期チェック**は `time.Sleep(50ms)` で許容 (CI でも flaky にならない長さに調整)
+
+```go
+// 「最終的に Stop が close される」を deadline 付きで待つ
+deadline := time.After(time.Second)
+for {
+    select {
+    case <-a.Stop:    return
+    case <-deadline:  t.Fatal("client was not evicted on heartbeat timeout")
+    case <-time.After(20 * time.Millisecond):
+    }
+}
+```
+
+### `slog.Logger` は `io.Discard` で差し替える
+
+ログを stdout に流さないために、test では `io.Discard` 行きの logger を渡す:
+
+```go
+func discardLogger() *slog.Logger {
+    return slog.New(slog.NewJSONHandler(io.Discard, nil))
+}
+```
+
+`Hub.Log` を struct field で持っている設計 ([coding-rules/go.md § 8](coding-rules/go.md)) なら自然に差し替えられる。
+
+### 実行
+
+```bash
+cd discord/backend
+go test ./...                 # 全件
+go test -race ./...           # race 検出付き (CI 必須)
+go test -run TestHub ./internal/gateway   # 特定パッケージのみ
+go test -v -count=1 ./...     # cache 無効化 + verbose
+```
+
+### CI
+
+`.github/workflows/ci.yml` の `discord-backend` ジョブで:
+
+```yaml
+- run: go vet ./...
+- run: go test -race ./...
+```
+
+の 2 段階。`-race` を必須にすることで「Hub goroutine が状態の唯一の owner」という ADR 0002 の前提が **将来の改修で崩れたら CI で気づく**ようにする。
 
 ---
 
