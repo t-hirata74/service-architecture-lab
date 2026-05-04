@@ -12,6 +12,7 @@ type Config struct {
 	DatabaseURL         string
 	JWTSecret           string
 	AIWorkerURL         string
+	AIInternalToken     string
 	HeartbeatIntervalMs int
 }
 
@@ -29,6 +30,10 @@ func Load() (*Config, error) {
 		addr = ":3060"
 	}
 	ai := strings.TrimSpace(os.Getenv("AI_WORKER_URL"))
+	aiTok := strings.TrimSpace(os.Getenv("AI_INTERNAL_TOKEN"))
+	if aiTok == "" {
+		aiTok = "dev-internal-token"
+	}
 	hb := 10000
 	if s := strings.TrimSpace(os.Getenv("HEARTBEAT_INTERVAL_MS")); s != "" {
 		if v, err := strconv.Atoi(s); err == nil && v >= 100 {
@@ -40,6 +45,7 @@ func Load() (*Config, error) {
 		DatabaseURL:         dsn,
 		JWTSecret:           sec,
 		AIWorkerURL:         ai,
+		AIInternalToken:     aiTok,
 		HeartbeatIntervalMs: hb,
 	}, nil
 }

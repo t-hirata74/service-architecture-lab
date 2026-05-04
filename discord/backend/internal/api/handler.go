@@ -25,18 +25,20 @@ const mysqlErrDuplicate = 1062
 const jwtTTL = 7 * 24 * time.Hour
 
 type Handler struct {
-	Log       *slog.Logger
-	Store     *store.Store
-	JWTSecret []byte
-	AIWorker  string
-	Registry  *gateway.Registry
+	Log              *slog.Logger
+	Store            *store.Store
+	JWTSecret        []byte
+	AIWorker         string
+	AIInternalToken  string
+	Registry         *gateway.Registry
 }
 
-func NewHandler(log *slog.Logger, st *store.Store, jwtSecret []byte, aiWorker string, registry *gateway.Registry) *Handler {
+func NewHandler(log *slog.Logger, st *store.Store, jwtSecret []byte, aiWorker, aiInternalToken string, registry *gateway.Registry) *Handler {
 	return &Handler{
 		Log: log, Store: st, JWTSecret: jwtSecret,
-		AIWorker: strings.TrimSuffix(aiWorker, "/"),
-		Registry: registry,
+		AIWorker:        strings.TrimSuffix(aiWorker, "/"),
+		AIInternalToken: aiInternalToken,
+		Registry:        registry,
 	}
 }
 
@@ -586,6 +588,9 @@ func (h *Handler) callSummarize(ctx context.Context, snippets []store.MessageSni
 		return "", true
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if h.AIInternalToken != "" {
+		req.Header.Set("X-Internal-Token", h.AIInternalToken)
+	}
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode >= 300 {

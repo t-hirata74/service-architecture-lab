@@ -10,7 +10,7 @@ slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue) / github (Rail
 
 ## 見どころハイライト (設計フェーズ)
 
-> Phase 3: WebSocket gateway + per-guild Hub goroutine + heartbeat 監視 + presence broadcast まで実装済み。Phase 4 で frontend / ai-worker。
+> Phase 4: ai-worker (FastAPI / `/summarize` `/moderate`) と frontend (Next.js 16 / WebSocket subscribe + heartbeat) まで結線済み。Phase 5 で E2E + Terraform。
 
 - **per-guild Hub goroutine + 単一プロセス** — slack の Rails ActionCable + Redis pub/sub と対比し、**Go の goroutine/channel で同じ問題をどう解くか**を残す ([ADR 0001](docs/adr/0001-guild-sharding-single-process-hub.md))
 - **Hub は CSP 流 single goroutine + select pattern** — `clients` map は Hub goroutine が専有、mutex なし。slow consumer は non-blocking send + drop で吸収 ([ADR 0002](docs/adr/0002-hub-goroutine-channel-pattern.md))
@@ -121,12 +121,12 @@ cd ../playwright && npm test
 | architecture.md             | 🟢 ER / WebSocket シーケンス / op codes / API 概観 / 起動順序まで記述 |
 | Backend (Go gateway)        | 🟢 Phase 2（REST + JWT + migrations + chi） |
 | WebSocket gateway           | 🟢 Phase 3（gorilla/websocket + per-guild Hub + heartbeat + presence） |
-| ai-worker (FastAPI)         | ⚪ Phase 4 で着手 |
-| Frontend (Next.js 16)       | ⚪ Phase 4 で着手 |
+| ai-worker (FastAPI)         | 🟢 Phase 4（`/summarize` `/moderate` deterministic mock + X-Internal-Token） |
+| Frontend (Next.js 16)       | 🟢 Phase 4（login / guild list / channel + WS subscribe + presence pane） |
 | 認証 (JWT bearer)           | 🟢 Phase 2 |
 | E2E (Playwright)            | ⚪ Phase 5 で着手 |
 | インフラ設計図 (Terraform)  | ⚪ Phase 5 で着手 |
-| CI (GitHub Actions)         | 🟢 backend build + migrate + `/health` smoke |
+| CI (GitHub Actions)         | 🟢 backend / ai-worker / frontend 3 ジョブ |
 
 ---
 
@@ -152,5 +152,5 @@ cd ../playwright && npm test
 | 1 | scaffolding + ADR 4 本 + architecture.md + docker-compose | 🟢 設計フェーズ完了 |
 | 2 | Go scaffold（chi + 生 SQL/`store` + JWT + bcrypt）+ Guild / Channel / Message / Member + REST CRUD + 認証 | 🟢 完了 |
 | 3 | WebSocket gateway + per-guild Hub + IDENTIFY/HEARTBEAT/DISPATCH + presence broadcast | 🟢 完了 |
-| 4 | ai-worker (FastAPI) `/summarize` `/moderate` + frontend (channels list / message feed / WS subscribe) | ⚪ 未着手 |
-| 5 | Playwright (2 BrowserContext で WebSocket fan-out 検証) + Terraform + CI workflows | ⚪ 未着手 |
+| 4 | ai-worker (FastAPI) `/summarize` `/moderate` + frontend (Next.js / WS subscribe / presence) | 🟢 完了 |
+| 5 | Playwright (2 BrowserContext で WebSocket fan-out 検証) + Terraform 設計図 | ⚪ 未着手 |

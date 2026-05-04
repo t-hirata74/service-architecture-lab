@@ -44,10 +44,18 @@ services:
   #     NEXT_PUBLIC_API_URL: http://localhost:3060
   #     NEXT_PUBLIC_WS_URL: ws://localhost:3060/gateway
 
+  # ai-worker は localでは uvicorn 直起動を想定（README 参照）。
+  # docker 化したい場合の雛形:
   # ai-worker:
-  #   build: ./ai-worker
+  #   image: python:3.12
+  #   working_dir: /work
+  #   volumes:
+  #     - ./ai-worker:/work
+  #   command: sh -c "pip install -q -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000"
   #   ports:
   #     - "8050:8000"
+  #   environment:
+  #     INTERNAL_TOKEN: dev-internal-token
 
 volumes:
   mysql_data:

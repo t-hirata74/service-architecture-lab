@@ -58,7 +58,7 @@ func main() {
 		AllowedOrigins:    []string{"http://localhost:3055"},
 	}
 
-	h := api.NewHandler(log, st, []byte(cfg.JWTSecret), cfg.AIWorkerURL, registry)
+	h := api.NewHandler(log, st, []byte(cfg.JWTSecret), cfg.AIWorkerURL, cfg.AIInternalToken, registry)
 
 	root := chi.NewRouter()
 	root.Use(middleware.RealIP)
