@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import app.models  # noqa: F401  (register all mappers)
 from app.db import Base, get_engine
 from app.domain.accounts.router import router as auth_router
+from app.domain.comments.router import router as comments_router
 from app.domain.posts.router import router as posts_router
 from app.domain.subreddits.router import router as subreddits_router
 from app.domain.votes.router import router as votes_router
@@ -22,6 +23,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)
     app.include_router(subreddits_router)
     app.include_router(posts_router)
+    app.include_router(comments_router)
     app.include_router(votes_router)
 
     @app.get("/health")
