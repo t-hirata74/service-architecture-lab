@@ -22,10 +22,10 @@ fi
 
 capture_name_for() {
   case "$1" in
-    *organization*repository*PR*) echo "01-browse-org-repo-pr" ;;
-    *outside_collaborator*)        echo "02-visibility-private-hidden" ;;
+    *browse*organization*)         echo "01-browse-org-repo-pr" ;;
+    *visibility-outside*)          echo "02-visibility-private-hidden" ;;
     *createIssue*)                 echo "03-graphql-create-issue" ;;
-    *ai-worker*check*run*)         echo "04-ai-worker-check-aggregation" ;;
+    *check_aggregation*)           echo "04-ai-worker-check-aggregation" ;;
     *) echo "$1" | tr -cs 'A-Za-z0-9-' '-' | sed -E 's/-+/-/g; s/^-//; s/-$//' | cut -c1-60 ;;
   esac
 }

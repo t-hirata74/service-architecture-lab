@@ -17,6 +17,19 @@ slack / youtube が **REST + OpenAPI** だったのに対し、**本リポジト
 
 ---
 
+## E2E デモ (Playwright で録画)
+
+`cd github/playwright && npm run capture` で再生成。仕組みは [docs/testing-strategy.md キャプチャ節](../docs/testing-strategy.md#キャプチャ-gif-を-readme-に埋め込む仕組み)。
+
+| # | シナリオ | キャプチャ |
+| --- | --- | --- |
+| 01 | organization → repository → PR detail navigation | ![browse](playwright/captures/01-browse-org-repo-pr.gif) |
+| 02 | outside_collaborator は private repo を一覧で見えない (PermissionResolver) | ![visibility](playwright/captures/02-visibility-private-hidden.gif) |
+| 03 | createIssue mutation appears in repository issues list | ![create issue](playwright/captures/03-graphql-create-issue.gif) |
+| 04 | ai-worker check/run drives PullRequest.checkStatus aggregation | ![check aggregation](playwright/captures/04-ai-worker-check-aggregation.gif) |
+
+---
+
 ## アーキテクチャ概要
 
 ```mermaid
