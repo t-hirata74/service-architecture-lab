@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f6f7f8;
+  --foreground: #1a1a1b;
+  --panel: #ffffff;
+  --panel-2: #f8f9fa;
+  --accent: #ff4500;
+  --muted: #7c7c7c;
+  --border: #ccc;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+}

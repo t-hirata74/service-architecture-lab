@@ -10,7 +10,7 @@ slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue) / github (Rail
 
 ## 見どころハイライト (設計フェーズ)
 
-> 🟡 Phase 3 完了：ADR 4 本 + FastAPI backend (auth / subreddits / posts / comments / votes) + 28 tests pass。Phase 4 で ai-worker + frontend に着手する。
+> 🟡 Phase 4 完了：ADR 4 本 + FastAPI backend (32 tests) + ai-worker (FastAPI + APScheduler、19 tests) + Next.js 16 frontend (build pass)。Phase 5 で Playwright E2E + Terraform + CI に着手する。
 
 - **コメントツリーは Adjacency List + Materialized Path のハイブリッド** — `parent_id` で「直接の親」、`path = '00000001/00000004'` で「サブツリー走査と preorder」を分業 ([ADR 0001](docs/adr/0001-comment-tree-storage.md))
 - **投票は votes truth + posts.score を相対加算で denormalize** — `INSERT ... ON DUPLICATE KEY UPDATE` + `UPDATE posts SET score = score + delta` を 1 トランザクションで。drift は ai-worker の reconcile job で吸収 ([ADR 0002](docs/adr/0002-vote-integrity.md))
@@ -113,9 +113,9 @@ cd ../playwright && npm test
 | --- | --- |
 | ADR (0001-0004)             | 🟢 全 Accepted |
 | architecture.md             | 🟢 ER / Hot シーケンス / REST API / 起動順序まで記述 |
-| Backend (FastAPI)           | 🟢 Phase 2-3 完了（auth / subreddits / posts / comments / votes / 28 tests pass） |
-| ai-worker (FastAPI + APScheduler) | 🔴 Phase 4 で着手 |
-| Frontend (Next.js 16)       | 🔴 Phase 4 で着手 |
+| Backend (FastAPI)           | 🟢 Phase 2-4 完了（auth / subreddits / posts / comments / votes / ai-worker proxy / 32 tests pass） |
+| ai-worker (FastAPI + APScheduler) | 🟢 Phase 4 完了（recompute_hot_scores 60s + reconcile_score nightly + /summarize /related /spam-check / 19 tests） |
+| Frontend (Next.js 16)       | 🟢 Phase 4 完了（subreddit list / hot+new feed / post detail + comment tree + vote / login / build pass） |
 | 認証 (JWT bearer)           | 🟢 Phase 2 完了 |
 | E2E (Playwright)            | 🔴 Phase 5 で着手 |
 | インフラ設計図 (Terraform)  | 🔴 Phase 5 で着手 |
@@ -145,5 +145,5 @@ cd ../playwright && npm test
 | 1 | scaffolding + ADR 4 本 + architecture.md + docker-compose | 🟢 設計フェーズ完了 |
 | 2 | FastAPI scaffold (async + SQLAlchemy 2.0 + bcrypt JWT) + auth / subreddits / posts CRUD + 投票 (ADR 0002) | 🟢 完了 |
 | 3 | comments ツリー (ADR 0001 path 採番) + コメント投票 + soft delete | 🟢 完了 |
-| 4 | ai-worker (FastAPI + APScheduler) で Hot 再計算 + `/summarize` `/related` `/spam-check` mock + frontend | 🔴 未着手 |
+| 4 | ai-worker (FastAPI + APScheduler) で Hot 再計算 + `/summarize` `/related` `/spam-check` mock + frontend | 🟢 完了 |
 | 5 | Playwright (anonymous read + 認証フロー + 投票 + コメント返信) + Terraform 設計図 + GitHub Actions CI workflows | 🔴 未着手 |

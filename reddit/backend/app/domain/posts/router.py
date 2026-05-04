@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
+from app.clients import ai_worker
 from app.deps import CurrentUser, SessionDep
 from app.domain.posts.models import Post
 from app.domain.posts.ranking import hot_score
@@ -80,3 +81,13 @@ async def get_post(post_id: int, session: SessionDep) -> PostResponse:
     if post is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "post not found")
     return PostResponse.model_validate(post)
+
+
+@router.post("/posts/{post_id}/summarize")
+async def summarize_post(post_id: int, session: SessionDep) -> dict:
+    post = (
+        await session.execute(select(Post).where(Post.id == post_id, Post.deleted_at.is_(None)))
+    ).scalar_one_or_none()
+    if post is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "post not found")
+    return await ai_worker.summarize(title=post.title, body=post.body)
