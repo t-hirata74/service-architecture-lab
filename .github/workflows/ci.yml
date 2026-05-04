@@ -815,6 +815,39 @@ jobs:
       - name: Build
         run: npm run build
 
+  discord-playwright:
+    name: discord / playwright (typecheck only)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: discord/playwright
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: discord/playwright/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+  discord-terraform:
+    name: discord / terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: discord/infra/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
   openapi-lint:
     name: openapi (lint slack + youtube schemas)
     runs-on: ubuntu-latest
