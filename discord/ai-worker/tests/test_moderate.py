@@ -23,3 +23,19 @@ def test_moderate_deterministic(client, auth_headers) -> None:
     a = client.post("/moderate", headers=auth_headers, json=payload).json()
     b = client.post("/moderate", headers=auth_headers, json=payload).json()
     assert a == b
+
+
+def test_moderate_clean_text_never_flagged(client, auth_headers) -> None:
+    # Score is hash-derived noise; it must not drive flagged on its own,
+    # otherwise innocent messages would randomly trip the filter.
+    samples = ["hi", "good morning", "ship it", "lunch?", "deploy ok"]
+    for body in samples:
+        r = client.post("/moderate", headers=auth_headers, json={"body": body}).json()
+        assert r["flagged"] is False, (body, r)
+
+
+def test_moderate_rejects_oversize_body(client, auth_headers) -> None:
+    r = client.post(
+        "/moderate", headers=auth_headers, json={"body": "x" * 5000}
+    )
+    assert r.status_code == 422

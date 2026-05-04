@@ -73,14 +73,9 @@ function GuildPageInner({ guildId }: { guildId: number }) {
     if (!token) return;
 
     const handlers = {
-      onReady: (d: ReadyPayload) => {
-        // READY brings the canonical channel list
-        setChannels(d.channels.map((c) => ({
-          id: c.id,
-          guild_id: d.guild.id,
-          name: c.name,
-          created_at: "",
-        })));
+      onReady: (_d: ReadyPayload) => {
+        // REST already populated channels with full metadata; READY is just
+        // the gateway ack here. Don't overwrite with the slimmer shape.
       },
       onMessageCreate: (d: MessageCreatePayload) => {
         // Append only when it's the channel we're viewing

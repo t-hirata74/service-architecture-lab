@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import secrets
 from collections import Counter
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -28,7 +29,9 @@ INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "dev-internal-token")
 def require_internal_token(
     x_internal_token: str | None = Header(default=None, alias="X-Internal-Token"),
 ) -> None:
-    if x_internal_token != INTERNAL_TOKEN:
+    if x_internal_token is None or not secrets.compare_digest(
+        x_internal_token, INTERNAL_TOKEN
+    ):
         raise HTTPException(status_code=401, detail="invalid internal token")
 
 
@@ -44,12 +47,13 @@ def health() -> dict:
 
 
 class SummarizeMessage(BaseModel):
-    username: str
-    body: str
+    username: str = Field(min_length=1, max_length=255)
+    body: str = Field(min_length=1, max_length=4096)
 
 
 class SummarizeRequest(BaseModel):
-    messages: list[SummarizeMessage] = Field(default_factory=list)
+    # Go gateway sends at most 20 snippets; cap server-side at 100 as a guard.
+    messages: list[SummarizeMessage] = Field(default_factory=list, max_length=100)
 
 
 class SummarizeResponse(BaseModel):
@@ -108,7 +112,7 @@ def summarize(req: SummarizeRequest) -> SummarizeResponse:
 
 
 class ModerateRequest(BaseModel):
-    body: str
+    body: str = Field(min_length=1, max_length=4096)
 
 
 class ModerateResponse(BaseModel):
@@ -127,16 +131,16 @@ def _moderate(body: str) -> ModerateResponse:
     if keyword_hits:
         reasons.append(f"matched_{keyword_hits}_banned_terms")
 
-    # deterministic 0.0..1.0 score from SHA-256 first 4 bytes
+    # Deterministic 0..1 noise from SHA-256, then bumped by keyword hits so the
+    # score numerically reflects flagging.
     digest = hashlib.sha256(body.encode("utf-8")).digest()
     base = int.from_bytes(digest[:4], "big") / 0xFFFFFFFF  # 0..1
-    score = min(1.0, base * 0.5 + keyword_hits * 0.25)
-    score = round(score, 3)
+    score = round(min(1.0, base * 0.6 + keyword_hits * 0.3), 3)
 
-    if not reasons and score >= 0.85:
-        reasons.append("hash_high_score")
-
-    flagged = score >= 0.7 or keyword_hits > 0
+    # In this mock, "flagged" is a real signal only when banned terms appear.
+    # The hash-based score is decorative noise and must not flip flagged on its
+    # own (otherwise ~30% of clean messages would flag at random).
+    flagged = keyword_hits > 0
     return ModerateResponse(flagged=flagged, score=score, reasons=reasons)
 
 
