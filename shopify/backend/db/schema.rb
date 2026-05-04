@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_05_000005) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_05_100004) do
   create_table "account_login_change_keys", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
     t.datetime "deadline", null: false
     t.string "key", null: false
@@ -122,6 +122,60 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_05_000005) do
     t.index ["variant_id"], name: "index_inventory_stock_movements_on_variant_id"
   end
 
+  create_table "orders_cart_items", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.bigint "cart_id", null: false
+    t.datetime "created_at", null: false
+    t.integer "quantity", default: 1, null: false
+    t.bigint "shop_id", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "variant_id", null: false
+    t.index ["cart_id", "variant_id"], name: "index_orders_cart_items_on_cart_id_and_variant_id", unique: true
+    t.index ["cart_id"], name: "index_orders_cart_items_on_cart_id"
+    t.index ["shop_id"], name: "index_orders_cart_items_on_shop_id"
+    t.index ["variant_id"], name: "index_orders_cart_items_on_variant_id"
+  end
+
+  create_table "orders_carts", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "customer_id", null: false
+    t.bigint "shop_id", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["customer_id"], name: "index_orders_carts_on_customer_id"
+    t.index ["shop_id", "customer_id", "status"], name: "index_orders_carts_on_shop_id_and_customer_id_and_status"
+    t.index ["shop_id"], name: "index_orders_carts_on_shop_id"
+  end
+
+  create_table "orders_order_items", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "currency", limit: 3, null: false
+    t.bigint "order_id", null: false
+    t.integer "quantity", null: false
+    t.bigint "shop_id", null: false
+    t.bigint "unit_price_cents", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "variant_id", null: false
+    t.index ["order_id", "variant_id"], name: "index_orders_order_items_on_order_id_and_variant_id"
+    t.index ["order_id"], name: "index_orders_order_items_on_order_id"
+    t.index ["shop_id"], name: "index_orders_order_items_on_shop_id"
+    t.index ["variant_id"], name: "index_orders_order_items_on_variant_id"
+  end
+
+  create_table "orders_orders", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "currency", limit: 3, default: "JPY", null: false
+    t.bigint "customer_id", null: false
+    t.bigint "number", null: false
+    t.bigint "shop_id", null: false
+    t.integer "status", default: 0, null: false
+    t.bigint "total_cents", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["customer_id"], name: "index_orders_orders_on_customer_id"
+    t.index ["shop_id", "number"], name: "index_orders_orders_on_shop_id_and_number", unique: true
+    t.index ["shop_id", "status", "created_at"], name: "index_orders_orders_on_shop_id_and_status_and_created_at"
+    t.index ["shop_id"], name: "index_orders_orders_on_shop_id"
+  end
+
   add_foreign_key "account_login_change_keys", "accounts", column: "id"
   add_foreign_key "account_password_reset_keys", "accounts", column: "id"
   add_foreign_key "account_remember_keys", "accounts", column: "id"
@@ -137,4 +191,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_05_000005) do
   add_foreign_key "inventory_stock_movements", "catalog_variants", column: "variant_id"
   add_foreign_key "inventory_stock_movements", "core_shops", column: "shop_id"
   add_foreign_key "inventory_stock_movements", "inventory_locations", column: "location_id"
+  add_foreign_key "orders_cart_items", "catalog_variants", column: "variant_id"
+  add_foreign_key "orders_cart_items", "core_shops", column: "shop_id"
+  add_foreign_key "orders_cart_items", "orders_carts", column: "cart_id"
+  add_foreign_key "orders_carts", "core_shops", column: "shop_id"
+  add_foreign_key "orders_carts", "core_users", column: "customer_id"
+  add_foreign_key "orders_order_items", "catalog_variants", column: "variant_id"
+  add_foreign_key "orders_order_items", "core_shops", column: "shop_id"
+  add_foreign_key "orders_order_items", "orders_orders", column: "order_id"
+  add_foreign_key "orders_orders", "core_shops", column: "shop_id"
+  add_foreign_key "orders_orders", "core_users", column: "customer_id"
 end

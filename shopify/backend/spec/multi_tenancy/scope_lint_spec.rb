@@ -9,8 +9,12 @@ RSpec.describe "Tenant-owned models lint" do
     Catalog::Variant,
     Inventory::Location,
     Inventory::InventoryLevel,
-    Inventory::StockMovement
-    # Phase 4+: Orders::Order, Orders::LineItem, Apps::AppInstallation, ...
+    Inventory::StockMovement,
+    Orders::Cart,
+    Orders::CartItem,
+    Orders::Order,
+    Orders::OrderItem
+    # Phase 5+: Apps::App, Apps::AppInstallation, Apps::WebhookSubscription, ...
   ].freeze
 
   TENANT_OWNED_MODELS.each do |klass|
