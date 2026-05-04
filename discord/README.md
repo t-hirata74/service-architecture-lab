@@ -10,7 +10,7 @@ slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue) / github (Rail
 
 ## 見どころハイライト (設計フェーズ)
 
-> Phase 5 まで完了：Playwright で 2 BrowserContext fan-out / presence offline を E2E 検証、Terraform は本番想定の設計図 (apply はしない) として `fmt + validate` を CI で常時通す。
+> 🟢 MVP 完成 (Phase 1-5 完了)：Playwright で 2 BrowserContext fan-out / presence offline を E2E 検証、Terraform は本番想定の設計図 (apply はしない) として `fmt + validate` を CI で常時通す。
 
 - **per-guild Hub goroutine + 単一プロセス** — slack の Rails ActionCable + Redis pub/sub と対比し、**Go の goroutine/channel で同じ問題をどう解くか**を残す ([ADR 0001](docs/adr/0001-guild-sharding-single-process-hub.md))
 - **Hub は CSP 流 single goroutine + select pattern** — `clients` map は Hub goroutine が専有、mutex なし。slow consumer は non-blocking send + drop で吸収 ([ADR 0002](docs/adr/0002-hub-goroutine-channel-pattern.md))
