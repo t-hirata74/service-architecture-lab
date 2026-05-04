@@ -216,6 +216,6 @@ cd ../playwright && npm test
 | --- | --- | --- |
 | 1 | scaffolding + ADR 4 本 + architecture.md + docker-compose | 🟢 設計フェーズ完了 |
 | 2 | Go gateway（chi + `store`/SQL + JWT + bcrypt）+ Guild / Channel / Message / Member + REST CRUD + 認証 1 経路 | 🟢 完了 |
-| 3 | WebSocket gateway (gorilla/websocket) + per-guild Hub + IDENTIFY/HEARTBEAT/DISPATCH op codes + presence broadcast | ⚪ 未着手 |
+| 3 | WebSocket gateway (gorilla/websocket) + per-guild Hub + IDENTIFY/HEARTBEAT/DISPATCH op codes + presence broadcast | 🟢 完了 |
 | 4 | ai-worker (FastAPI) `/summarize` `/moderate` + frontend (Next.js channels list / message feed / native WebSocket subscribe) | ⚪ 未着手 |
 | 5 | Playwright (2 BrowserContext で fan-out 検証) + Terraform 設計図 + GitHub Actions CI workflows | ⚪ 未着手 |

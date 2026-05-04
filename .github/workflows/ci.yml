@@ -765,6 +765,9 @@ jobs:
           go vet ./...
           go build -o bin/server ./cmd/server
 
+      - name: Test (race)
+        run: go test -race ./...
+
       - name: Smoke /health
         run: |
           ./bin/server &

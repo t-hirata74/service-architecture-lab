@@ -16,6 +16,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/hiratatomoaki/service-architecture-lab/discord/backend/internal/auth"
+	"github.com/hiratatomoaki/service-architecture-lab/discord/backend/internal/gateway"
 	"github.com/hiratatomoaki/service-architecture-lab/discord/backend/internal/store"
 )
 
@@ -28,10 +29,15 @@ type Handler struct {
 	Store     *store.Store
 	JWTSecret []byte
 	AIWorker  string
+	Registry  *gateway.Registry
 }
 
-func NewHandler(log *slog.Logger, st *store.Store, jwtSecret []byte, aiWorker string) *Handler {
-	return &Handler{Log: log, Store: st, JWTSecret: jwtSecret, AIWorker: strings.TrimSuffix(aiWorker, "/")}
+func NewHandler(log *slog.Logger, st *store.Store, jwtSecret []byte, aiWorker string, registry *gateway.Registry) *Handler {
+	return &Handler{
+		Log: log, Store: st, JWTSecret: jwtSecret,
+		AIWorker: strings.TrimSuffix(aiWorker, "/"),
+		Registry: registry,
+	}
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -481,7 +487,8 @@ func (h *Handler) PostChannelMessage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, ok := h.requireChannelGuildMember(w, r, chID, uid); !ok {
+	ch, ok := h.requireChannelGuildMember(w, r, chID, uid)
+	if !ok {
 		return
 	}
 	var body messageBody
@@ -505,6 +512,9 @@ func (h *Handler) PostChannelMessage(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+
+	h.broadcastMessageCreate(ch.GuildID, m)
+
 	jsonWrite(w, http.StatusCreated, map[string]any{
 		"message": map[string]any{
 			"id": m.ID, "channel_id": m.ChannelID, "user_id": m.UserID, "body": m.Body,
@@ -512,6 +522,29 @@ func (h *Handler) PostChannelMessage(w http.ResponseWriter, r *http.Request) {
 			"created_at": m.CreatedAt.UTC().Format(time.RFC3339Nano),
 		},
 	})
+}
+
+func (h *Handler) broadcastMessageCreate(guildID int64, m *store.Message) {
+	if h.Registry == nil {
+		return
+	}
+	hub := h.Registry.Get(guildID)
+	if hub == nil {
+		return // no subscribers — skip without spawning a Hub
+	}
+	payload, err := gateway.MarshalFrame(gateway.OpDispatch, gateway.EventMessageCreate, gateway.MessageCreateData{
+		ID: m.ID, ChannelID: m.ChannelID, GuildID: guildID, UserID: m.UserID,
+		AuthorUsername: m.AuthorUsername, Body: m.Body,
+		CreatedAt: m.CreatedAt.UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		h.Log.Warn("marshal MESSAGE_CREATE", slog.Any("err", err))
+		return
+	}
+	if !hub.Broadcast(payload) {
+		h.Log.Warn("hub broadcast queue full",
+			slog.Int64("guild_id", guildID), slog.Int64("message_id", m.ID))
+	}
 }
 
 func (h *Handler) PostChannelSummarize(w http.ResponseWriter, r *http.Request) {

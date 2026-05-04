@@ -10,13 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	chicors "github.com/go-chi/cors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	chicors "github.com/go-chi/cors"
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/hiratatomoaki/service-architecture-lab/discord/backend/internal/api"
 	"github.com/hiratatomoaki/service-architecture-lab/discord/backend/internal/config"
+	"github.com/hiratatomoaki/service-architecture-lab/discord/backend/internal/gateway"
 	"github.com/hiratatomoaki/service-architecture-lab/discord/backend/internal/store"
 )
 
@@ -42,12 +43,26 @@ func main() {
 	defer db.Close()
 
 	st := &store.Store{DB: db}
-	h := api.NewHandler(log, st, []byte(cfg.JWTSecret), cfg.AIWorkerURL)
+
+	hubCtx, hubCancel := context.WithCancel(context.Background())
+	defer hubCancel()
+	hbInterval := time.Duration(cfg.HeartbeatIntervalMs) * time.Millisecond
+	registry := gateway.NewRegistry(hubCtx, hbInterval, log)
+
+	gw := &gateway.Service{
+		Log:               log,
+		Store:             st,
+		JWTSecret:         []byte(cfg.JWTSecret),
+		Registry:          registry,
+		HeartbeatInterval: hbInterval,
+		AllowedOrigins:    []string{"http://localhost:3055"},
+	}
+
+	h := api.NewHandler(log, st, []byte(cfg.JWTSecret), cfg.AIWorkerURL, registry)
 
 	root := chi.NewRouter()
 	root.Use(middleware.RealIP)
 	root.Use(middleware.RequestID)
-	root.Use(middleware.Timeout(120 * time.Second))
 	root.Use(middleware.Recoverer)
 	root.Use(chicors.Handler(chicors.Options{
 		AllowedOrigins:   []string{"http://localhost:3055"},
@@ -56,7 +71,13 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	root.Mount("/", h.Routes())
+	// /gateway must NOT be wrapped by middleware.Timeout — long-lived WS.
+	root.Get("/gateway", gw.HandleGateway)
+
+	root.Group(func(r chi.Router) {
+		r.Use(middleware.Timeout(120 * time.Second))
+		r.Mount("/", h.Routes())
+	})
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
@@ -65,7 +86,8 @@ func main() {
 	}
 
 	go func() {
-		log.Info("listening", slog.String("addr", cfg.Addr))
+		log.Info("listening", slog.String("addr", cfg.Addr),
+			slog.Int("heartbeat_ms", cfg.HeartbeatIntervalMs))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("server exit", slog.Any("err", err))
 			os.Exit(1)
@@ -79,6 +101,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
+	hubCancel() // stop all Hub goroutines
 	log.Info("shutdown complete")
 }
 

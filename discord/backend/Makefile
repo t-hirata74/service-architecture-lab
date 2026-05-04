@@ -1,4 +1,4 @@
-.PHONY: tidy migrate build run vet
+.PHONY: tidy migrate build run vet test
 tidy:
 	go mod tidy
 
@@ -13,3 +13,6 @@ run:
 
 vet:
 	go vet ./...
+
+test:
+	go test -race ./...

@@ -3,14 +3,16 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
 type Config struct {
-	Addr         string
-	DatabaseURL  string
-	JWTSecret    string
-	AIWorkerURL  string
+	Addr                string
+	DatabaseURL         string
+	JWTSecret           string
+	AIWorkerURL         string
+	HeartbeatIntervalMs int
 }
 
 func Load() (*Config, error) {
@@ -27,11 +29,18 @@ func Load() (*Config, error) {
 		addr = ":3060"
 	}
 	ai := strings.TrimSpace(os.Getenv("AI_WORKER_URL"))
+	hb := 10000
+	if s := strings.TrimSpace(os.Getenv("HEARTBEAT_INTERVAL_MS")); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v >= 100 {
+			hb = v
+		}
+	}
 	return &Config{
-		Addr:        addr,
-		DatabaseURL: dsn,
-		JWTSecret:   sec,
-		AIWorkerURL: ai,
+		Addr:                addr,
+		DatabaseURL:         dsn,
+		JWTSecret:           sec,
+		AIWorkerURL:         ai,
+		HeartbeatIntervalMs: hb,
 	}, nil
 }
 
