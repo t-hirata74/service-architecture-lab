@@ -35,13 +35,25 @@ mkdir -p "$CAPTURE_DIR"
 shopt -s nullglob
 for dir in "$RESULTS_DIR"/*/; do
   name=$(basename "$dir")
-  webm="$dir/video.webm"
-  [[ -f "$webm" ]] || { echo "skip: no video in $dir"; continue; }
   out="$CAPTURE_DIR/$(capture_name_for "$name").gif"
-  echo "→ $out"
-  ffmpeg -y -i "$webm" \
-    -vf "setpts=${PLAYBACK_RATE}*PTS,fps=10,scale=720:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5" \
-    -loop 0 "$out" 2>/dev/null
+
+  webms=()
+  [[ -f "$dir/video.webm" ]] && webms+=("$dir/video.webm")
+  for w in "$dir"page@*.webm; do [[ -f "$w" ]] && webms+=("$w"); done
+
+  if (( ${#webms[@]} == 0 )); then
+    echo "skip: no video in $dir"; continue
+  elif (( ${#webms[@]} == 1 )); then
+    echo "→ $out"
+    ffmpeg -y -i "${webms[0]}" \
+      -vf "setpts=${PLAYBACK_RATE}*PTS,fps=10,scale=720:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5" \
+      -loop 0 "$out" 2>/dev/null
+  else
+    echo "→ $out (hstack ${#webms[@]} contexts)"
+    ffmpeg -y -i "${webms[0]}" -i "${webms[1]}" \
+      -filter_complex "[0:v]setpts=${PLAYBACK_RATE}*PTS,fps=10,scale=540:-1:flags=lanczos[a];[1:v]setpts=${PLAYBACK_RATE}*PTS,fps=10,scale=540:-1:flags=lanczos[b];[a][b]hstack=inputs=2,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5" \
+      -loop 0 "$out" 2>/dev/null
+  fi
 done
 
 echo

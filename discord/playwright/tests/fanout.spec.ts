@@ -1,4 +1,11 @@
-import { test, expect, type Page, type BrowserContext } from "@playwright/test";
+import { test, expect, type Page, type BrowserContext, type TestInfo } from "@playwright/test";
+
+/** PLAYWRIGHT_VIDEO=on で browser.newContext() に recordVideo を inject (capture 用)。 */
+function captureCtxOpts(testInfo: TestInfo): { recordVideo?: { dir: string } } {
+  return process.env.PLAYWRIGHT_VIDEO === "on"
+    ? { recordVideo: { dir: testInfo.outputDir } }
+    : {};
+}
 
 // E2E focus: ADR 0001 / 0002 / 0003 が守られていること:
 //   - alice の POST が WebSocket 経由で bob に届く (per-guild Hub fan-out)
@@ -65,15 +72,15 @@ async function send(page: Page, body: string) {
 
 test("WebSocket fan-out: alice の発言が bob のページに即時反映される", async ({
   browser,
-}) => {
+}, testInfo) => {
   test.setTimeout(120_000);
   const ts = Date.now();
   const alice = `alice_${ts}`;
   const bob = `bob_${ts}`;
   const password = "password123!";
 
-  const aliceCtx: BrowserContext = await browser.newContext();
-  const bobCtx: BrowserContext = await browser.newContext();
+  const aliceCtx: BrowserContext = await browser.newContext(captureCtxOpts(testInfo));
+  const bobCtx: BrowserContext = await browser.newContext(captureCtxOpts(testInfo));
   const a = await aliceCtx.newPage();
   const b = await bobCtx.newPage();
 
@@ -121,15 +128,15 @@ test("WebSocket fan-out: alice の発言が bob のページに即時反映さ�
 
 test("presence offline: 片方のタブを閉じると相手側の online list から消える", async ({
   browser,
-}) => {
+}, testInfo) => {
   test.setTimeout(120_000);
   const ts = Date.now();
   const alice = `a2_${ts}`;
   const bob = `b2_${ts}`;
   const password = "password123!";
 
-  const aliceCtx = await browser.newContext();
-  const bobCtx = await browser.newContext();
+  const aliceCtx = await browser.newContext(captureCtxOpts(testInfo));
+  const bobCtx = await browser.newContext(captureCtxOpts(testInfo));
   const a = await aliceCtx.newPage();
   const b = await bobCtx.newPage();
 
