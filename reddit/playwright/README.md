@@ -41,3 +41,19 @@ DB は `./e2e.db` (sqlite) を使用し、テスト開始前に削除して migr
 - `playwright.config.ts` は `PLAYWRIGHT_VIDEO=on` のときだけ全ケース録画 (`video: "on"`)
 - `scripts/record-captures.sh` が test 実行 → `test-results/<dir>/video.webm` を発見 → ffmpeg で `fps=10, width=720px, palettegen + paletteuse` の gif に変換
 - 出力名は test ディレクトリ名から content match (`*anonymous*` `*認証フロー*` `*ai-worker*`) して `01-..03-` の prefix を付ける。テストを増やしたら `scripts/record-captures.sh` の `case` 句に追加する
+
+## CI と連動
+
+GitHub Actions `reddit-playwright-e2e` ジョブが PR / push 毎に **full E2E + capture** を回し、以下 3 つを **artifact として upload**:
+
+| artifact 名 | 内容 | retention |
+| --- | --- | --- |
+| `reddit-captures` | `captures/*.gif` (README 埋め込み相当) | 30 日 |
+| `reddit-playwright-test-results` | `test-results/` (webm + trace、失敗解析用) | 7 日 |
+| `reddit-playwright-report` | `playwright-report/` (HTML report) | 7 日 |
+
+Actions の Run 詳細ページから download できる。レビュー時に **「最新コードで撮った gif」** を確認できる位置づけ。
+
+リポジトリ内の `reddit/playwright/captures/*.gif` (README 表示用) は **手動更新** (`npm run capture` + commit) のまま。CI は git に書き戻さない (gif は非決定的なので `git diff --exit-code` 不可、auto-commit はノイズ大)。
+
+別の `reddit-playwright` ジョブ (typecheck only) は速い gate として残してある。

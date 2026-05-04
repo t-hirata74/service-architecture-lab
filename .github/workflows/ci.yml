@@ -922,6 +922,83 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+  reddit-playwright-e2e:
+    name: reddit / playwright (full E2E + capture artifacts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            reddit/backend/requirements.txt
+            reddit/ai-worker/requirements.txt
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            reddit/frontend/package-lock.json
+            reddit/playwright/package-lock.json
+
+      - name: Install ffmpeg (for webm → gif)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Backend venv + deps
+        working-directory: reddit/backend
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: ai-worker venv + deps
+        working-directory: reddit/ai-worker
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Frontend deps
+        working-directory: reddit/frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Playwright deps + chromium
+        working-directory: reddit/playwright
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E + record captures
+        working-directory: reddit/playwright
+        run: npm run capture
+
+      - name: Upload captures (gif, README 用)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reddit-captures
+          path: reddit/playwright/captures/
+          retention-days: 30
+
+      - name: Upload test-results (webm + trace, 失敗解析用)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reddit-playwright-test-results
+          path: reddit/playwright/test-results/
+          retention-days: 7
+
+      - name: Upload playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reddit-playwright-report
+          path: reddit/playwright/playwright-report/
+          retention-days: 7
+
   reddit-terraform:
     name: reddit / terraform (fmt + validate)
     runs-on: ubuntu-latest
