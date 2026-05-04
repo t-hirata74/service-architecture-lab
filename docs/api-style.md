@@ -27,6 +27,10 @@
 | `slack`   | **REST + OpenAPI** | 主要技術課題（fan-out / 既読 cursor）は WebSocket と直交。残りの CRUD は固定形で OpenAPI と相性が良い |
 | `youtube` | **REST + OpenAPI** | アップロード状態機械は action ベースの REST が素直。Recommendation / 検索 / コメントも独立リソースで GraphQL に倒す価値が薄い |
 | `github` | **GraphQL** (graphql-ruby + urql) | 主要技術課題が「**Issue / PR / Review / Permission の関係グラフ**」。REST だと endpoint 爆発 + N+1 議論が分散する。実 GitHub も v4 が GraphQL |
+| `perplexity` | **REST + SSE** (`ActionController::Live`) | 同期 API は固定形で十分、stream 部分のみ SSE で切り出す |
+| `instagram` | **REST** (DRF) | フォロー / タイムラインは action ベースの REST で十分。スキーマ定義は DRF Serializer ベース |
+| `discord` | **REST + WebSocket** (`/gateway`) | gateway protocol が主役、REST は補助 |
+| `reddit` | **REST + JSON** (FastAPI) | サブレディット / post / comment / vote は典型的な CRUD + custom action。FastAPI 型駆動で OpenAPI 自動生成。GraphQL を入れる動機が薄い (関係グラフは comment tree だけで、それは path 列で十分扱える) |
 
 ### 選定をしない・先送りでよいケース
 

@@ -1,11 +1,14 @@
 # Python コーディング規約
 
-本リポの Python コードは 2 系統:
+本リポの Python コードは 3 系統:
 
 1. **ai-worker (FastAPI)** — `slack/ai-worker/` `youtube/ai-worker/` 等。AI / 数値計算 / モックの軽量サービス
-2. **Django/DRF backend** — `instagram/backend/`。Web アプリ本体 (Rails 代替の言語別バックエンド)
+2. **Django/DRF backend** — `instagram/backend/`。Web アプリ本体 (Rails 代替の言語別バックエンド、**同期 ORM + Celery**)
+3. **FastAPI async backend** — `reddit/backend/`。Web アプリ本体 (Django とは対照的な **非同期 I/O + APScheduler**)
 
-下に **(A) ai-worker (FastAPI)** と **(B) Django (DRF) backend** を分けて書く。
+下に **(A) ai-worker (FastAPI)** / **(B) Django (DRF) backend** / **(C) FastAPI async backend** を分けて書く。
+
+`(B) Django` と `(C) FastAPI async` の選定軸は [`framework-python-async-vs-sync.md`](../framework-python-async-vs-sync.md) を参照。
 
 ---
 
@@ -314,3 +317,204 @@ def follow(request, username):
 - **`ATOMIC_REQUESTS=True` を黙って入れる**: ADR で意図を残してから (default は False のまま)
 - **`F()` を使わずに `obj.count += 1; save()`**: race する
 - **`select_related` / `prefetch_related` を書き忘れたまま list view を追加**: N+1 不変条件試験 ([testing-strategy.md](../testing-strategy.md) を 1 本書くまで PR をマージしない
+
+---
+
+## (C) FastAPI async backend
+
+`reddit/backend/` で実際に採用した規約。役割は **Web アプリ本体** (instagram の Django/DRF と対照的な「Python 非同期 I/O + 型駆動 + DB-driven scheduler」を 1 リポで習得する位置づけ)。
+
+### 技術スタック
+
+- Python 3.12+ / FastAPI 0.115+ / **SQLAlchemy 2.0 async** (`AsyncSession`) / aiomysql (production) + aiosqlite (tests)
+- Pydantic v2 + pydantic-settings (env 駆動 settings)
+- HS256 JWT (python-jose) + bcrypt (passlib)
+- APScheduler (AsyncIOScheduler) — 周期 batch (Hot 再計算 / reconcile)
+- httpx async — outbound to ai-worker
+
+### ディレクトリ構成 (**bounded context 縦割り**)
+
+```text
+backend/
+  app/
+    main.py                  # FastAPI app + lifespan + create_app()
+    config.py                # pydantic-settings (env 駆動 1 ファイル)
+    db.py                    # async engine + sessionmaker + get_session
+    deps.py                  # SessionDep / CurrentUser / CurrentUserOptional
+    security.py              # JWT encode/decode + bcrypt
+    cli.py                   # `python -m app.cli migrate`
+    models.py                # 全 mapper を import (Base.metadata 集約)
+    clients/                 # outbound HTTP (ai-worker など)
+    domain/
+      <bounded_context>/     # accounts / subreddits / posts / comments / votes
+        models.py            # SQLAlchemy 2.0 mapped_column + Index
+        schemas.py           # Pydantic request/response
+        service.py           # 集約をまたぐ書き込みロジック
+        repository.py        # (任意) read 集約
+        router.py            # FastAPI APIRouter
+  tests/                     # pytest-asyncio + httpx ASGITransport + sqlite
+```
+
+instagram の Django apps (横断レイヤを 1 ディレクトリに集約) と思想は同じだが、**`models.py` は 1 ファイルではなく `mapped_column` ベース**にする (SQLAlchemy 2.0 流)。
+
+### 規律 1: route handler は `async def` のみ。blocking I/O は `asyncio.to_thread`
+
+`async def` 内で同期 DB ライブラリを呼ぶと event loop を止める。SQLAlchemy 2.0 async / aiomysql / httpx async に統一する。CPU bound や stdlib の同期 I/O は `await asyncio.to_thread(fn, ...)` で逃がす。
+
+### 規律 2: `Annotated[AsyncSession, Depends(get_session)]` を **`SessionDep` で alias**
+
+```python
+# app/deps.py
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+# router.py
+async def list_posts(session: SessionDep) -> list[PostResponse]:
+    rows = (await session.execute(select(Post))).scalars().all()
+    ...
+```
+
+毎ハンドラに `Depends(get_session)` を書かない。`CurrentUser` / `CurrentUserOptional` も同じ alias パターン。
+
+### 規律 3: SQLAlchemy 2.0 async の lazy load は **MissingGreenlet で落ちる**
+
+```python
+post = (await session.execute(select(Post))).scalar_one()
+post.comments  # ← MissingGreenlet error (lazy load triggers blocking I/O)
+```
+
+**規律**: 関連を読むなら `selectinload` / `joinedload` を **必ず明示**:
+
+```python
+stmt = select(Post).options(selectinload(Post.comments)).where(Post.id == pid)
+```
+
+これは Django の `prefetch_related` 明示と同じ思想。silent fallback ではなく **明示的にエラーで落とす**ことで N+1 と境界を可視化する。
+
+### 規律 4: 書き込みは `service.py` に集約、router は薄く
+
+```python
+# domain/votes/service.py
+async def cast_vote_on_post(
+    session: AsyncSession, *, user_id: int, post_id: int, value: int
+) -> tuple[int, int]:
+    # 1. SELECT target (存在確認のみ、ロックしない)
+    # 2. SELECT votes ... FOR UPDATE (toggle 時の既存行を lock)
+    # 3. delta 計算 → INSERT or UPDATE → UPDATE target SET score = score + delta
+    # 4. COMMIT
+    ...
+```
+
+router は service に flat に呼び出すだけ。例外は **subclass で分け**、router で `except <Specific> as exc: raise HTTPException(...)` にする。文字列 match で 404/403 を分ける anti-pattern を避ける。
+
+### 規律 5: bcrypt + JWT bearer。`X-Internal-Token` で内部 ingress
+
+```python
+# app/security.py — HS256 + sub=user_id + iat + exp
+def create_access_token(user_id: int) -> str: ...
+def decode_token(token: str) -> int: ...
+
+# app/deps.py — Header() で取得し、DB lookup 1 回
+async def get_current_user(session: SessionDep, authorization: str = Header()) -> User: ...
+```
+
+公開 GET は `CurrentUserOptional` (None 許容)、書き込みは `CurrentUser` (必須) で分ける。Reddit 的「閲覧 anonymous OK」を route 単位で表現。
+
+ai-worker 側 (内部 ingress) は `secrets.compare_digest` で `X-Internal-Token` 検証 → これは [operating-patterns §1](../operating-patterns.md#1-内部-trusted-ingress-rest--共有トークン) と同パターン。
+
+### 規律 6: pydantic-settings + `@lru_cache` で env 駆動 1 ファイル
+
+```python
+# app/config.py
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    database_url: str = "mysql+aiomysql://reddit:reddit@127.0.0.1:3313/reddit_development"
+    jwt_secret: str = "dev-secret-do-not-use-in-prod"
+    enable_scheduler: bool = True
+    ...
+
+@lru_cache
+def get_settings() -> Settings: return Settings()
+```
+
+instagram の `python-decouple` と思想は同じ (env 駆動 1 ファイル)。Pydantic v2 の型変換が乗るので少し賢い。
+
+### 規律 7: APScheduler は `lifespan` で start/shutdown、テストは無効化
+
+```python
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if get_settings().enable_scheduler:
+        sched = AsyncIOScheduler()
+        sched.add_job(recompute_hot_scores, "interval", seconds=60, max_instances=1, coalesce=True)
+        sched.start()
+        yield
+        sched.shutdown(wait=False)
+    else:
+        yield
+```
+
+詳細は [operating-patterns §16](../operating-patterns.md#16-apscheduler-driven-batch--single-instance-constraint-reddit)。**`max_instances=1` + `coalesce=True`** が現場の安全弁。
+
+### 規律 8: Migration は **`Base.metadata.create_all()`** から始め、Alembic は ADR を立てて入れる
+
+ADR 0004 で「Alembic を意図的に避けた」と書いた。reasoning: 学習スコープが「FastAPI async + ORM 2.0 への習熟」なので、migration history 管理を後回しにする。スキーマが変わる頻度が上がったタイミングで派生 ADR を立てて Alembic 化する。
+
+```python
+# app/main.py
+async def init_db() -> None:
+    async with get_engine().begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+```
+
+`python -m app.cli migrate` で呼ぶ。これは production には**使わない** — Terraform 側で「実環境では Alembic」を ADR に切り出す前提。
+
+### 規律 9: outbound HTTP は graceful degradation 込みで wrap
+
+```python
+# app/clients/ai_worker.py
+async def _post(path, payload) -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as c:
+            res = await c.post(url, json=payload, headers={"X-Internal-Token": token})
+    except httpx.RequestError as exc:
+        return {"degraded": True, "reason": "unreachable"}
+    if res.status_code >= 500:
+        return {"degraded": True, "reason": f"upstream_{res.status_code}"}
+    if res.status_code >= 400:                  # ← 4xx も degraded で吸収する
+        return {"degraded": True, "reason": f"upstream_{res.status_code}"}
+    body = res.json()
+    body.setdefault("degraded", False)
+    return body
+```
+
+**罠**: `res.raise_for_status()` を使うと `HTTPStatusError` が飛ぶが、これは **`httpx.RequestError` のサブクラスではない** ので `except RequestError` では捕まらない。`status_code` を直接 if で見る方が安全。詳細は [operating-patterns §2](../operating-patterns.md#2-graceful-degradation)。
+
+### 規律 10: SQLAlchemy 2.0 async の `with_for_update()` は sqlite で **no-op**
+
+production (MySQL) では行ロックが効くが、テスト (sqlite) ではロックなし。**ロジック自体は両方で同じ動作になる**ので、`pytest` を sqlite in-memory で回しても意味はある (UNIQUE 制約 / トランザクション境界 / 相対加算は両方で test できる)。詳細は [testing-strategy.md FastAPI 節](../testing-strategy.md#fastapi-async-backend-reddit)。
+
+### FastAPI async backend でやらないこと
+
+- **同期 SQLAlchemy / requests を `async def` 内で呼ぶ**: event loop が止まる。aiomysql / httpx async 一択
+- **lazy load relationship**: `selectinload` / `joinedload` を明示しないと MissingGreenlet で落ちる
+- **`raise_for_status()` で 4xx/5xx をまとめて捕まえようとする**: `HTTPStatusError` は `RequestError` のサブクラスではない
+- **APScheduler を複数 task で起動する**: ECS desired_count=1 を Terraform 側でも固定 ([operating-patterns §16](../operating-patterns.md#16-apscheduler-driven-batch--single-instance-constraint-reddit))
+- **Alembic / Liquibase を YAGNI で先回り導入**: `Base.metadata.create_all()` で始め、必要になってから ADR を立てる
+
+---
+
+## (A) ai-worker への追記: APScheduler を持つ ai-worker (reddit)
+
+`reddit/ai-worker/` は (A) ai-worker の派生形で、`/summarize` `/related` `/spam-check` mock に加えて **DB を読み書きする APScheduler ジョブ**を内蔵する:
+
+- `recompute_hot_scores` — 60s interval、`posts.hot_score` を bulk UPDATE
+- `reconcile_score` — nightly cron、`votes` SUM と `posts/comments.score` の drift をログ出力
+
+**ai-worker に DB アクセスを許す条件** ([CLAUDE.md「ai-worker は計算系専任」]に対する例外):
+
+1. backend のドメインロジックを再実装しない (raw SQL `text()` で集計のみ)
+2. ai-worker 側に SQLAlchemy ORM mapper を **持たない** (backend と二重定義しない)
+3. desired_count=1 で複数台運用しない ([operating-patterns §16](../operating-patterns.md#16-apscheduler-driven-batch--single-instance-constraint-reddit))
+4. テストは `ENABLE_SCHEDULER=false` で scheduler を無効化し、ジョブ関数を直接呼ぶ
+
+これを破ると「backend と ai-worker でドメインロジックが分裂する」ので、責務は厳格に守る。

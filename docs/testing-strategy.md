@@ -350,6 +350,141 @@ webServer: [{
 
 ---
 
+## FastAPI async backend (reddit) <a id="fastapi-async-backend-reddit"></a>
+
+`reddit/backend/` で確立したパターン。Django pytest と並ぶ Python の **2 系統目**。**SQLAlchemy 2.0 async + aiomysql** を production、**aiosqlite + sqlite in-memory** を test に使う構成。MySQL 不要で 30 件超の test を 7 秒で回せる。
+
+### 構成 — `pytest-asyncio` + `httpx ASGITransport` + sqlite in-memory
+
+```python
+# tests/conftest.py
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+import app.models  # noqa  ← 全 mapper を Base.metadata に集約
+from app import db as db_module
+from app.db import Base
+from app.main import create_app
+
+TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
+
+@pytest_asyncio.fixture
+async def engine():
+    eng = create_async_engine(TEST_DB_URL, future=True)
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield eng
+    await eng.dispose()
+
+@pytest_asyncio.fixture
+async def sessionmaker(engine):
+    return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+@pytest_asyncio.fixture
+async def client(sessionmaker):
+    app = create_app()
+    async def override():
+        async with sessionmaker() as s: yield s
+    app.dependency_overrides[db_module.get_session] = override
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+```
+
+### 規律 1: `dependency_overrides` で session を差し替える
+
+production の `get_session` は `aiomysql` 経由で MySQL に繋ぐ。test では `dependency_overrides[get_session] = override` で sqlite session を返すように差し替えれば、**route handler のロジックは無改変**で test できる。
+
+`db.py` に test 専用関数 (`reset_engine_for_tests` 等) を生やさない。dep injection で済ませる。
+
+### 規律 2: SQLAlchemy 2.0 async の `with_for_update()` は sqlite では **no-op**
+
+production (MySQL) では行ロック、test (sqlite) ではノーロック。**ロジック自体は両環境で同じ**:
+
+```python
+# vote service: SELECT FOR UPDATE → INSERT/UPDATE → COMMIT
+existing = (await session.execute(
+    select(Vote).where(...).with_for_update()
+)).scalar_one_or_none()
+```
+
+sqlite test で UNIQUE 制約 / トランザクション境界 / 相対加算 / idempotent (delta=0) は test できる。**race condition 自体**は sqlite では再現できないので、ロック設計の正しさは ADR + コードレビューで担保する。
+
+### 規律 3: APScheduler は **`ENABLE_SCHEDULER=false`** で起動させない
+
+```python
+# tests/conftest.py
+os.environ.setdefault("ENABLE_SCHEDULER", "false")
+```
+
+`httpx.ASGITransport` は version によって lifespan を起動するので、env で scheduler を無効化する二重保険。ジョブ関数自体は **scheduler を介さず直接 await** して test する ([operating-patterns §16](operating-patterns.md#16-apscheduler-driven-batch--single-instance-constraint-reddit) 規律 3)。
+
+### 規律 4: Hot 式の duplicate test (backend と ai-worker)
+
+reddit Hot 式は `backend/app/domain/posts/ranking.py` (新規 post の初期 hot_score 計算) と `ai-worker/app/ranking.py` (60s 再計算) に **意図的に duplicate** している。**両者が一致することを test で保証**する:
+
+```python
+# ai-worker/tests/test_hot_formula.py
+def test_ai_worker_and_backend_formula_match():
+    spec = importlib.util.spec_from_file_location(
+        "backend_ranking",
+        Path(__file__).resolve().parents[2] / "backend/app/domain/posts/ranking.py",
+    )
+    mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
+    for s in (-50, -1, 0, 1, 100, 9999):
+        assert hot_score(s, dt) == mod.hot_score(s, dt), s
+```
+
+**`importlib.util.spec_from_file_location`** で別パッケージの単一ファイルを読み込む。`sys.path` を弄ると `app` 名前空間が衝突するので不可。
+
+### 規律 5: 外部 HTTP は **`respx`** で mock する
+
+```python
+import respx, httpx
+
+@respx.mock
+async def test_summarize_degraded_on_5xx(client):
+    respx.post("http://127.0.0.1:8060/summarize").mock(
+        return_value=httpx.Response(503, text="Service Unavailable")
+    )
+    res = await client.post(f"/posts/{post_id}/summarize")
+    assert res.json()["degraded"] is True
+```
+
+ai-worker の起動を test で要求しない。graceful degradation の **4 ケース** (success / unreachable / 5xx / 4xx) を respx で全部踏める。
+
+### 規律 6: pytest-asyncio v0.23+ は **`event_loop` fixture を上書きしない**
+
+旧来の以下の pattern は deprecated:
+```python
+@pytest.fixture(scope="session")
+def event_loop():
+    loop = asyncio.new_event_loop(); yield loop; loop.close()
+```
+→ `asyncio_mode = auto` (`pytest.ini`) を入れて、上書きせずに済ませる。
+
+### 書かないもの
+
+- **route ごとの単体 test** — `httpx ASGITransport` 経由の **integration test** で fixture を共有すれば十分
+- **race condition の再現** — sqlite で再現不能。ADR + コードレビューで担保し、本物の race は production 観測に任せる
+- **scheduler の interval 動作 test** — `time.sleep` で 60s 待つ test は flake のもと。ジョブ関数を直接 await する
+
+### 実行
+
+```bash
+cd reddit/backend
+source .venv/bin/activate
+pytest                    # 全 test
+pytest tests/test_votes.py -v
+```
+
+CI: `reddit-backend` ジョブで `pip install -r requirements.txt` → `pytest -q`。MySQL service は不要 (sqlite)。
+
+詳細: `reddit/backend/tests/`、ai-worker は `reddit/ai-worker/tests/`。
+
+---
+
 ## Go backend (discord) <a id="go-backend-discord"></a>
 
 `discord/backend/` で確立したパターン。Rails RSpec / Django pytest と並ぶ位置づけ。**設計の見どころ (per-guild Hub の goroutine + channel 設計、ADR 0002 / 0003) を 1 ケースずつ縛る**のが中心で、CRUD ハンドラの単体テストは書かない (Playwright E2E が事実上の積分テスト)。

@@ -200,10 +200,14 @@ Terraform で以下を定義する（**実行はしない**）：VPC、ECS/Lambd
 
 - `docs/coding-rules/frontend.md` — React / Next.js
 - `docs/coding-rules/rails.md` — Rails
-- `docs/coding-rules/python.md` — Python（ai-worker）
+- `docs/coding-rules/python.md` — Python: (A) ai-worker / (B) Django / (C) FastAPI async backend
+- `docs/coding-rules/go.md` — Go (discord で確立)
 - `docs/git-workflow.md` — ブランチ・コミット・PR
-- `docs/testing-strategy.md` — テスト方針
+- `docs/testing-strategy.md` — テスト方針 (Rails RSpec / Django pytest / FastAPI async pytest / Go race / Playwright)
 - `docs/adr-template.md` — ADR 雛形
 - `docs/api-style.md` — API スタイル
+- `docs/operating-patterns.md` — 横断パターン (graceful degradation / 内部 ingress / fan-out / Hub / Materialized Path / 相対加算 + reconcile / APScheduler)
+- `docs/framework-django-vs-rails.md` — Django ↔ Rails 比較
+- `docs/framework-python-async-vs-sync.md` — Django sync vs FastAPI async (Python 二大潮流)
 
 プロジェクト固有のアーキ図・ADR は `<service>/docs/` 配下。
