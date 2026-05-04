@@ -1,17 +1,45 @@
 @import "tailwindcss";
 
+/* design-tokens.md の共通トークン (light theme) */
 :root {
-  --background: #f6f7f8;
-  --foreground: #1a1a1b;
-  --panel: #ffffff;
-  --panel-2: #f8f9fa;
-  --accent: #ff4500;
-  --muted: #7c7c7c;
-  --border: #ccc;
+  --bg:            #fafafa;
+  --bg-elevated:   #ffffff;
+  --bg-subtle:     #f4f4f5;
+  --border:        #e4e4e7;
+  --border-strong: #d4d4d8;
+
+  --fg:            #18181b;
+  --fg-muted:      #52525b;
+  --fg-subtle:     #a1a1aa;
+
+  --radius-sm:     4px;
+  --radius:        8px;
+  --radius-lg:     12px;
+
+  --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow:        0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg:     0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+
+  --font-sans:     -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+                   "Hiragino Kaku Gothic ProN", "Helvetica Neue", Arial, sans-serif;
+
+  /* per-project accent: reddit orange */
+  --accent:        #ff4500;
+  --accent-hover:  #e03d00;
+  --accent-fg:     #ffffff;
+
+  /* legacy aliases (旧 component が参照) */
+  --background:    var(--bg);
+  --foreground:    var(--fg);
+  --panel:         var(--bg-elevated);
+  --panel-2:       var(--bg-subtle);
+  --muted:         var(--fg-muted);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
 }

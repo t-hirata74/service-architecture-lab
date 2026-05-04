@@ -46,23 +46,38 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">subreddits</h1>
-      {error && <p className="text-red-500 text-sm">{error}</p>}
+      <header className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight">subreddits</h1>
+        <p className="text-sm text-[var(--fg-muted)]">
+          コミュニティを選んで投稿を読んだり、自分でコミュニティを作ったりできます。
+        </p>
+      </header>
+      {error && (
+        <div className="text-sm text-[var(--accent)] bg-[var(--bg-subtle)] border border-[var(--border)] rounded-[var(--radius-sm)] px-3 py-2">
+          {error}
+        </div>
+      )}
 
-      <ul className="bg-[var(--panel)] border border-[var(--border)] rounded divide-y divide-[var(--border)]">
+      <ul className="bg-[var(--bg-elevated)] border border-[var(--border)] rounded-[var(--radius)] shadow-[var(--shadow-sm)] divide-y divide-[var(--border)] overflow-hidden">
         {subs.map((s) => (
-          <li key={s.id} className="px-4 py-2">
-            <Link href={`/r/${s.name}`} className="text-[var(--accent)] font-bold">
-              r/{s.name}
+          <li key={s.id}>
+            <Link
+              href={`/r/${s.name}`}
+              className="flex items-baseline gap-3 px-4 py-3 hover:bg-[var(--bg-subtle)] transition-colors"
+            >
+              <span className="text-[var(--accent)] font-semibold">r/{s.name}</span>
+              {s.description && (
+                <span className="text-[var(--fg-muted)] text-sm truncate">
+                  {s.description}
+                </span>
+              )}
             </Link>
-            {s.description && (
-              <span className="text-[var(--muted)] text-sm ml-3">{s.description}</span>
-            )}
           </li>
         ))}
         {subs.length === 0 && (
-          <li className="px-4 py-2 text-[var(--muted)] text-sm">
-            no subreddits yet
+          <li className="px-4 py-12 text-center">
+            <div className="text-3xl mb-2 opacity-30">📭</div>
+            <p className="text-sm text-[var(--fg-subtle)]">no subreddits yet</p>
           </li>
         )}
       </ul>
@@ -70,24 +85,26 @@ export default function HomePage() {
       {user && (
         <form
           onSubmit={submit}
-          className="bg-[var(--panel)] border border-[var(--border)] rounded p-4 space-y-2"
+          className="bg-[var(--bg-elevated)] border border-[var(--border)] rounded-[var(--radius)] shadow-[var(--shadow-sm)] p-5 space-y-3"
         >
-          <h2 className="font-bold text-sm">create subreddit</h2>
+          <h2 className="font-semibold text-sm tracking-wide uppercase text-[var(--fg-muted)]">
+            create subreddit
+          </h2>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="name (a-z, 0-9, _)"
-            className="w-full p-2 border border-[var(--border)] rounded text-sm"
+            className="w-full px-3 h-9 border border-[var(--border-strong)] rounded-md text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:border-[var(--accent)] transition-colors"
           />
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="description"
-            className="w-full p-2 border border-[var(--border)] rounded text-sm"
+            className="w-full px-3 h-9 border border-[var(--border-strong)] rounded-md text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:border-[var(--accent)] transition-colors"
           />
           <button
             type="submit"
-            className="px-4 py-1 rounded bg-[var(--accent)] text-white text-sm"
+            className="px-4 h-9 rounded-md bg-[var(--accent)] text-[var(--accent-fg)] text-sm font-medium hover:bg-[var(--accent-hover)] transition-colors shadow-[var(--shadow-sm)]"
           >
             create
           </button>
