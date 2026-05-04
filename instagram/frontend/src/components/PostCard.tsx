@@ -51,15 +51,23 @@ export function PostCard({
   }
 
   return (
-    <article className="border border-black/10 dark:border-white/10 rounded-lg overflow-hidden bg-background">
-      <header className="flex items-center justify-between px-4 py-2 text-sm">
+    <article className="border border-[var(--border)] rounded-[var(--radius-lg)] overflow-hidden bg-[var(--bg-elevated)] shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow)] transition-shadow">
+      <header className="flex items-center justify-between px-4 h-12 border-b border-[var(--border)]">
         <Link
           href={`/users/${post.user.username}`}
-          className="font-semibold hover:underline"
+          className="flex items-center gap-2 group"
         >
-          @{post.user.username}
+          <span
+            aria-hidden
+            className="size-8 rounded-full bg-gradient-to-br from-[var(--accent)] to-[var(--accent-hover)] grid place-items-center text-[var(--accent-fg)] text-xs font-bold"
+          >
+            {post.user.username.charAt(0).toUpperCase()}
+          </span>
+          <span className="font-semibold text-sm group-hover:text-[var(--accent)] transition-colors">
+            @{post.user.username}
+          </span>
         </Link>
-        <span className="text-xs text-black/50 dark:text-white/50">
+        <span className="text-xs text-[var(--fg-subtle)] tabular-nums">
           {new Date(post.created_at).toLocaleString()}
         </span>
       </header>
@@ -68,33 +76,41 @@ export function PostCard({
         <img
           src={post.image_url}
           alt=""
-          className="w-full max-h-[600px] object-cover bg-black/5"
+          className="w-full max-h-[600px] object-cover bg-[var(--bg-subtle)]"
         />
       ) : null}
-      <div className="px-4 py-3 text-sm space-y-2">
-        {post.caption ? <p className="whitespace-pre-wrap">{post.caption}</p> : null}
-        <div className="flex items-center gap-4 text-xs text-black/60 dark:text-white/60">
+      <div className="px-4 py-3 text-sm space-y-3">
+        {post.caption ? (
+          <p className="whitespace-pre-wrap leading-relaxed">{post.caption}</p>
+        ) : null}
+        <div className="flex items-center gap-1 -mx-2">
           <button
             type="button"
             onClick={toggle}
-            className={`hover:underline ${liked ? "text-pink-600 dark:text-pink-400" : ""}`}
+            className={`px-2 h-8 inline-flex items-center gap-1.5 rounded-md text-sm font-medium transition-colors ${
+              liked
+                ? "text-[var(--accent)] hover:bg-[var(--bg-subtle)]"
+                : "text-[var(--fg-muted)] hover:text-[var(--accent)] hover:bg-[var(--bg-subtle)]"
+            }`}
             aria-pressed={liked}
             disabled={busy}
           >
-            {liked ? "♥" : "♡"} {count}
+            <span className="text-base leading-none">{liked ? "♥" : "♡"}</span>
+            <span className="tabular-nums">{count}</span>
           </button>
           <Link
             href={`/post/${post.id}`}
-            className="hover:underline"
+            className="px-2 h-8 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--bg-subtle)] transition-colors"
           >
-            💬 {post.comments_count}
+            <span className="text-base leading-none">💬</span>
+            <span className="tabular-nums">{post.comments_count}</span>
           </Link>
           {isMine ? (
             <button
               type="button"
               onClick={onDelete}
               disabled={deleting}
-              className="ml-auto text-black/40 hover:text-red-600 dark:text-white/40"
+              className="ml-auto px-2 h-8 inline-flex items-center rounded-md text-xs text-[var(--fg-subtle)] hover:text-[var(--accent)] hover:bg-[var(--bg-subtle)] transition-colors disabled:opacity-50"
             >
               {deleting ? "..." : "delete"}
             </button>
