@@ -27,7 +27,9 @@ export default defineConfig({
     baseURL: FRONTEND_URL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    // PLAYWRIGHT_VIDEO=on で常時録画モード (capture スクリプト用)。
+    // 通常実行は failure のときだけ録画する。
+    video: process.env.PLAYWRIGHT_VIDEO === "on" ? "on" : "retain-on-failure",
   },
 
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],

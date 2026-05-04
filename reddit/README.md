@@ -19,6 +19,18 @@ slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue) / github (Rail
 
 ---
 
+## E2E デモ (Playwright で録画)
+
+`cd reddit/playwright && npm run capture` で再生成可能。仕組みは [`playwright/README.md`](playwright/README.md#キャプチャ生成の仕組み)。
+
+| # | シナリオ | キャプチャ |
+| --- | --- | --- |
+| 01 | anonymous 閲覧 (subreddit 一覧) | ![anonymous feed](playwright/captures/01-anonymous-feed.gif) |
+| 02 | 認証フロー (登録 → subreddit → post → upvote → コメント → reply で depth 2) | ![auth flow](playwright/captures/02-auth-flow.gif) |
+| 03 | ai-worker proxy (TL;DR を取得して表示) | ![ai summarize](playwright/captures/03-ai-summarize.gif) |
+
+---
+
 ## アーキテクチャ概要
 
 ```mermaid
