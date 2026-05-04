@@ -33,7 +33,7 @@ capture_name_for() {
 }
 
 rm -rf "$RESULTS_DIR"
-PLAYWRIGHT_VIDEO=on npx playwright test --reporter=list
+PLAYWRIGHT_VIDEO=on npx playwright test --reporter=list || true   # 失敗 test の video も gif 化
 
 mkdir -p "$CAPTURE_DIR"
 shopt -s nullglob
