@@ -1,4 +1,15 @@
-import { Page, expect } from "@playwright/test";
+import { Page, TestInfo, expect } from "@playwright/test";
+
+/**
+ * `browser.newContext()` で作る独自 context は use.video 設定が伝播しないので、
+ * PLAYWRIGHT_VIDEO=on 時のみ recordVideo オプションを付ける。
+ * 使い方: `await browser.newContext(captureCtxOpts(testInfo))`
+ */
+export function captureCtxOpts(testInfo: TestInfo): { recordVideo?: { dir: string } } {
+  return process.env.PLAYWRIGHT_VIDEO === "on"
+    ? { recordVideo: { dir: testInfo.outputDir } }
+    : {};
+}
 
 export function uniqueEmail(prefix: string = "user"): string {
   const tag = Math.random().toString(36).slice(2, 10);

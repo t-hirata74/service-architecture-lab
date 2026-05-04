@@ -1,13 +1,13 @@
 import { test, expect } from "@playwright/test";
-import { signupViaUI, uniqueEmail, uniqueChannelName } from "./helpers";
+import { captureCtxOpts, signupViaUI, uniqueEmail, uniqueChannelName } from "./helpers";
 
 const PASSWORD = "correcthorsebatterystaple";
 const API_URL = "http://localhost:3010";
 
 test.describe("既読 cursor (ADR 0002)", () => {
-  test("チャンネル閲覧で未読インジケータが消える (auto-mark-read)", async ({ browser }) => {
+  test("チャンネル閲覧で未読インジケータが消える (auto-mark-read)", async ({ browser }, testInfo) => {
     // Bob: チャンネル作成と投稿で未読の元を仕込む
-    const bobCtx = await browser.newContext();
+    const bobCtx = await browser.newContext(captureCtxOpts(testInfo));
     const bob = await bobCtx.newPage();
     const bobEmail = uniqueEmail("bob");
     await signupViaUI(bob, { displayName: "Bob", email: bobEmail, password: PASSWORD });
@@ -23,7 +23,7 @@ test.describe("既読 cursor (ADR 0002)", () => {
     await expect(bob.getByText("Bob からの未読メッセージ")).toBeVisible();
 
     // Alice: signup → join → /channels に未読バッジが出る
-    const aliceCtx = await browser.newContext();
+    const aliceCtx = await browser.newContext(captureCtxOpts(testInfo));
     const alice = await aliceCtx.newPage();
     const aliceEmail = uniqueEmail("alice");
     await signupViaUI(alice, { displayName: "Alice", email: aliceEmail, password: PASSWORD });

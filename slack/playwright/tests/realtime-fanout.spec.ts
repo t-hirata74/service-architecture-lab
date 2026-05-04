@@ -1,14 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { signupViaUI, uniqueEmail, uniqueChannelName } from "./helpers";
+import { captureCtxOpts, signupViaUI, uniqueEmail, uniqueChannelName } from "./helpers";
 
 const PASSWORD = "correcthorsebatterystaple";
 const API_URL = "http://localhost:3010";
 
 test.describe("リアルタイム fan-out (ADR 0001)", () => {
-  test("Alice 送信 -> Bob が受信 / Bob 送信 -> Alice が受信", async ({ browser }) => {
+  test("Alice 送信 -> Bob が受信 / Bob 送信 -> Alice が受信", async ({ browser }, testInfo) => {
     // 別 BrowserContext を 2 つ立ち上げて 2 ユーザーをシミュレート
-    const aliceCtx = await browser.newContext();
-    const bobCtx = await browser.newContext();
+    const aliceCtx = await browser.newContext(captureCtxOpts(testInfo));
+    const bobCtx = await browser.newContext(captureCtxOpts(testInfo));
     const alice = await aliceCtx.newPage();
     const bob = await bobCtx.newPage();
 
