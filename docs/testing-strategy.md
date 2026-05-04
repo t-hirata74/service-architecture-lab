@@ -195,6 +195,54 @@ AI_WORKER_RUNNING=1 npm test          # ai-worker 必要なスペック含む
 npx playwright test --ui              # デバッグ
 ```
 
+### キャプチャ (gif) を README に埋め込む仕組み
+
+各プロジェクトの `playwright/` には **`npm run capture`** タスクを揃えてある。実行すると Playwright が webm を録画し、`scripts/record-captures.sh` が ffmpeg で gif に変換して `playwright/captures/<test-name>.gif` に置く。README で `![](playwright/captures/...gif)` で埋め込めば GitHub 上で auto-play される。
+
+```bash
+cd <service>/playwright
+npm run capture                       # 全シナリオ録画 → gif
+PLAYBACK_RATE=2.5 npm run capture     # 2.5x ゆっくり (default 1.8)
+```
+
+仕組み:
+
+- **`playwright.config.ts`**: `video: process.env.PLAYWRIGHT_VIDEO === "on" ? "on" : "retain-on-failure"` で、通常実行は失敗時のみ録画 / `PLAYWRIGHT_VIDEO=on` のとき全件録画
+- **`scripts/record-captures.sh`**: `PLAYWRIGHT_VIDEO=on npx playwright test` → `test-results/<dir>/video.webm` を発見 → ffmpeg で `setpts=${PLAYBACK_RATE}*PTS,fps=10,scale=720,palettegen+paletteuse` の gif に変換
+- **case マッピング**: test ディレクトリ名 (UTF-8 + 記号混在) を `*pattern*) echo "01-clean-name"` 形式で ASCII 名に対応させる。テストを増やしたら **`scripts/record-captures.sh` の `case` 句に追加**する
+- **`captures/` はコミット対象**、**`test-results/` は `.gitignore`** で除外
+- **gif は非決定的**なので CI で `git diff --exit-code captures/` は不可。CI 連動は **artifact upload** で対応 (詳細: reddit `ci.yml` の `reddit-playwright-e2e` ジョブ)
+
+スピード調整:
+
+| `PLAYBACK_RATE` | 用途 |
+| --- | --- |
+| `1.0` | 等倍 (実時間) |
+| `1.8` (default) | 流れを目で追える程度 |
+| `2.5+` | 説明資料として強調したい時 |
+
+ファイルサイズの目安: 5〜10 秒の test → **30KB〜300KB** (1.8x、palette 128 色)。README 埋め込みに十分軽い。
+
+ffmpeg は `brew install ffmpeg` / `apt install ffmpeg`。**capture スクリプトは ffmpeg がない環境では明示的にエラー終了**する (silently skip しない)。
+
+CI 連動 (実装済みは reddit のみ):
+
+```yaml
+reddit-playwright-e2e:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/setup-python@v5
+    - uses: actions/setup-node@v6
+    - run: sudo apt-get install -y ffmpeg
+    - run: cd reddit/backend && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+    # ... ai-worker / frontend / playwright のセットアップ
+    - run: cd reddit/playwright && npm run capture
+    - uses: actions/upload-artifact@v4
+      with: { name: reddit-captures, path: reddit/playwright/captures/ }
+```
+
+他プロジェクトは MySQL / Redis service が必要なので CI 化は案件ごとに判断 (mechanism 自体は全プロジェクトで揃ってる)。
+
 ---
 
 ## Python (ai-worker)
