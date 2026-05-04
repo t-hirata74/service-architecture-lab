@@ -81,4 +81,24 @@ RSpec.describe Orders::CheckoutService do
     other_loc = Inventory::Location.create!(shop: other_shop, name: "main", kind: "warehouse")
     expect { described_class.call(cart: cart, location: other_loc) }.to raise_error(Orders::CheckoutError, /same shop/)
   end
+
+  # Review fix C3
+  it "C3: cart に複数 currency が混じっていると CurrencyMismatchError" do
+    variant_usd = Catalog::Variant.create!(shop: shop, product: product, sku: "C", price_cents: 999, currency: "USD")
+    Inventory::InventoryLevel.create!(shop: shop, variant: variant_usd, location: location, on_hand: 5)
+    cart = open_cart_with([ [ variant_a, 1 ], [ variant_usd, 1 ] ])
+
+    expect { described_class.call(cart: cart, location: location) }.to raise_error(Orders::CurrencyMismatchError, /multiple currencies/)
+    expect(Orders::Order.count).to eq(0)
+  end
+
+  # Review fix I2
+  it "I2: ledger の StockMovement に source_type/source_id が Order と紐づいて記録される" do
+    cart = open_cart_with([ [ variant_a, 1 ] ])
+    order = described_class.call(cart: cart, location: location)
+
+    movement = Inventory::StockMovement.find_by(variant_id: variant_a.id, location_id: location.id)
+    expect(movement.source_type).to eq("Orders::Order")
+    expect(movement.source_id).to eq(order.id)
+  end
 end

@@ -43,8 +43,8 @@ Rails.application.configure do
   # Replace the default in-process memory cache store with a durable alternative.
   # config.cache_store = :mem_cache_store
 
-  # Replace the default in-process and non-durable queuing backend for Active Job.
-  # config.active_job.queue_adapter = :resque
+  # queue_adapter は config/application.rb で全環境共通に :solid_queue を設定済み。
+  # 本リポは single-DB 方針なので connects_to は不要 (queue tables は main DB に同居)。
 
   # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
   # the I18n.default_locale when a translation cannot be found).

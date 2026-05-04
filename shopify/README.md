@@ -10,7 +10,9 @@ slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue 状態機械) /
 
 ## 見どころハイライト (設計フェーズ)
 
-> 🟢 **MVP 完成 (Phase 1-5 完了)**: Phase 4 + apps Engine + Webhook 配信 (HMAC + delivery_id idempotency + at-least-once retry) / **ActiveSupport::Notifications で `orders → apps` の dependency inversion** (orders は apps を直接参照しない / packwerk で fixate) / Terraform validate pass / GitHub Actions **5 ジョブ追加** / RSpec **71 件通過** + pytest 7 件 + packwerk 0 violation。
+> 🟢 **MVP 完成 (Phase 1-5 完了 + 高精度コードレビュー反映)**: Phase 4 + apps Engine + Webhook 配信 (HMAC + delivery_id idempotency + at-least-once retry) / **ActiveSupport::Notifications で `orders → apps` の dependency inversion** (orders は apps を直接参照しない / packwerk で fixate) / Terraform validate pass / GitHub Actions **5 ジョブ追加** / RSpec **89 件通過** + pytest 7 件 + packwerk 0 violation。
+>
+> Review fix: cart double-submit (lock!) / cart 重複作成防止 (UNIQUE 制約 + retry) / currency mismatch 検証 / `Inventory::NotConfigured` 区別 / DeductService source ledger 紐付け / Order#number 原子採番 (`core_shops.next_order_number` counter) / Solid Queue 実装 / Apps API endpoint (Bearer + scope) / ai-worker 統合 + graceful degradation。並行 spec で C1/C2/I3 の不変条件を fixate。
 
 - **モジュラーモノリス: Rails Engine + packwerk** — `core / catalog / inventory / orders / apps` の 5 Engine、依存方向を packwerk で CI 失敗にする ([ADR 0001](docs/adr/0001-modular-monolith-rails-engine.md))
 - **マルチテナント: `shop_id` row-level scoping** — サブドメイン解決 + 明示 scope (`current_shop.products.find`)、`default_scope` は意図的に却下 ([ADR 0002](docs/adr/0002-multi-tenancy-row-level-shop-scoping.md))
@@ -93,9 +95,12 @@ docker compose up -d mysql                  # 3315
 
 # 2. backend (Rails 8)
 cd backend && bundle install
-bin/rails db:prepare                         # Phase 2 で実装
+bin/rails db:prepare                         # 全 migration 適用
 bin/packwerk check                           # 依存方向違反 0 を確認 (ADR 0001)
 bin/rails s -p 3090
+
+# 2b. Solid Queue worker (別タブ / ADR 0004 webhook 配信に必須)
+cd backend && bin/jobs                       # WebhookDelivery を pickup して dispatch
 
 # 3. ai-worker (別タブ)
 cd ../ai-worker && python -m venv .venv && source .venv/bin/activate
@@ -153,4 +158,5 @@ cd ../playwright && npm test
 | 2 | Rails 8 + 5 Engine + packwerk 0 violation + core (Shop / User / Auth) + tenant resolver middleware | 🟢 完了 (RSpec 20 件: shop / user / tenant_resolver / auth (rodauth) / cross_tenant_isolation / scope_lint / dependency) |
 | 3 | catalog + inventory + 条件付き UPDATE + concurrent decrement spec + stock_movements ledger | 🟢 完了 (RSpec 40 件: + product / variant / stock_movement / deduct_service / **concurrent_deduct (100 thread × initial 60 で 60 成功 / 40 失敗 / on_hand=0 / SUM(delta)=-60**)) |
 | 4 | orders + checkout + ai-worker proxy + frontend (merchant 画面 + storefront) | 🟢 完了 (RSpec 56 件: + Orders::CheckoutService 6 件 (在庫不足時の全件 rollback) / storefront API request 6 件 / pytest 7 件 / Next.js build pass) |
-| 5 | apps Engine + WebhookSubscription/Delivery + Terraform + CI 5 ジョブ | 🟢 完了 (RSpec 71 件: + Signer 2 / EventBus 3 / DeliveryJob 5 (HMAC + retry + 4xx 即 fail + idempotency) / order_created notification cross-engine 2 件 / Terraform validate / CI 5 ジョブ追加) |
+| 5 | apps Engine + WebhookSubscription/Delivery + Terraform + CI 5 ジョブ | 🟢 完了 (RSpec 71 件) |
+| Review fix | C1-C4 + I1-I6 + M2/M4/M7/M8 を反映 | 🟢 完了 (RSpec 89 件: + 並行 checkout 2 / cart UNIQUE 4 / NotConfigured 1 / source ledger 1 / currency mismatch 1 / cart retry 1 / Apps API 5 / recommendations 3) |

@@ -49,4 +49,12 @@ RSpec.describe Inventory::DeductService do
       described_class.call(shop: shop, variant: variant, location: other_loc, quantity: 1, reason: "order_deduct")
     }.to raise_error(ArgumentError, /same tenant/)
   end
+
+  # Review fix I1: 行不在ケースは NotConfigured で区別する
+  it "I1: InventoryLevel が無い variant への deduct は NotConfigured (InsufficientStock とは別)" do
+    other_variant = Catalog::Variant.create!(shop: shop, product: product, sku: "NEW", price_cents: 500)
+    expect {
+      described_class.call(shop: shop, variant: other_variant, location: location, quantity: 1, reason: "order_deduct")
+    }.to raise_error(Inventory::NotConfigured)
+  end
 end

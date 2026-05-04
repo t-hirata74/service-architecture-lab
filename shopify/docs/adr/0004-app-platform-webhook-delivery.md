@@ -76,6 +76,10 @@ Shopify を Shopify たらしめている特徴の 1 つが「**App プラット
 - **順序保証なし**：`order.created` と `order.paid` が逆順に届く可能性。Shopify 自身も「順序保証はしない」スタンス。順序が必要な app は `created_at` で並べ替えるか、状態を `GET` で fetch する責務が受信側にある（**派生 ADR 候補**）
 - **HMAC 鍵の rotation なし**：MVP は単一 secret。rotation は派生 ADR
 - **失敗の永続化**：`max_attempts` 到達後は `WebhookDelivery#status = 'failed_permanent'`。Shopify は app 側の管理画面で失敗 delivery を再送できる UI を持つが、本実装では DB 直叩きの管理コマンドのみ
+- **`Apps::EventBus.publish` の失敗が caller (checkout) を rollback させる**：`ActiveSupport::Notifications.instrument("orders.order_created", ...)` の subscriber は同期実行され、subscriber 内で raise すると instrument の caller (Orders::CheckoutService の transaction) に伝搬する。すなわち WebhookDelivery 行の DB エラーや subscription テーブル障害で **checkout 全体が失敗する**。これは「webhook を確実に予約できないなら注文も受けない」という強い at-least-once 保証の代償であり意図通り。代替案 (subscriber を `rescue` して log のみ) は at-least-once 保証を弱めるので採らない。webhook 機能の停止が business critical な checkout を止めることを防ぎたい場合は、kill switch (subscription 自体を全件 disable する運用フラグ) を派生 ADR で
+- **Webhook receiver の SSRF 危険性**：`WebhookSubscription#endpoint` に任意 URL を保存できる構造。`http://169.254.169.254/` (AWS metadata) や `http://localhost:*/` などの内部資源を叩かせる SSRF が可能。MVP / ローカル方針では許容するが、**production 化する場合は IP allowlist / DNS resolve restriction (private IP 拒否) を必ず入れる** (派生 ADR)
+- **`Apps::App.secret` の平文保存**：HMAC 鍵を平文で保存。rotation がない前提なら encryption-at-rest (Rails 7+ の `encrypts :secret`) を導入すべきだが、MVP は許容。production 化時に encryption を入れる (派生 ADR)
+- **Solid Queue worker の常駐が前提**：`bin/jobs` を別プロセスで常駐させないと DeliveryJob が dispatch されない。Rails app 側だけ起動してジョブが「pending のまま戻ってこない」状態を生まないため、README に起動手順を明記する
 
 ## このADRを守るテスト / 実装ポインタ
 

@@ -6,5 +6,5 @@ Rails.application.routes.draw do
   mount Catalog::Engine,   at: "/"
   mount Inventory::Engine, at: "/"
   mount Orders::Engine,    at: "/"
-  mount Apps::Engine,      at: "/"
+  mount Apps::Engine,      at: "/apps"
 end

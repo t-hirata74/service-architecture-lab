@@ -68,6 +68,8 @@ Shopify が実プロダクトで採用していることで知られる「モジ
 - **Engine 間 in-process 同期呼び出し**：例えば `Orders::CheckoutService` から `Inventory::DeductService.call(...)` を直接呼ぶ。将来別サービスに切り出す時はここに gRPC/HTTP 境界が立つ。**今はインターフェースだけ Service Object 化して呼び出し位置を絞る**
 - **DB スキーマは単一**：各 Component の table prefix で論理分離 (`catalog_products`, `orders_orders`)。物理的には JOIN 可能なので、それを **packwerk + ApplicationRecord 規約** で防ぐ
 - **packwerk の運用コスト**：違反を許容する `package_todo.yml` の運用が必要。導入時は ignore で済ませず、初期から zero-violation を維持する
+- **`enforce_privacy` (公開 API 制約) は本 Phase では採用しない**：packwerk 3 で `enforce_privacy` は `packwerk-privacy` gem に分離された。Phase 5 までは `enforce_dependencies` のみで「どの方向に依存できるか」を縛り、「Engine の internal を外から触る」の禁止 (`public/` ディレクトリで API を絞る) は派生 ADR に倒す。Engine 間の interface は **Service Object (`Apps::EventBus.publish` / `Inventory::DeductService.call`) に集約**することで人手規約として担保する
+- **`core` Engine が抱える top-level クラス**：`ApplicationController` / `ApplicationJob` / `Account` (rodauth が解決する定数) / `TenantOwned` concern は core Engine 配下に置きつつトップレベル namespace で定義する。これは「他 Engine から ::ApplicationController として継承できる必要がある」「rodauth が `Account` をトップレベル lookup する」という外部規約に従う形であり、core Engine が**プラットフォームの基盤層**として top-level スロットを持つことを許容する
 
 ## このADRを守るテスト / 実装ポインタ
 

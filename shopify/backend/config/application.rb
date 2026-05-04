@@ -40,5 +40,10 @@ module Backend
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # ADR 0004: webhook 配信は Solid Queue (DB-backed at-least-once)。
+    # main DB に同居 (single-DB 方針)。:async の in-memory queue では再起動で job が
+    # 消えるため、明示的に :solid_queue を採用する。
+    config.active_job.queue_adapter = :solid_queue
   end
 end

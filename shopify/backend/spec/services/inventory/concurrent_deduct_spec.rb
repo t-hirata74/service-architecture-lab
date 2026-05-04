@@ -6,6 +6,11 @@ require "rails_helper"
 # 条件付き UPDATE (`WHERE on_hand >= :q`) が悲観ロック無しで原子性を提供することを実証する。
 # 100 thread から 1 個ずつ deduct を試行 / 在庫は 60 個 → 60 個成功 + 40 個 InsufficientStock を期待。
 #
+# Note (M2): "100 thread" だが ActiveRecord connection pool のデフォルトは 5 のため、
+# **MySQL 側の物理並列数は 5**。thread 100 はあくまで「論理的に同時に発射されたリクエスト」を
+# 模擬するもので、connection を取り合いながら順次 5 並列ずつ実行される。
+# それでも「条件付き UPDATE が race を防ぐ」不変条件の検証としては十分強い。
+#
 # transactional fixtures は OFF (thread が別 connection / transaction を持つため)。
 # 後始末は after で truncate-style に明示削除する。
 RSpec.describe "Inventory::DeductService — concurrent decrement (ADR 0003)" do

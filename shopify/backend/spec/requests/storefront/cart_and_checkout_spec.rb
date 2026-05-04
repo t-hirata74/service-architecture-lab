@@ -50,4 +50,18 @@ RSpec.describe "Storefront cart + checkout", type: :request do
     get "/storefront/cart", headers: headers
     expect(response).to have_http_status(:unauthorized)
   end
+
+  # Review fix C2: find_or_create_by の RecordNotUnique を controller が retry すること
+  it "C2: 並行 add_item で 1 customer に open cart が 1 つだけ作られる (UNIQUE + retry)" do
+    headers = auth_headers(subdomain: subdomain, jwt: jwt)
+    # 1 度目で cart を作る
+    post "/storefront/cart/items", params: { variant_id: variant.id, quantity: 1 }.to_json, headers: headers
+    expect(response).to have_http_status(:created)
+    # 別 customer ではなく同 customer の 2 度目はその cart を再利用 (UNIQUE 制約あり)
+    post "/storefront/cart/items", params: { variant_id: variant.id, quantity: 1 }.to_json, headers: headers
+    expect(response).to have_http_status(:created)
+
+    user = Core::Account.find_by(email: "buyer@example.com").user
+    expect(Orders::Cart.where(shop: shop, customer_id: user.id, status: :open).count).to eq(1)
+  end
 end

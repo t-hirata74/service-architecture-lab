@@ -61,9 +61,13 @@ Shopify は数百万のマーチャント（= Shop）を 1 つのプラットフ
 ## 引き受けるトレードオフ
 
 - **noisy neighbor**：1 つの Shop の重いクエリが全 Shop に波及する。MVP では許容、将来的には connection pool 分離 / read replica で吸収する設計余地のみ残す
-- **明示 scope のボイラープレート**：`current_shop.products.find(id)` を毎回書く。RuboCop custom cop で `Product.find` を禁止し、`current_shop.products.find` のみ許可する
+- **明示 scope のボイラープレート**：`current_shop.products.find(id)` を毎回書く。RuboCop custom cop で `Product.find` を禁止し、`current_shop.products.find` のみ許可する (将来。MVP では人手規約 + `scope_lint_spec.rb` で TenantOwned include を強制)
 - **cross-tenant 集計の取り扱い**：admin 用集計は `Shop.unscoped` ではなく `AdminQuery` という別境界 (Service Object) からのみ許可。controller には漏らさない
-- **`shop_id` の漏れ**：FK 違反だけでなく、`Order.where(...)` で `shop_id` 抜けの事故が起きうる。**全 tenant-scoped table に `(shop_id, id)` 複合 index を貼り、`shop_id` 抜きクエリを EXPLAIN で検出する spec を組む**
+- **`shop_id` の漏れ**：FK 違反だけでなく、`Order.where(...)` で `shop_id` 抜けの事故が起きうる。**全 tenant-scoped table に `(shop_id, ...)` 複合 index を貼り**、`scope_lint_spec.rb` で全 tenant-owned model が TenantOwned concern を include していることを fixate する
+- **`accounts.email` はグローバル UNIQUE (rodauth 既定)**：rodauth の `accounts` テーブルは email UNIQUE 1 つ。すなわち「同一 buyer が複数 shop で同 email を使ってアカウントを作る」はできない。**Shopify 実プロダクトは shop ごとに customer DB が分離される設計**だが、本リポでは rodauth-rails の既定スキーマに従い 1 buyer 1 アカウントのモデルを採用する。`Core::User` 側は `(shop_id, email)` UNIQUE を持つので「異なる buyer の同 email アカウントが別 shop に存在する」ことは可能。スコープ整理:
+    - `Account` (rodauth): プラットフォーム全体で 1 email 1 アカウント (グローバル UNIQUE)
+    - `Core::User`: shop ごとに 1 email 1 ユーザー (`(shop_id, email)` UNIQUE)
+  これは **Apps::App** (プラットフォーム global) と **AppInstallation** (shop tenant) と同じ「プラットフォーム層 / テナント層」分離パターン。派生 ADR で「マルチショップ 1 buyer モデル」をやる場合、accounts と users の関係を 1:N に拡張する
 
 ## このADRを守るテスト / 実装ポインタ
 

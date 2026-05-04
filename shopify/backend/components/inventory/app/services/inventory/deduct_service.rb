@@ -9,6 +9,17 @@ module Inventory
     end
   end
 
+  # Review fix I1: 「在庫不足 (rows exist but on_hand < q)」と
+  # 「そもそも InventoryLevel 行が無い (merchant 設定漏れ)」を区別する。
+  class NotConfigured < StandardError
+    attr_reader :variant_id, :location_id
+    def initialize(variant_id:, location_id:)
+      @variant_id = variant_id
+      @location_id = location_id
+      super("inventory level not configured: variant=#{variant_id} location=#{location_id}")
+    end
+  end
+
   # ADR 0003: 在庫減算の唯一の経路。
   # `UPDATE inventory_levels SET on_hand = on_hand - :q WHERE on_hand >= :q`
   # を発行し、affected_rows == 1 を確認。同一トランザクション内で ledger に追記する。
@@ -41,7 +52,14 @@ module Inventory
           .update_all([ "on_hand = on_hand - ?", @quantity ])
 
         if affected.zero?
-          raise InsufficientStock.new(variant_id: @variant.id, location_id: @location.id, requested: @quantity)
+          # I1: 行が無いのか、on_hand 不足なのかを区別する。
+          # 別 SELECT が必要だが、checkout の主経路では「行は事前に存在する」ことが普通なので
+          # 通常パスはこの分岐に来ない。コストは異常系のみ。
+          if InventoryLevel.exists?(variant_id: @variant.id, location_id: @location.id)
+            raise InsufficientStock.new(variant_id: @variant.id, location_id: @location.id, requested: @quantity)
+          else
+            raise NotConfigured.new(variant_id: @variant.id, location_id: @location.id)
+          end
         end
 
         StockMovement.create!(

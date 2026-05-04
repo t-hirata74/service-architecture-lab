@@ -1,6 +1,10 @@
 module Orders
   module Storefront
     # 認証済み buyer の現在の open cart を取り回す。
+    #
+    # Review fix C2: open cart は (shop_id, customer_id, active_marker) UNIQUE で
+    # DB レベルで「customer 1 人に open cart 1 つ」を担保。find_or_create_by の race で
+    # 並行リクエストが UNIQUE 違反を踏んだ場合は 1 回 retry する。
     class CartsController < ::ApplicationController
       before_action :authenticate_user!
 
@@ -35,7 +39,20 @@ module Orders
       private
 
       def current_open_cart
-        Orders::Cart.find_or_create_by!(shop_id: current_shop.id, customer_id: current_user.id, status: Orders::Cart.statuses[:open])
+        attempts = 0
+        begin
+          attempts += 1
+          Orders::Cart.find_or_create_by!(
+            shop_id: current_shop.id,
+            customer_id: current_user.id,
+            status: Orders::Cart.statuses[:open]
+          )
+        rescue ActiveRecord::RecordNotUnique
+          # C2: UNIQUE 違反は並行リクエストが先に作成した場合に起きる。
+          # 1 回だけ retry すれば既存行を find できる。
+          retry if attempts < 2
+          raise
+        end
       end
 
       def serialize_cart(cart)

@@ -4,7 +4,9 @@ module Core
     #
     # サブドメイン解決対象パスの判定:
     #   - `/up`, `/rails/*` (health) は素通り
-    #   - `/create-account`, `/login`, `/logout` 等の rodauth パスもサブドメイン必須 (登録時に shop が決まる)
+    #   - `/apps/api/*` (3rd-party App API) も素通り — Apps::Api::BaseController が
+    #     `Authorization: Bearer <token>` から AppInstallation 経由で shop を解決する
+    #   - `/create-account`, `/login`, `/logout` 等の rodauth パスはサブドメイン必須 (登録時に shop が決まる)
     #
     # 解決方針:
     #   - `acme-store.localhost` → "acme-store"
@@ -13,7 +15,7 @@ module Core
     #
     # フォールバック (テスト/開発用): `X-Shop-Subdomain` ヘッダがあればそれを優先。
     class TenantResolver
-      SKIP_PATHS = %r{\A/(up|rails/)}
+      SKIP_PATHS = %r{\A/(up|rails/|apps/api/)}
 
       def initialize(app)
         @app = app
