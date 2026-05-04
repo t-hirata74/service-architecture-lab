@@ -202,7 +202,7 @@ npx playwright test --ui              # デバッグ
 ```bash
 cd <service>/playwright
 npm run capture                       # 全シナリオ録画 → gif
-PLAYBACK_RATE=2.5 npm run capture     # 2.5x ゆっくり (default 1.8)
+PLAYBACK_RATE=1.8 npm run capture     # 1.8x ゆっくり (default 1.0 = 等倍)
 ```
 
 仕組み:
@@ -217,11 +217,11 @@ PLAYBACK_RATE=2.5 npm run capture     # 2.5x ゆっくり (default 1.8)
 
 | `PLAYBACK_RATE` | 用途 |
 | --- | --- |
-| `1.0` | 等倍 (実時間) |
-| `1.8` (default) | 流れを目で追える程度 |
+| `1.0` (default) | 等倍 (実時間) |
+| `1.8` | 1.8x ゆっくり (流れを目で追いたい時) |
 | `2.5+` | 説明資料として強調したい時 |
 
-ファイルサイズの目安: 5〜10 秒の test → **30KB〜300KB** (1.8x、palette 128 色)。README 埋め込みに十分軽い。
+ファイルサイズの目安: 1〜3 秒の test → **30KB〜200KB** (等倍、palette 128 色)、SSE のような長尺は ffmpeg `-t 12` で trim する。README 埋め込みに十分軽い。
 
 ffmpeg は `brew install ffmpeg` / `apt install ffmpeg`。**capture スクリプトは ffmpeg がない環境では明示的にエラー終了**する (silently skip しない)。
 
