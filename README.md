@@ -24,6 +24,22 @@
 
 ---
 
+## E2E デモ (Playwright で録画)
+
+各プロジェクトの主要シナリオを `npm run capture` で gif 化し、それぞれの README に埋め込み済み。multi-context tests (slack / instagram / discord) は `ffmpeg hstack` で alice + bob を side-by-side に並べて 1 つの gif にしている。仕組みは [`docs/testing-strategy.md` キャプチャ節](docs/testing-strategy.md#キャプチャ-gif-を-readme-に埋め込む仕組み)。
+
+| プロジェクト | gif 数 | 主な見どころ |
+| --- | --- | --- |
+| [`slack`](slack/README.md#e2e-デモ-playwright-で録画) | 5 | リアルタイム fan-out / 既読 cursor 共に 2 BrowserContext を hstack |
+| [`youtube`](youtube/README.md#e2e-デモ-playwright-で録画) | 3 | browse / FULLTEXT 検索 (hit + 0 件) |
+| [`github`](github/README.md#e2e-デモ-playwright-で録画) | 4 | org→repo→PR / visibility / createIssue (GraphQL) / ai-worker check 集約 |
+| [`perplexity`](perplexity/README.md#e2e-デモ-playwright-で録画) | 2 | SSE streaming (12s trim) / 空クエリ validation |
+| [`instagram`](instagram/README.md#e2e-デモ-playwright-で録画) | 3 | self-timeline / **alice/bob hstack で fan-out on write** / like toggle |
+| [`reddit`](reddit/README.md#e2e-デモ-playwright-で録画) | 3 | anonymous 閲覧 / 認証フロー (post→vote→comment→reply) / ai-worker proxy |
+| `discord` | 0 (未生成) | Go backend で capture 用 mechanism は配置済みだが手元環境に Go なしで未実行 |
+
+---
+
 ## プロジェクト横断のハイライト
 
 「3 プロジェクト並べたから見える」設計の対比と、共通ドキュメントに昇華した知見。
