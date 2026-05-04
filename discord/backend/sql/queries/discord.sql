@@ -59,8 +59,8 @@ WHERE m.channel_id = ? AND m.id < ?
 ORDER BY m.id DESC
 LIMIT ?;
 
--- name: ListRecentMessagesForChannel :many
-SELECT m.id, m.user_id, m.body, u.username AS author_username
+-- name: ListRecentMessageSnippets :many
+SELECT u.username, m.body
 FROM messages m
 INNER JOIN users u ON u.id = m.user_id
 WHERE m.channel_id = ?

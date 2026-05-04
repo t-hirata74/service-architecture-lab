@@ -47,8 +47,7 @@ type Message struct {
 }
 
 type MessageSnippet struct {
-	User     string `json:"user"`
-	Username string `json:"username,omitempty"`
+	Username string `json:"username"`
 	Body     string `json:"body"`
 }
 
@@ -93,13 +92,31 @@ func (s *Store) UserByID(ctx context.Context, id int64) (*User, error) {
 	return &u, nil
 }
 
-func (s *Store) CreateGuild(ctx context.Context, name string, ownerID int64) (int64, error) {
-	res, err := s.DB.ExecContext(ctx,
+// CreateGuildWithOwner inserts the guild and the owner membership atomically.
+func (s *Store) CreateGuildWithOwner(ctx context.Context, name string, ownerID int64) (int64, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx,
 		`INSERT INTO guilds (name, owner_id) VALUES (?, ?)`, name, ownerID)
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	gid, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO memberships (guild_id, user_id, role) VALUES (?, ?, 'owner')`,
+		gid, ownerID); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return gid, nil
 }
 
 func (s *Store) GuildByID(ctx context.Context, id int64) (*Guild, error) {
@@ -266,7 +283,7 @@ func (s *Store) RecentMessageSnippets(ctx context.Context, channelID int64, limi
 		limit = 20
 	}
 	rows, err := s.DB.QueryContext(ctx,
-		`SELECT m.id, m.user_id, m.body, u.username
+		`SELECT u.username, m.body
 		 FROM messages m INNER JOIN users u ON u.id = m.user_id
 		 WHERE m.channel_id = ?
 		 ORDER BY m.id DESC LIMIT ?`,
@@ -277,12 +294,11 @@ func (s *Store) RecentMessageSnippets(ctx context.Context, channelID int64, limi
 	defer rows.Close()
 	var out []MessageSnippet
 	for rows.Next() {
-		var id, uid int64
-		var body, uname string
-		if err := rows.Scan(&id, &uid, &body, &uname); err != nil {
+		var s MessageSnippet
+		if err := rows.Scan(&s.Username, &s.Body); err != nil {
 			return nil, err
 		}
-		out = append(out, MessageSnippet{User: uname, Username: uname, Body: body})
+		out = append(out, s)
 	}
 	return out, rows.Err()
 }

@@ -13,10 +13,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-sql-driver/mysql"
 
 	"github.com/hiratatomoaki/service-architecture-lab/discord/backend/internal/auth"
 	"github.com/hiratatomoaki/service-architecture-lab/discord/backend/internal/store"
 )
+
+const mysqlErrDuplicate = 1062
 
 const jwtTTL = 7 * 24 * time.Hour
 
@@ -242,12 +245,9 @@ func (h *Handler) PostGuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	gid, err := h.Store.CreateGuild(ctx, body.Name, uid)
+	gid, err := h.Store.CreateGuildWithOwner(ctx, body.Name, uid)
 	if err != nil {
-		jsonError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err := h.Store.CreateMembership(ctx, gid, uid, "owner"); err != nil {
+		h.Log.Error("create guild", slog.Any("err", err))
 		jsonError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -291,14 +291,11 @@ func (h *Handler) PostGuildMember(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if _, err := h.Store.Membership(ctx, guildID, uid); err == nil {
-		jsonError(w, http.StatusConflict, "already a member")
-		return
-	} else if !errors.Is(err, store.ErrNotFound) {
-		jsonError(w, http.StatusInternalServerError, "internal error")
-		return
-	}
 	if err := h.Store.CreateMembership(ctx, guildID, uid, "member"); err != nil {
+		if isDuplicate(err) {
+			jsonError(w, http.StatusConflict, "already a member")
+			return
+		}
 		jsonError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -619,6 +616,9 @@ func isDuplicate(err error) bool {
 	if err == nil {
 		return false
 	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "duplicate") || strings.Contains(msg, "unique")
+	var me *mysql.MySQLError
+	if errors.As(err, &me) {
+		return me.Number == mysqlErrDuplicate
+	}
+	return false
 }

@@ -38,6 +38,7 @@ func main() {
 	}
 	db.SetMaxOpenConns(20)
 	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
 	defer db.Close()
 
 	st := &store.Store{DB: db}
