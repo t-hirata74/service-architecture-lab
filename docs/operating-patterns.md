@@ -736,6 +736,243 @@ SELECT id, score, created_at FROM posts WHERE deleted_at IS NULL AND created_at 
 
 ---
 
+## 17. モジュラーモノリス (Rails Engine + packwerk) (shopify)
+
+shopify ADR 0001 で確立。**ドメイン境界が独立** (catalog / inventory / orders / apps) なプロジェクトで、namespace 規約だけでは半年で崩れる依存方向を **CI で強制**する。
+
+### いつ採用するか
+
+| プロジェクト | 採否 | 理由 |
+| --- | --- | --- |
+| slack / youtube / perplexity | 不採用 | 単一ドメイン中心、namespace で十分 |
+| github | 不採用 | 権限グラフ単独テーマ、Engine 分割は議論を逸らす |
+| shopify | **採用** | EC は catalog/inventory/orders/apps の 4 つが独立性高、互いの internal を触る事故が起きやすい |
+
+「Engine 分割を始めるか」の判断軸: ドメイン境界が **5 個以上** ある、かつ **境界侵食** (model 直参照 / controller cross-call) が namespace 規約だけでは抑止しきれない見込み — どちらも YES なら採用。
+
+### 規律 1: 依存方向は単一方向、CI で 0 violation 維持
+
+```
+apps → orders → inventory → catalog → core
+```
+
+各 Engine の `package.yml` で `enforce_dependencies: true` + `dependencies:` を明示。`bin/packwerk check` を CI に組み込み、**初期から zero-violation を維持**する (`package_todo.yml` の運用は始めない)。
+
+### 規律 2: top-level クラスは core Engine の `app/*/` 直下に置く
+
+`ApplicationController` / `ApplicationJob` / `Account` (rodauth が解決) / `TenantOwned` concern などの top-level 定数は、**core Engine の `app/*/` 直下** (namespace 無し) に置く。主 app の `app/` に置くと「`'.' (root)` への依存」と packwerk が怒る。詳細は [coding-rules/rails.md "モジュラーモノリス"](coding-rules/rails.md#モジュラーモノリス-rails-engine--packwerk) 参照。
+
+### 規律 3: Engine 間 interface は Service Object に集約 (privacy 制約の代替)
+
+`enforce_privacy` (公開 API のみ露出) は packwerk 3 で別 gem 化されており、本リポでは採らない。代わりに **Engine 間呼び出しは Service Object 1 ファイルに絞る**:
+
+| 呼び出し | 経路 |
+| --- | --- |
+| orders → inventory | `Inventory::DeductService.call(...)` |
+| (apps → orders は禁止 / 逆向き Notifications で) | `Apps::EventBus.publish(...)` |
+
+「外部から呼ぶ場所を grep 1 発で見つけられる」 = 規律 (人手レビュー) で privacy を担保する。
+
+### 規律 4: 逆向き通知は ActiveSupport::Notifications で dependency inversion
+
+`apps → orders` の依存方向のもとで、orders の業務イベントを apps の webhook 配信が拾うには、Rails 標準の Notifications を使う:
+
+```ruby
+# orders 側 — apps を一切参照しない
+ActiveSupport::Notifications.instrument("orders.order_created", shop: shop, payload: { ... })
+
+# apps 側 — Engine の after_initialize で subscribe
+config.after_initialize do
+  ActiveSupport::Notifications.subscribe("orders.order_created") do |*, payload|
+    Apps::EventBus.publish(topic: :order_created, payload: payload[:payload], shop: payload[:shop])
+  end
+end
+```
+
+Notifications の subscriber は **同期実行** で publish 元の transaction に乗るため、subscriber 内の `WebhookDelivery.create!` も同じ tx で原子的に enqueue される。subscriber が raise すれば caller (checkout) を rollback させられる。
+
+詳細: shopify ADR 0001 + `shopify/backend/components/*/package.yml` + `shopify/backend/components/orders/app/services/orders/checkout_service.rb` + `shopify/backend/components/apps/lib/apps/engine.rb`。
+
+---
+
+## 18. row-level multi-tenancy (`shop_id` scoping) (shopify)
+
+shopify ADR 0002 で確立。SaaS の典型「複数 tenant が同一 backend / 同一 DB を共有しつつ互いのデータが見えない」を **行レベル scoping + 明示 scope + scope_lint spec** の 3 段で守る。
+
+### 規律 1: 全 tenant-scoped table に `shop_id` + 複合 index
+
+すべての tenant-scoped table に `shop_id BIGINT NOT NULL` + `(shop_id, ...)` 複合 index を必須化。`Catalog::Variant` のような子モデルは親 (Product) 経由で shop_id を引けるが、**index 効率と将来の sharding を考えて denormalize して保持**する。
+
+### 規律 2: `default_scope` ではなく明示 scope
+
+`current_shop.products.find(id)` のように **明示的に** scope を通す。`default_scope :for_shop` は `unscoped` で簡単に外せる + 関連付け経由で漏れる事故 (`User.find(id).orders` が tenant 跨ぎ) が頻出するため採らない。Shopify 自身も明示 scope を推奨。
+
+### 規律 3: `TenantOwned` concern + `scope_lint_spec` で fixate
+
+```ruby
+# concerns/tenant_owned.rb
+module TenantOwned
+  extend ActiveSupport::Concern
+  included do
+    belongs_to :shop, class_name: "Core::Shop"
+    validates :shop_id, presence: true
+  end
+end
+
+# spec/multi_tenancy/scope_lint_spec.rb
+TENANT_OWNED_MODELS = [Core::User, Catalog::Product, ...].freeze
+TENANT_OWNED_MODELS.each do |klass|
+  it "#{klass.name} は TenantOwned を include している" do
+    expect(klass.included_modules).to include(TenantOwned)
+  end
+end
+```
+
+「全 tenant-scoped model がこの concern を include している」を CI で fixate する。Phase が進んで model が増えたら spec のリストを更新する規約。
+
+### 規律 4: tenant 解決は middleware に集約
+
+サブドメイン → Shop の解決は `Core::Middleware::TenantResolver` 1 箇所に閉じ込める。`/up`, `/rails/*`, `/apps/api/*` (3rd-party API) は SKIP_PATHS で素通り。詳細は [coding-rules/rails.md "サブドメインで tenant 解決する middleware"](coding-rules/rails.md#サブドメインで-tenant-解決する-middleware)。
+
+### 規律 5: 「1 active per X」UNIQUE は `active_marker` NULL trick
+
+「customer 1 人 = open cart 1 つ」のような **status 依存の UNIQUE** は、MySQL の partial UNIQUE が無いので `active_marker` カラム (active 時 1, それ以外 NULL) + `(scope_cols, active_marker)` UNIQUE で実現。MySQL の UNIQUE は複数 NULL を許容するので、completed/abandoned cart は何個でも作れる。
+
+### スコープ整理: グローバル属性 vs テナント属性
+
+| レイヤー | 属性 |
+| --- | --- |
+| Platform global | `Apps::App` (3rd-party app 定義) / `Core::Account` (rodauth global email UNIQUE) / SolidQueue tables |
+| Tenant scoped | `Core::User` ((shop_id, email) UNIQUE) / `Catalog::*` / `Inventory::*` / `Orders::*` / `Apps::AppInstallation` |
+
+rodauth の `accounts.email` がグローバル UNIQUE なので、「同じ buyer が複数 shop でアカウント」は本実装ではできない。マルチショップ 1 buyer モデルが必要なら派生 ADR で。
+
+詳細: shopify ADR 0002 + `shopify/backend/components/core/{lib/core/middleware/tenant_resolver.rb,app/models/concerns/tenant_owned.rb}` + `shopify/backend/spec/multi_tenancy/`。
+
+---
+
+## 19. compare-and-decrement + ledger による原子減算 (shopify)
+
+shopify ADR 0003 で確立。EC の中核論点「並行 checkout で同 SKU の在庫が競合した時に **負在庫を絶対に作らない**」を、悲観/楽観ロックなしで条件付き UPDATE 1 本で解決する。**§15 (reddit votes の相対加算) の対称形**: あちらは `+delta` (任意の delta)、こちらは `-:q WHERE col >= :q` で「足りる時だけ引く」。
+
+### 規律 1: 条件付き UPDATE で原子減算
+
+```ruby
+affected = InventoryLevel
+  .where(variant_id: v.id, location_id: l.id)
+  .where("on_hand >= ?", q)
+  .update_all(["on_hand = on_hand - ?", q])
+raise InsufficientStock if affected.zero?
+```
+
+`affected_rows == 1` を確認、0 なら `InsufficientStock` で transaction を rollback。**同一 transaction で `stock_movements` ledger に `-q` を append** する。
+
+却下した代替案:
+- `with_lock` (悲観ロック) — フラッシュセールでスループット劣化
+- 楽観ロック (`lock_version`) — retry ループの複雑さがアプリ層に漏れる
+- Redis `DECRBY` reservation — 二重 truth、Redis 不使用方針に反する
+
+### 規律 2: ledger は append-only
+
+```ruby
+class StockMovement < ApplicationRecord
+  def readonly?
+    persisted?  # 永続化後は update! を ActiveRecord::ReadOnlyRecord で拒否
+  end
+end
+```
+
+`SUM(stock_movements.delta) + initial == on_hand` の不変条件を持たせる。**reconcile job** (ai-worker 側 nightly) で drift を検出する (§15 の reconcile と同じ思想)。
+
+### 規律 3: 「行不在」と「在庫不足」を区別する
+
+`affected.zero?` は両方の場合に発生する:
+- InventoryLevel 行が無い (merchant 設定漏れ)
+- on_hand < q (在庫切れ)
+
+UX 上意味が違うので、`InsufficientStock` と `NotConfigured` を別 exception にする。controller で 409 (在庫切れ → buyer に「品切れ」表示) と 422 (設定漏れ → ops に escalation) で出し分け。
+
+### 規律 4: ledger に source を残す
+
+`Orders::CheckoutService` から `Inventory::DeductService.call(..., source: order)` を渡し、`StockMovement.source_type = "Orders::Order"`, `source_id = order.id` を記録。後から「どの注文で減算したか」を ledger から辿れる。
+
+### 規律 5: Order#number は親リソースの counter で原子採番
+
+`SELECT MAX(number) FOR UPDATE + UPDATE` は MySQL InnoDB の next-key lock の "たまたま" 動作に依存して脆い。**親 (`shops`) に `next_order_number` カラム** + `lock` で読み取り → `+1 update` の方が読みやすく可搬:
+
+```ruby
+shop = Core::Shop.where(id: shop_id).lock.first!
+number = shop.next_order_number
+shop.update!(next_order_number: number + 1)
+```
+
+§reddit (相対加算) との対比:
+- reddit: 競合する `votes truth` と `posts.score cache` の **2 系統 + reconcile**
+- shopify: 単一 truth (`on_hand`) の **条件付き UPDATE + ledger**
+
+どちらも MySQL 行レベルの原子性を活かして悲観ロックを避ける思想は共通。
+
+詳細: shopify ADR 0003 + `shopify/backend/components/inventory/app/services/inventory/deduct_service.rb` + `shopify/backend/spec/services/inventory/concurrent_deduct_spec.rb`。
+
+---
+
+## 20. at-least-once webhook 配信 (Solid Queue + HMAC + delivery_id) (shopify)
+
+shopify ADR 0004 で確立。**3rd-party App プラットフォーム** (Shopify / Stripe / GitHub の webhook) の publisher 側設計。
+
+### 規律 1: WebhookDelivery テーブルで配信状態を DB-backed 管理
+
+```
+status: pending → delivered (2xx)
+              → failed_permanent (max_attempts または 4xx 受信)
+attempts: 試行回数
+next_attempt_at: 次回再試行時刻 (exponential backoff)
+delivered_at: 成功時刻
+last_error: 直近エラー
+```
+
+`:async` (in-memory) ではなく **Solid Queue (DB-backed)** を採用。Rails 再起動で job が消滅して「pending のまま戻ってこない」事故を防ぐ。`config.active_job.queue_adapter = :solid_queue` を `config/application.rb` で全環境共通に明示し、`bin/jobs` を別プロセスで常駐させる。
+
+### 規律 2: HMAC 署名 + delivery_id でメッセージの完全性と冪等性
+
+| header | 役割 |
+| --- | --- |
+| `X-Hmac-Sha256` | `HMAC-SHA256(secret, body)` の Base64。受信側で改ざん検知 |
+| `X-Webhook-Delivery-Id` | UUID。受信側が「このイベントを処理済みか」を記録するキー |
+| `X-Webhook-Topic` | `order_created` 等のイベント種別 |
+
+verify は timing-safe に `ActiveSupport::SecurityUtils.secure_compare` を使う。
+
+### 規律 3: 4xx と 5xx で振る舞いを変える
+
+- 2xx → `delivered`
+- 4xx → **即 `failed_permanent`** (retry しても無駄、受信側のバグなので)
+- 5xx / timeout / network error → `attempts++`、まだ MAX 未満なら `next_attempt_at = backoff(attempts).seconds.from_now` で再 enqueue
+- MAX_ATTEMPTS 到達 → `failed_permanent`
+
+「5xx と 4xx を一括で retry」する実装は受信側のバグを延々再送し続けるアンチパターン。
+
+### 規律 4: at-least-once → 受信側の冪等性は契約
+
+receiver が同じ `X-Webhook-Delivery-Id` で 2 回受信したら 1 回だけ副作用を実行する責務は **受信側に押し付ける** (publisher 側で重複配送防止は試みない)。Shopify 自身も同じ契約。
+
+### 規律 5: subscriber 失敗は publish 元 transaction を rollback
+
+`ActiveSupport::Notifications.instrument` の subscriber が raise すれば、caller の transaction が rollback される。すなわち WebhookDelivery 行の DB エラーで **checkout 全体が失敗する**。
+
+これは「webhook を確実に予約できないなら注文も受けない」という強い at-least-once 保証の代償であり意図通り。webhook 機能の停止が business critical な checkout を止めることを防ぎたい場合は、kill switch (subscription 自体を全件 disable する運用フラグ) を派生 ADR で。
+
+### 派生 ADR で扱う候補
+
+- **Webhook 順序保証**: `order.created` と `order.paid` の逆順到着 → receiver 側で並べ替え、または `if-modified-since` 風の version
+- **HMAC 鍵 rotation**: 単一鍵 → key_id 付きの multiple keys
+- **WebhookSubscription#endpoint の SSRF 防御**: private IP / metadata endpoint への送信を防ぐ DNS resolve restriction
+- **failed delivery の管理画面 / 再送 API**
+
+詳細: shopify ADR 0004 + `shopify/backend/components/apps/app/{services,jobs}/apps/*` + `shopify/backend/spec/jobs/apps/delivery_job_spec.rb`。
+
+---
+
 ## 関連ドキュメント
 
 - [CLAUDE.md](../CLAUDE.md) — エージェント向け要約

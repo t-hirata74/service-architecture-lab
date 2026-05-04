@@ -129,6 +129,107 @@ github プロジェクト (ADR 0001) で実運用に入った構成。次に Gra
 
 ---
 
+## マルチテナント API: subdomain による tenant 解決 (shopify)
+
+shopify で確立。複数 SaaS tenant を同一 backend で運用する際の API 入口設計。
+
+### 規律 1: tenant は middleware で解決し、controller は `current_shop` を読むだけ
+
+```ruby
+# components/core/lib/core/middleware/tenant_resolver.rb
+def call(env)
+  return @app.call(env) if env["PATH_INFO"]&.match?(SKIP_PATHS)
+  if subdomain = extract_subdomain(env)
+    shop = Core::Shop.find_by(subdomain: subdomain)
+    return [404, ...] unless shop
+    env["shopify.current_shop"] = shop
+  end
+  @app.call(env)
+end
+```
+
+`ApplicationController#current_shop` は `request.env["shopify.current_shop"]` を読むだけ。controller / service には「subdomain 解析」のロジックを漏らさない。
+
+### 規律 2: SKIP_PATHS で **subdomain を要求しない経路** を明示
+
+| 経路 | 理由 |
+| --- | --- |
+| `/up`, `/rails/*` | health check |
+| `/apps/api/*` (3rd-party API) | Bearer token から AppInstallation 経由で shop 解決 |
+| `/create-account`, `/login` 等 (rodauth) | 登録時に shop が決まるので **subdomain 必須** (skip しない) |
+
+「subdomain なしで叩ける経路」を明示的に管理することで、tenant 漏れの事故 (subdomain 無しでも某 endpoint が動いてしまう) を防ぐ。
+
+### 規律 3: middleware は Rodauth より**前**に挿入
+
+rodauth-rails は middleware として動作する。`before_create_account` フックで `request.env["shopify.current_shop"]` を読みたい場合、TenantResolver は Rodauth より前に挿入する必要がある:
+
+```ruby
+config.after :load_config_initializers do |app|
+  app.middleware.insert_before Rodauth::Rails::Middleware, Core::Middleware::TenantResolver
+end
+```
+
+`config.middleware.use` だと末尾追加で順序が確定しない。**`insert_before` を使う**。
+
+実例: `shopify/backend/components/core/lib/core/middleware/tenant_resolver.rb` + `shopify/backend/spec/middleware/tenant_resolver_spec.rb`。
+
+---
+
+## 3rd-party App API: Bearer token + scope 認可 (shopify)
+
+shopify で確立。「プラットフォームに install された app が tenant のリソースを叩く API」の設計。
+
+### 規律 1: Bearer token は SHA256 digest で永続化、生 token は install 時のみ返す
+
+```ruby
+class AppInstallation < ApplicationRecord
+  def self.digest_token(token) = Digest::SHA256.hexdigest(token)
+end
+```
+
+DB に平文を持たない。verify は受信した Bearer の digest で `find_by(api_token_digest: ...)`。生 token は install 直後に 1 回だけクライアントに返し、再発行不可 (失くしたら作り直し)。
+
+### 規律 2: tenant は `installation.shop` から解決 (subdomain 不要)
+
+3rd-party App API は subdomain を持たない (アプリ側はテナントを意識しない)。`Apps::Api::BaseController#current_shop` を `installation.shop` で override し、TenantResolver の SKIP_PATHS に `/apps/api/` を入れて素通りさせる:
+
+```ruby
+class Apps::Api::BaseController < ApplicationController
+  before_action :authenticate_app_installation!
+  def current_shop
+    current_app_installation.shop  # subdomain ではなく Bearer 由来
+  end
+end
+```
+
+### 規律 3: scope は per-action で `requires_scope!` を呼ぶ
+
+`AppInstallation#scopes` は `,` 区切りの文字列 (例: `"read_orders,write_inventory"`)。各 controller action の最初で:
+
+```ruby
+class Apps::Api::OrdersController < BaseController
+  def index
+    requires_scope!("read_orders")
+    # ...
+  end
+end
+```
+
+scope 不足は **403 Forbidden** + `{ error: "missing_scope", scope: "read_orders" }`。401 (token 無効) と区別する。
+
+### 規律 4: エラー型を 3 つに分ける
+
+| status | 意味 |
+| --- | --- |
+| 401 invalid_app_token | Bearer 無し / token がいかなる installation にも一致しない |
+| 403 missing_scope | token は valid だが必要な scope を持たない |
+| 404 (該当 controller の standard) | リソース不在 (cross-tenant 含む — installation.shop に紐づかないリソース) |
+
+実例: `shopify/backend/components/apps/app/controllers/apps/api/{base,orders}_controller.rb` + `shopify/backend/spec/requests/apps/api/orders_spec.rb`。
+
+---
+
 ## 現時点の宿題
 
 - `slack/backend` と `youtube/backend` の OpenAPI 契約検証は導入済み (e94df38)

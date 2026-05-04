@@ -764,3 +764,197 @@ end
 
 真の並行性を見たい場合は別 DB / システムテストで `:truncation` strategy にする (学習リポでは不要)。
 実例: `github/backend/spec/services/issue_number_allocator_spec.rb`。
+
+---
+
+## モジュラーモノリス (Rails Engine + packwerk) プロジェクトの追加テストパターン
+
+shopify プロジェクトで確立。Engine 分割 / マルチテナント / 並行整合性 / webhook 配信を扱うプロジェクトに必要な spec パターン群。
+
+### packwerk dependency direction を spec で fixate
+
+CI の `bin/packwerk check` だけでなく、RSpec の architecture spec でも 0 violation を確認する。CI ログより読みやすい形で「Engine の依存方向が ADR 通りか」が PR review で見える:
+
+```ruby
+# spec/architecture/dependency_spec.rb
+RSpec.describe "Modular monolith — packwerk dependency direction" do
+  it "packwerk check で violations が 0 件" do
+    output = `cd #{Rails.root} && bin/packwerk check 2>&1`
+    expect($?.success?).to be(true), "packwerk check failed:\n#{output}"
+    expect(output).to include("No offenses detected")
+  end
+end
+```
+
+実例: `shopify/backend/spec/architecture/dependency_spec.rb`。
+
+### TenantOwned scope_lint spec
+
+「全 tenant-scoped model が `TenantOwned` concern を include しているか」を CI で fixate。Phase が進むたびにリストを更新する規約:
+
+```ruby
+# spec/multi_tenancy/scope_lint_spec.rb
+TENANT_OWNED_MODELS = [
+  Core::User, Catalog::Product, Catalog::Variant,
+  Inventory::Location, Inventory::InventoryLevel, Inventory::StockMovement,
+  Orders::Cart, Orders::CartItem, Orders::Order, Orders::OrderItem,
+  Apps::AppInstallation, Apps::WebhookSubscription, Apps::WebhookDelivery,
+].freeze
+
+TENANT_OWNED_MODELS.each do |klass|
+  it "#{klass.name} は TenantOwned を include している" do
+    expect(klass.included_modules).to include(TenantOwned)
+  end
+end
+```
+
+「リスト漏れ」自体が事故源だが、phase 完了レビューで「新しい model を追加したら scope_lint に書く」を規律として運用。あわせて cross-tenant isolation spec で「Shop A のセッションで Shop B のリソースを引けない」を最低 1 件持つ:
+
+```ruby
+# spec/multi_tenancy/cross_tenant_isolation_spec.rb
+it "明示 scope (current_shop.users.find) を使うと shop 跨ぎは 404 になる" do
+  expect { acme.users.find(alice_at_globex.id) }.to raise_error(ActiveRecord::RecordNotFound)
+end
+```
+
+実例: `shopify/backend/spec/multi_tenancy/`。
+
+### 並行性 spec — `use_transactional_tests = false` + `Concurrent::CyclicBarrier`
+
+「条件付き UPDATE が race を防ぐか」「lock! が double-submit を直列化するか」のような **真の並行性**は transactional fixtures では再現できない。専用 spec で:
+
+```ruby
+# spec/services/inventory/concurrent_deduct_spec.rb
+RSpec.describe "Inventory::DeductService — concurrent decrement" do
+  self.use_transactional_tests = false  # thread が別 connection を持つため
+
+  let(:shop)    { Core::Shop.create!(subdomain: "rev-#{SecureRandom.hex(3)}", name: "X") }
+  let(:variant) { Catalog::Variant.create!(...) }
+  before        { Inventory::InventoryLevel.create!(..., on_hand: 60) }
+
+  after do
+    # 明示クリーンアップ (transactional rollback が効かない)
+    Inventory::StockMovement.where(shop_id: shop.id).delete_all
+    Inventory::InventoryLevel.where(shop_id: shop.id).delete_all
+    # ... 子から親の順に明示削除
+    shop.destroy
+  end
+
+  it "100 並行 thread × initial 60 → 60 成功 / 40 失敗 / on_hand=0 / SUM(delta)=-60" do
+    barrier = Concurrent::CyclicBarrier.new(100)  # 全 thread を同時突入
+    threads = 100.times.map do
+      Thread.new do
+        barrier.wait
+        ActiveRecord::Base.connection_pool.with_connection do
+          Inventory::DeductService.call(...)
+          mutex.synchronize { success_count += 1 }
+        rescue Inventory::InsufficientStock
+          mutex.synchronize { fail_count += 1 }
+        end
+      end
+    end
+    threads.each(&:join)
+    expect(success_count).to eq(60); expect(fail_count).to eq(40)
+  end
+end
+```
+
+注意点:
+- `thread_count` は connection_pool の上限を超えても OK (logical concurrency)。物理並列は connection 数まで。それでも条件付き UPDATE が race を防ぐ不変条件の検証には十分強い
+- after で truncate-style のクリーンアップを必ず書く。**子から親の順**で `delete_all`
+- `SecureRandom.hex(...)` で shop_subdomain / sku を unique 化し、他テストと衝突しないようにする
+- `Concurrent::CyclicBarrier` (Rails 依存の concurrent-ruby gem 同梱) で全 thread の barrier wait を取り、本当に「同時に発射」する
+
+実例: `shopify/backend/spec/services/inventory/concurrent_deduct_spec.rb` (Inventory) / `shopify/backend/spec/services/orders/concurrent_checkout_spec.rb` (cart lock! と Order#number 採番)。
+
+### Webhook delivery spec — webmock + HMAC verify + retry/idempotency
+
+at-least-once 配信の不変条件 (HMAC 署名 / delivery_id / 4xx 即 fail / 5xx retry / MAX_ATTEMPTS) は webmock で stub して検証:
+
+```ruby
+# spec/jobs/apps/delivery_job_spec.rb
+require "webmock/rspec"
+
+it "2xx 受信で delivered になり、HMAC + delivery_id ヘッダ付きで POST する" do
+  captured = nil
+  stub = stub_request(:post, endpoint).to_return(status: 200)
+                                       .with { |req| captured = req; true }
+  described_class.perform_now(delivery.id)
+
+  expect(stub).to have_been_made
+  expect(delivery.reload).to be_delivered
+  # HMAC 署名と delivery_id 契約の検証
+  expected_sig = Apps::Signer.sign(secret: app.secret, body: payload_json)
+  expect(captured.headers[Apps::Signer::HEADER_HMAC]).to eq(expected_sig)
+  expect(captured.headers[Apps::Signer::HEADER_DELIVERY_ID]).to eq("abc-123")
+end
+
+it "5xx 受信は pending 維持で attempts++ + 再 enqueue (retry)" do
+  stub_request(:post, endpoint).to_return(status: 503)
+  expect { described_class.perform_now(delivery.id) }.to have_enqueued_job(Apps::DeliveryJob)
+  expect(delivery.reload).to be_pending
+  expect(delivery.attempts).to eq(1)
+end
+
+it "4xx 受信は即 failed_permanent (retry しない)" do
+  stub_request(:post, endpoint).to_return(status: 400)
+  expect { described_class.perform_now(delivery.id) }.not_to have_enqueued_job(Apps::DeliveryJob)
+  expect(delivery.reload).to be_failed_permanent
+end
+```
+
+実例: `shopify/backend/spec/{jobs/apps/delivery_job_spec.rb,services/apps/{signer,event_bus}_spec.rb}`。
+
+### Cross-engine integration spec — Notifications subscriber が発火していること
+
+`ActiveSupport::Notifications` での dependency inversion は、**subscriber が実際に発火していること**を spec で fixate しないと黙って壊れる:
+
+```ruby
+RSpec.describe "Order created → webhook delivery (cross-engine)" do
+  before do
+    ActiveJob::Base.queue_adapter = :test
+    Apps::WebhookSubscription.create!(shop: shop, app_installation: install,
+                                      topic: "order_created", endpoint: "https://app.example.com/hook")
+  end
+
+  it "checkout 成功 → WebhookDelivery が 1 件 + DeliveryJob enqueue" do
+    expect {
+      Orders::CheckoutService.call(cart: cart, location: location)
+    }.to change(Apps::WebhookDelivery, :count).by(1)
+      .and have_enqueued_job(Apps::DeliveryJob)
+  end
+end
+```
+
+実例: `shopify/backend/spec/services/apps/order_created_notification_spec.rb`。
+
+### 落とし穴: rspec `let!(:app)` は rack-test の `app` メソッドと衝突する
+
+`type: :request` spec で `let!(:app) { Apps::App.create!(...) }` のように書くと、`Rack::Test::Methods` の `app` (Rails アプリを返す Rack endpoint メソッド) を上書きしてしまい、rack-test が **let の戻り値 (ActiveRecord 実体) を `.call(env)` しようとして NoMethodError**:
+
+```
+undefined method `call' for an instance of Apps::App
+```
+
+**変数名を変える** (`let!(:platform_app)`, `let!(:third_party_app)` 等) のが唯一の対処。`app` は予約語と思って避ける。バックトレースが `process_request` → `method_missing` → `Apps::App` instance になっていたらこのパターン。
+
+### 落とし穴: `find_or_create_by!` は UNIQUE 制約 + retry とセットで使う
+
+UNIQUE 制約があれば、並行 `find_or_create_by!` の race は **`RecordNotUnique` を 1 回 retry** で吸収できる:
+
+```ruby
+def current_open_cart
+  attempts = 0
+  begin
+    attempts += 1
+    Orders::Cart.find_or_create_by!(...)
+  rescue ActiveRecord::RecordNotUnique
+    retry if attempts < 2
+    raise
+  end
+end
+```
+
+UNIQUE 制約**なしで** `find_or_create_by!` を使うと race 時にサイレントに重複行を作るので、必ず DB UNIQUE 制約とセットにする。spec では「同 customer 2 つ目の open cart は RecordNotUnique」を fixate。
+
+実例: `shopify/backend/spec/models/orders/cart_unique_active_spec.rb` + `shopify/backend/spec/requests/storefront/cart_and_checkout_spec.rb`。

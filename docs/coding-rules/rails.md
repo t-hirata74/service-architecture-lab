@@ -191,7 +191,209 @@ end
 - `find_or_create_by!` は **lock の外**で起きるので、最初の 2 リクエストが衝突する。**unique 制約**が最後のセーフティネット
 - transactional fixtures は同じ接続を使うので RSpec 内では真の並行性をテストできない。`expect_any_instance_of(...).to receive(:with_lock)` で意図確認するに留める
 
-実例: `github/backend/app/services/issue_number_allocator.rb`, `github/backend/spec/services/issue_number_allocator_spec.rb`。
+### 親レコード上の counter カラム (シンプル版 / shopify)
+
+per-tenant な per-shop counter なら、専用 counter 表を作らず **親 (`shops`) に `next_order_number` カラムを 1 個追加**するだけで足りる:
+
+```ruby
+# shopify ADR 0003 + I3 review fix
+def allocate_order_number!
+  shop = Core::Shop.where(id: @cart.shop_id).lock.first!  # SELECT FOR UPDATE
+  number = shop.next_order_number
+  shop.update!(next_order_number: number + 1)
+  number
+end
+```
+
+- **`SELECT MAX(number) FOR UPDATE` は採らない**。MySQL InnoDB の next-key lock + gap lock の挙動に依存して "たまたま" 直列化されるだけで、Postgres など他 DB では破綻する。明示的な counter カラム + `lock` の方が読みやすく可搬
+- counter 表を別に立てるか親に持たせるかは、「採番対象が 1 リソース型 (Issue/PR の番号空間共有 = 別表) か、親リソースの 1 属性 (Order#number = 親 (Shop) 属性) か」で決める
+
+実例: `github/backend/app/services/issue_number_allocator.rb` / `shopify/backend/components/orders/app/services/orders/checkout_service.rb#allocate_order_number!`。
+
+---
+
+## モジュラーモノリス (Rails Engine + packwerk)
+
+ドメイン境界が浅いプロジェクト (slack/youtube/perplexity) では namespace で十分だが、**境界の独立性が高いドメイン** (shopify の catalog / inventory / orders / apps) では Rails Engine + packwerk で「依存方向を CI で強制」する選択肢がある。判断軸は ADR 0001 (shopify) を参照。
+
+### Engine 配置の落とし穴
+
+`isolate_namespace Foo` 配下の autoload は `app/*/foo/` 配下を `Foo::*` として解決する。一方、**top-level 定数** (`ApplicationRecord`, `ApplicationJob`, `ApplicationController`, `Account` (rodauth が解決)) は `app/*/` 直下に置く必要がある。
+
+主 app の `app/` ディレクトリに置くと、Engine から参照したときに **packwerk dependency violation** になる (`'.' (root) に依存していない` と怒られる)。**core Engine の `app/` 直下に集約する**:
+
+```
+components/core/
+  app/
+    controllers/application_controller.rb   # ← top-level: 全 Engine の controller 親
+    jobs/application_job.rb                  # ← top-level: 全 Engine の Job 親
+    models/account.rb                        # ← top-level: rodauth が解決する定数
+    models/concerns/tenant_owned.rb          # ← top-level concern
+    models/core/shop.rb                      # ← Core::* (engine namespace)
+    models/core/user.rb
+    models/core/application_record.rb        # ← Core::ApplicationRecord (Engine local abstract)
+```
+
+その上で `package.yml` に `dependencies: []` (core) を書けば、他 Engine が `< ApplicationController` してもよい (root から見れば core への依存はない、core から見れば top-level 定数を提供しているだけ)。
+
+### `enforce_dependencies` のみ採用、`enforce_privacy` は派生 ADR
+
+packwerk 3 で `enforce_privacy` (公開 API のみ露出) は別 gem (`packwerk-privacy`) に分離された。MVP では `enforce_dependencies: true` のみで「方向」を縛り、Engine の internal を外から触る禁止は **Service Object に集約 (人手規約)** で代替。`Apps::EventBus.publish` / `Inventory::DeductService.call` のような明確な entry point を 1 ファイルに集めることで、外部から呼ぶ場所を grep 1 発で見つけられるようにする。
+
+### Engine 間 dependency inversion: ActiveSupport::Notifications
+
+依存方向 `apps → orders` のもとで、**逆向きの通知** (`orders` の業務イベントを `apps` の webhook 配信が拾う) を実装したい場合、orders から apps を直接呼べない。Rails 標準の `ActiveSupport::Notifications` で pub/sub する。
+
+```ruby
+# orders/app/services/orders/checkout_service.rb
+ActiveSupport::Notifications.instrument("orders.order_created", shop: @cart.shop, payload: { ... })
+
+# apps/lib/apps/engine.rb
+config.after_initialize do
+  ActiveSupport::Notifications.subscribe("orders.order_created") do |*, payload|
+    Apps::EventBus.publish(topic: :order_created, payload: payload[:payload], shop: payload[:shop])
+  end
+end
+```
+
+特性:
+- subscriber は **同期実行** で publish 元の transaction に乗る (webhook 配信 INSERT も同じ tx 内で原子的)
+- subscriber 内で raise すれば caller (checkout) を rollback させられる → at-least-once 保証の代償
+- packwerk から見ると orders は apps を一切参照していない (依存方向 fixate)
+
+実例: `shopify/backend/components/orders/app/services/orders/checkout_service.rb` + `shopify/backend/components/apps/lib/apps/engine.rb`。
+
+---
+
+## マルチテナント (`shop_id` row-level scoping)
+
+`shop_id` を全 tenant-scoped table に必ず持たせ、`current_shop.products.find(id)` のように **明示 scope** を controller / service で必ず通す。`default_scope` は採らない (`unscoped` で外せる + 関連付け経由で漏れる事故が多い)。
+
+### TenantOwned concern + scope_lint spec で fixate
+
+```ruby
+# components/core/app/models/concerns/tenant_owned.rb
+module TenantOwned
+  extend ActiveSupport::Concern
+  included do
+    belongs_to :shop, class_name: "Core::Shop"
+    validates :shop_id, presence: true
+  end
+end
+
+# 全 tenant-owned model がこれを include していることを spec で固定
+RSpec.describe "Tenant-owned models lint" do
+  TENANT_OWNED_MODELS = [Core::User, Catalog::Product, ...].freeze
+  TENANT_OWNED_MODELS.each do |klass|
+    it "#{klass.name} は TenantOwned を include している" do
+      expect(klass.included_modules).to include(TenantOwned)
+    end
+  end
+end
+```
+
+### 「1 active per X」UNIQUE のための `active_marker` パターン
+
+「customer 1 人 = open cart 1 つ / completed cart は何個でも」のような **status 依存の UNIQUE** を MySQL で表現したい時、partial UNIQUE index は標準では使えない。**`active_marker` カラム (active 時 1, それ以外 NULL)** + `(scope_cols, active_marker)` UNIQUE で実現する:
+
+```ruby
+# migration
+add_column :orders_carts, :active_marker, :integer
+add_index :orders_carts, [:shop_id, :customer_id, :active_marker], unique: true
+
+# model: status と active_marker を sync
+class Cart
+  enum :status, { open: 0, completed: 1, abandoned: 2 }
+  before_validation { self.active_marker = open? ? 1 : nil }
+end
+```
+
+MySQL の UNIQUE は **複数 NULL を許容**するので、completed/abandoned cart は何個でも作れる一方、open は 1 つしか作れない。Postgres なら partial UNIQUE index でもっと素直に書ける。
+
+### `find_or_create_by!` の race と retry idiom
+
+UNIQUE 制約が立っていれば、並行リクエストでの `find_or_create_by!` race を **1 回 retry** で吸収できる:
+
+```ruby
+def current_open_cart
+  attempts = 0
+  begin
+    attempts += 1
+    Orders::Cart.find_or_create_by!(shop_id: ..., customer_id: ..., status: :open)
+  rescue ActiveRecord::RecordNotUnique
+    retry if attempts < 2
+    raise
+  end
+end
+```
+
+UNIQUE 制約**なしの**場合、`find_or_create_by!` は race するとサイレントに重複行を作るので、必ず DB 制約とセットで使う。
+
+### TOCTOU 防止の `lock!`
+
+「cart が `:open` であること」をチェックしてから `:completed` に更新するような **time-of-check vs time-of-use** な経路では、トランザクション開始直後に `record.lock!` で SELECT FOR UPDATE を取り、ロック取得後に再評価する:
+
+```ruby
+def call
+  Order.transaction do
+    @cart.lock!  # SELECT ... FOR UPDATE
+    raise CheckoutError, "cart is not open" unless @cart.open?
+    # ...
+  end
+end
+```
+
+constructor で `cart.open?` を判定してから transaction に入る形は double-submit で破綻する (両 thread が constructor チェックを通過する)。**lock! は transaction 内で**取り、ロック後に状態を再評価。
+
+### `ActiveRecord::Deadlocked` を rescue
+
+InnoDB の deadlock detection は二重課金を防いでくれるが、**caller には `ActiveRecord::Deadlocked` が伝搬する**。Controller で:
+
+```ruby
+rescue ActiveRecord::Deadlocked
+  render json: { error: "concurrent_conflict", retryable: true }, status: :conflict
+```
+
+retry-able であることをクライアントに伝える (UX 上 500 にはしない)。
+
+実例: `shopify/backend/components/orders/app/services/orders/checkout_service.rb` / `shopify/backend/components/orders/app/controllers/orders/storefront/{carts,checkouts}_controller.rb` / `shopify/backend/spec/multi_tenancy/scope_lint_spec.rb`。
+
+---
+
+## サブドメインで tenant 解決する middleware
+
+Shopify 風の「`<shop>.example.com` で tenant を確定」運用では、Rails アプリの最前段に Rack middleware を置いて `current_shop` を rack env に積む:
+
+```ruby
+# components/core/lib/core/middleware/tenant_resolver.rb
+SKIP_PATHS = %r{\A/(up|rails/|apps/api/)}  # health / 3rd-party API は素通り
+def call(env)
+  return @app.call(env) if env["PATH_INFO"]&.match?(SKIP_PATHS)
+  subdomain = extract_subdomain(env)
+  if subdomain
+    shop = Core::Shop.find_by(subdomain: subdomain)
+    return [404, ...] unless shop
+    env["shopify.current_shop"] = shop
+  end
+  @app.call(env)
+end
+```
+
+`ApplicationController#current_shop` は `request.env["shopify.current_shop"]` を読むだけ。
+
+### 落とし穴: rodauth より前に挿入する
+
+rodauth-rails の `before_create_account` フック内で `request.env["shopify.current_shop"]` を読むなら、**TenantResolver は Rodauth::Rails::Middleware より手前**に挿入する必要がある:
+
+```ruby
+config.after :load_config_initializers do |app|
+  app.middleware.insert_before Rodauth::Rails::Middleware, Core::Middleware::TenantResolver
+end
+```
+
+`config.middleware.use` だと末尾追加で順序が確定しない。`insert_before` を使う。
+
+実例: `shopify/backend/components/core/lib/core/middleware/tenant_resolver.rb`。
 
 ---
 
