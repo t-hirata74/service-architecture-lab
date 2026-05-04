@@ -3,7 +3,8 @@ from fastapi import APIRouter, HTTPException, status
 from app.deps import CurrentUser, SessionDep
 from app.domain.comments.schemas import CommentCreate, CommentResponse
 from app.domain.comments.service import (
-    CommentError,
+    CommentNotFound,
+    NotAuthor,
     ParentMismatch,
     ParentNotFound,
     PostNotFound,
@@ -57,8 +58,8 @@ async def delete_comment(
 ) -> CommentResponse:
     try:
         comment = await soft_delete(session, comment_id=comment_id, user_id=current.id)
-    except CommentError as exc:
-        msg = str(exc)
-        code = status.HTTP_404_NOT_FOUND if msg == "comment not found" else status.HTTP_403_FORBIDDEN
-        raise HTTPException(code, msg) from exc
+    except CommentNotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except NotAuthor as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     return CommentResponse.model_validate(comment)

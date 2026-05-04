@@ -192,7 +192,7 @@ cd ../playwright && npm test
 | Phase | 範囲 | 状態 |
 | --- | --- | --- |
 | 1 | scaffolding + ADR 4 本 + architecture.md + docker-compose | 🟢 設計フェーズ完了 |
-| 2 | FastAPI scaffold (async + SQLAlchemy 2.0 + bcrypt JWT) + auth / subreddits / posts CRUD + 投票 (ADR 0002) | 🔴 未着手 |
-| 3 | comments ツリー (ADR 0001 path 採番) + コメント投票 + soft delete | 🔴 未着手 |
+| 2 | FastAPI scaffold (async + SQLAlchemy 2.0 + bcrypt JWT) + auth / subreddits / posts CRUD + 投票 (ADR 0002) | 🟢 完了 |
+| 3 | comments ツリー (ADR 0001 path 採番) + コメント投票 + soft delete | 🟢 完了 |
 | 4 | ai-worker (FastAPI + APScheduler) で Hot 再計算 + `/summarize` `/related` `/spam-check` mock + frontend (Next.js / hot 一覧 / コメントツリー) | 🔴 未着手 |
 | 5 | Playwright (anonymous read + 認証フロー + 投票 + コメント返信) + Terraform 設計図 + GitHub Actions CI workflows | 🔴 未着手 |

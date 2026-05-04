@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.comments.models import Comment
 from app.domain.posts.models import Post
 
-PATH_PAD = 10  # 10 桁 0 埋め (bigint 19 桁未満を想定)
+PATH_PAD = 10  # 10 桁 0 埋め: 10 億件まで lexicographic 順 = preorder を維持できる
 
 
 def _path_segment(comment_id: int) -> str:
@@ -26,6 +26,10 @@ def _path_segment(comment_id: int) -> str:
 
 
 class CommentError(Exception):
+    pass
+
+
+class CommentNotFound(CommentError):
     pass
 
 
@@ -38,6 +42,10 @@ class ParentNotFound(CommentError):
 
 
 class ParentMismatch(CommentError):
+    pass
+
+
+class NotAuthor(CommentError):
     pass
 
 
@@ -91,16 +99,12 @@ async def create_comment(
     return comment
 
 
-async def list_tree(
-    session: AsyncSession,
-    *,
-    post_id: int,
-    root_path: str | None = None,
-) -> list[Comment]:
-    stmt = select(Comment).where(Comment.post_id == post_id)
-    if root_path:
-        stmt = stmt.where(Comment.path.like(f"{root_path}/%"))
-    stmt = stmt.order_by(Comment.path)
+async def list_tree(session: AsyncSession, *, post_id: int) -> list[Comment]:
+    # ADR 0001: soft-deleted comments も返す。子コメントを残すため、
+    # frontend で deleted_at を見て「[deleted]」プレースホルダを描画する。
+    stmt = (
+        select(Comment).where(Comment.post_id == post_id).order_by(Comment.path)
+    )
     return list((await session.execute(stmt)).scalars().all())
 
 
@@ -111,9 +115,9 @@ async def soft_delete(
         await session.execute(select(Comment).where(Comment.id == comment_id))
     ).scalar_one_or_none()
     if comment is None:
-        raise CommentError("comment not found")
+        raise CommentNotFound("comment not found")
     if comment.user_id != user_id:
-        raise CommentError("not the author")
+        raise NotAuthor("not the author")
     if comment.deleted_at is None:
         comment.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await session.commit()
