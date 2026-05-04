@@ -26,9 +26,8 @@ slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue 状態機械) /
 | # | シナリオ | キャプチャ |
 | --- | --- | --- |
 | 01 | register → post 投稿 → 自分の timeline に出る | ![register-post-timeline](playwright/captures/01-register-post-self-timeline.gif) |
+| 02 | alice が bob を follow すると bob の post が alice の timeline に出る (fan-out、2 BrowserContext を hstack) | ![follow-fanout](playwright/captures/02-follow-fanout-on-write.gif) |
 | 03 | post の like ボタンで count が増える / 戻すと減る | ![like-toggle](playwright/captures/03-like-toggle-counter.gif) |
-
-> 02 (alice → bob follow による fan-out) は `browser.newContext()` を使った 2 ブラウザ協調テストで、Playwright の `use.video` 設定が伝播しないため gif 化していない (派生として `recordVideo` 個別指定すれば可能)。
 
 ---
 
