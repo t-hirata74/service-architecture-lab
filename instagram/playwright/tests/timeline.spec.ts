@@ -1,7 +1,14 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type TestInfo } from "@playwright/test";
 
 // E2E: register → post → timeline で自分の post が見える
 // ADR 0001: self entry は signal で同期 INSERT されるので Celery 待ちなし
+
+/** PLAYWRIGHT_VIDEO=on で browser.newContext() に recordVideo を inject (capture 用)。 */
+function captureCtxOpts(testInfo: TestInfo): { recordVideo?: { dir: string } } {
+  return process.env.PLAYWRIGHT_VIDEO === "on"
+    ? { recordVideo: { dir: testInfo.outputDir } }
+    : {};
+}
 
 async function register(page: Page, username: string, password: string) {
   await page.goto("/register");
@@ -34,13 +41,13 @@ test("register → post 投稿 → 自分の timeline に出る", async ({ page 
 
 test("alice が bob を follow すると bob の post が alice の timeline に出る (fan-out)", async ({
   browser,
-}) => {
+}, testInfo) => {
   const ts = Date.now();
   const aliceName = `alice_${ts}`;
   const bobName = `bob_${ts}`;
 
-  const aliceCtx = await browser.newContext();
-  const bobCtx = await browser.newContext();
+  const aliceCtx = await browser.newContext(captureCtxOpts(testInfo));
+  const bobCtx = await browser.newContext(captureCtxOpts(testInfo));
   const alicePage = await aliceCtx.newPage();
   const bobPage = await bobCtx.newPage();
 
