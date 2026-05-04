@@ -4,8 +4,13 @@ require "rails_helper"
 # このリストは Phase 3 以降の増加に合わせて更新する (Product / InventoryLevel / Order ...)。
 RSpec.describe "Tenant-owned models lint" do
   TENANT_OWNED_MODELS = [
-    Core::User
-    # Phase 3+: Catalog::Product, Inventory::InventoryLevel, Orders::Order, Apps::AppInstallation, ...
+    Core::User,
+    Catalog::Product,
+    Catalog::Variant,
+    Inventory::Location,
+    Inventory::InventoryLevel,
+    Inventory::StockMovement
+    # Phase 4+: Orders::Order, Orders::LineItem, Apps::AppInstallation, ...
   ].freeze
 
   TENANT_OWNED_MODELS.each do |klass|

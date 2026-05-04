@@ -10,7 +10,7 @@ slack (Rails / WebSocket fan-out) / youtube (Rails / Solid Queue 状態機械) /
 
 ## 見どころハイライト (設計フェーズ)
 
-> 🟡 Phase 2 完了 (Rails 8 + 5 Engine + packwerk 0 violation + core Engine: Shop / User / rodauth-rails JWT + TenantResolver middleware / RSpec **20 件通過**)。Phase 3 以降は catalog + inventory に着手予定。
+> 🟡 Phase 3 完了 (Phase 2 + catalog Engine + inventory Engine + **`Inventory::DeductService` 条件付き UPDATE** / 100 並行 thread の concurrent decrement spec で負在庫ゼロを実証 / RSpec **40 件通過** / packwerk 0 violation)。Phase 4 以降は orders + checkout + ai-worker proxy + frontend に着手予定。
 
 - **モジュラーモノリス: Rails Engine + packwerk** — `core / catalog / inventory / orders / apps` の 5 Engine、依存方向を packwerk で CI 失敗にする ([ADR 0001](docs/adr/0001-modular-monolith-rails-engine.md))
 - **マルチテナント: `shop_id` row-level scoping** — サブドメイン解決 + 明示 scope (`current_shop.products.find`)、`default_scope` は意図的に却下 ([ADR 0002](docs/adr/0002-multi-tenancy-row-level-shop-scoping.md))
@@ -121,7 +121,7 @@ cd ../playwright && npm test
 | --- | --- |
 | ADR (0001-0004)             | 🟢 全 Accepted |
 | architecture.md             | 🟢 ER / 在庫減算シーケンス / Engine 構成 / Phase ロードマップまで記述 |
-| Backend (Rails 8 + 5 Engine) | 🟢 Phase 2 完了 (5 Engine mount + packwerk 0 violation + Core::Shop / Core::User + TenantResolver middleware) |
+| Backend (Rails 8 + 5 Engine) | 🟢 Phase 3 完了 (Phase 2 + Catalog::Product/Variant + Inventory::{Location,InventoryLevel,StockMovement} + `Inventory::DeductService` 条件付き UPDATE) |
 | ai-worker (FastAPI)          | 🟡 Phase 4 で着手予定 |
 | Frontend (Next.js 16)        | 🟡 Phase 4 で着手予定 |
 | 認証 (rodauth-rails + JWT)   | 🟢 Phase 2 完了 (RodauthMain JSON+JWT mode / before_create_account で shop_id bind / 共有 PK で Account ↔ Core::User) |
@@ -152,6 +152,6 @@ cd ../playwright && npm test
 | --- | --- | --- |
 | 1 | scaffolding + ADR 4 本 + architecture.md + docker-compose | 🟢 設計フェーズ完了 |
 | 2 | Rails 8 + 5 Engine + packwerk 0 violation + core (Shop / User / Auth) + tenant resolver middleware | 🟢 完了 (RSpec 20 件: shop / user / tenant_resolver / auth (rodauth) / cross_tenant_isolation / scope_lint / dependency) |
-| 3 | catalog + inventory + 条件付き UPDATE + concurrent decrement spec + stock_movements ledger | 🟡 |
+| 3 | catalog + inventory + 条件付き UPDATE + concurrent decrement spec + stock_movements ledger | 🟢 完了 (RSpec 40 件: + product / variant / stock_movement / deduct_service / **concurrent_deduct (100 thread × initial 60 で 60 成功 / 40 失敗 / on_hand=0 / SUM(delta)=-60**)) |
 | 4 | orders + checkout + ai-worker proxy + frontend (merchant 画面 + storefront) | 🟡 |
 | 5 | apps Engine + WebhookSubscription/Delivery + Mock receiver + Playwright + Terraform + CI 5 ジョブ | 🟡 |
