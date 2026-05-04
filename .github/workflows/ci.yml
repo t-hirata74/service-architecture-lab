@@ -848,6 +848,95 @@ jobs:
       - run: terraform init -backend=false -input=false
       - run: terraform validate
 
+  reddit-backend:
+    name: reddit / backend (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reddit/backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: reddit/backend/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Pytest (sqlite in-memory)
+        run: pytest -q
+
+  reddit-ai-worker:
+    name: reddit / ai-worker (FastAPI + APScheduler + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reddit/ai-worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: reddit/ai-worker/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Pytest (sqlite in-memory)
+        run: pytest -q
+
+  reddit-frontend:
+    name: reddit / frontend (Next.js typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reddit/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: reddit/frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+
+  reddit-playwright:
+    name: reddit / playwright (typecheck only)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reddit/playwright
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: reddit/playwright/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+  reddit-terraform:
+    name: reddit / terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reddit/infra/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
   openapi-lint:
     name: openapi (lint slack + youtube schemas)
     runs-on: ubuntu-latest
