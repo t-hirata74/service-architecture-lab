@@ -1,15 +1,40 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f1115;
-  --foreground: #e6e6e6;
-  --panel: #1a1d23;
-  --panel-2: #232730;
-  --accent: #5865f2;
+  --bg:            #0a0a0c;
+  --bg-elevated:   #18181b;
+  --bg-subtle:     #232328;
+  --border:        #2a2a30;
+  --border-strong: #3f3f46;
+
+  --fg:            #fafafa;
+  --fg-muted:      #a1a1aa;
+  --fg-subtle:     #71717a;
+
+  --radius-sm:     4px;
+  --radius:        8px;
+  --radius-lg:     12px;
+
+  --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow:        0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-lg:     0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  --font-sans:     -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue",
+                   "Hiragino Kaku Gothic ProN", Arial, sans-serif;
+
+  --accent:        #5865f2;
+  --accent-hover:  #4752c4;
+  --accent-fg:     #ffffff;
+
+  --background:    var(--bg);
+  --foreground:    var(--fg);
+  --panel:         var(--bg-elevated);
+  --panel-2:       var(--bg-subtle);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
