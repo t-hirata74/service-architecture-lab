@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 
 CAPTURE_DIR="captures"
 RESULTS_DIR="test-results"
-PLAYBACK_RATE="${PLAYBACK_RATE:-1.8}"   # 1.0 = 等倍、1.8 = 1.8x ゆっくり
+PLAYBACK_RATE="${PLAYBACK_RATE:-1.0}"   # 1.0 = 等倍 (default)、1.8 / 2.5 = ゆっくり再生
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "ffmpeg required (brew install ffmpeg / apt install ffmpeg)" >&2

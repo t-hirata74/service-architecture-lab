@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 
 CAPTURE_DIR="captures"
 RESULTS_DIR="test-results"
-PLAYBACK_RATE="${PLAYBACK_RATE:-1.8}"
+PLAYBACK_RATE="${PLAYBACK_RATE:-1.0}"
 
 if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "ffmpeg required (brew install ffmpeg / apt install ffmpeg)" >&2
