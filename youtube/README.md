@@ -16,6 +16,20 @@ slack で扱った WebSocket fan-out とは別軸の技術課題（**非同期 +
 
 ---
 
+## E2E デモ (Playwright で録画)
+
+`cd youtube/playwright && npm run capture` で再生成。仕組みは [docs/testing-strategy.md キャプチャ節](../docs/testing-strategy.md#キャプチャ-gif-を-readme-に埋め込む仕組み)。
+
+| # | シナリオ | キャプチャ |
+| --- | --- | --- |
+| 01 | home page lists videos and detail page renders | ![browse](playwright/captures/01-browse-feed-and-detail.gif) |
+| 03 | search page returns results from MySQL ngram FULLTEXT | ![search hit](playwright/captures/03-search-fulltext-hit.gif) |
+| 04 | search page is empty for non-matching keyword | ![search empty](playwright/captures/04-search-no-match.gif) |
+
+> 02 (upload state machine) は Solid Queue worker (`bundle exec bin/jobs`) と `JOBS_RUNNING=1` env 必要、capture 時は skip される。
+
+---
+
 ## アーキテクチャ概要
 
 ```mermaid
