@@ -1,26 +1,45 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg:            #f6f8fa;
+  --bg-elevated:   #ffffff;
+  --bg-subtle:     #f4f4f5;
+  --border:        #d0d7de;
+  --border-strong: #afb8c1;
+
+  --fg:            #1f2328;
+  --fg-muted:      #59636e;
+  --fg-subtle:     #818b95;
+
+  --radius-sm:     4px;
+  --radius:        6px;
+  --radius-lg:     12px;
+
+  --shadow-sm:     0 1px 0 rgba(31, 35, 40, 0.04);
+  --shadow:        0 3px 6px rgba(31, 35, 40, 0.08);
+  --shadow-lg:     0 12px 28px rgba(31, 35, 40, 0.12);
+
+  --font-sans:     -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter",
+                   "Hiragino Kaku Gothic ProN", "Helvetica Neue", Arial, sans-serif;
+
+  /* per-project accent: github primer blue */
+  --accent:        #0969da;
+  --accent-hover:  #0550ae;
+  --accent-fg:     #ffffff;
+  --accent-success: #1f883d;
+
+  --background:    var(--bg);
+  --foreground:    var(--fg);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }

@@ -16,11 +16,22 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900">
+      <body className="min-h-full flex flex-col bg-[var(--bg)] text-[var(--fg)]">
         <UrqlProvider>
-          <header className="border-b bg-white">
-            <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-              <Link href="/" className="font-semibold text-lg">github (lab)</Link>
+          <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg-elevated)]/95 backdrop-blur">
+            <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
+              <Link
+                href="/"
+                className="flex items-center gap-2 font-semibold text-base hover:opacity-90 transition-opacity"
+              >
+                <span
+                  aria-hidden
+                  className="size-7 rounded-md bg-[var(--fg)] grid place-items-center text-[var(--bg-elevated)] text-base"
+                >
+                  ⌥
+                </span>
+                <span>github (lab)</span>
+              </Link>
               <ViewerSwitcher />
             </div>
           </header>
