@@ -8,7 +8,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-# disable scheduler before importing main
+# disable scheduler before importing main. ASGITransport は httpx 設定に依って
+# lifespan を起動しうるので、env で scheduler を無効化しておく二重保険。
 os.environ.setdefault("ENABLE_SCHEDULER", "false")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

@@ -123,10 +123,6 @@ export async function login(username: string, password: string): Promise<AuthRes
   });
 }
 
-export async function fetchMe(): Promise<ApiUser> {
-  return apiFetch("/me");
-}
-
 // ─── subreddits ────────────────────────────────────────────────────────────
 
 export async function listSubreddits(): Promise<ApiSubreddit[]> {
