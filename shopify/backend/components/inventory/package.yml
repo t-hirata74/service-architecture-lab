@@ -1,0 +1,6 @@
+# inventory: InventoryLevel / StockMovement。catalog (Variant) と core を参照。
+enforce_dependencies: true
+
+dependencies:
+  - "components/catalog"
+  - "components/core"

@@ -1,0 +1,17 @@
+include:
+  - "app/**/*.{rb,rake}"
+  - "components/*/app/**/*.rb"
+  - "components/*/lib/**/*.rb"
+
+exclude:
+  - "bin/**/*"
+  - "node_modules/**/*"
+  - "script/**/*"
+  - "tmp/**/*"
+  - "vendor/**/*"
+  - "spec/**/*"
+  - "db/**/*"
+
+package_paths:
+  - "."
+  - "components/*"

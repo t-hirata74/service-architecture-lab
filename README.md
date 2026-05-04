@@ -19,6 +19,7 @@
 | [`instagram`](instagram/) | Instagram 風タイムライン (Django/DRF) | タイムライン生成戦略 (fan-out on write) / フォローグラフ DB 設計 / Django ORM N+1 + index / DRF TokenAuthentication | 🟢 MVP 完成 (Django pytest 51 + ai-worker pytest 12 + Playwright 実機 3 件通過 / Terraform validate / CI 4 ジョブ) | [README](instagram/README.md) ・ [Architecture](instagram/docs/architecture.md) ・ [ADR (4)](instagram/docs/adr/) |
 | [`discord`](discord/) | Discord 風リアルタイムチャット (Go) | ギルド単位シャーディング + 単一プロセス Hub / goroutine + channel CSP pattern / プレゼンスハートビート / WebSocket fan-out (slack Rails ActionCable との対比) | 🟢 MVP 完成 (Go gateway + WS Hub + Next.js 16 + ai-worker + Playwright fan-out / presence offline 2 ケース通過 / Terraform validate / CI 5 ジョブ) | [README](discord/README.md) ・ [Architecture](discord/docs/architecture.md) ・ [ADR (4)](discord/docs/adr/) |
 | [`reddit`](reddit/) | Reddit 風 forum (FastAPI / async) | コメントツリー (Adjacency List + Materialized Path) / 投票整合性 (votes truth + posts.score 相対加算) / Hot ランキング (Reddit 公式式 + ai-worker APScheduler 60s 再計算) / FastAPI async + SQLAlchemy 2.0 async + aiomysql + HS256 JWT | 🟢 MVP 完成 (FastAPI 32 + ai-worker 19 + Next.js build + Playwright 3 / Terraform validate / CI 5 ジョブ) | [README](reddit/README.md) ・ [Architecture](reddit/docs/architecture.md) ・ [ADR (4)](reddit/docs/adr/) |
+| [`shopify`](shopify/) | Shopify 風 EC プラットフォーム (Rails 8) | モジュラーモノリス (Rails Engine + packwerk) / マルチテナント (`shop_id` row-level scoping) / 在庫の同時減算 (条件付き UPDATE + ledger) / App プラットフォーム (Webhook at-least-once + HMAC + idempotency) | 🟡 Phase 2 完了 (Rails 8 + 5 Engine + packwerk 0 violation + core/Shop/User/rodauth JWT + TenantResolver / RSpec 20 件通過) | [README](shopify/README.md) ・ [Architecture](shopify/docs/architecture.md) ・ [ADR (4)](shopify/docs/adr/) |
 
 各プロジェクトは **backend (Rails 8) + frontend (Next.js 16) + ai-worker (Python / FastAPI) + MySQL** という同形構成。違いは **API スタイル / キュー / 認可モデル / 検索エンジン / streaming プロトコル** といった技術課題ごとの選択にある。
 
@@ -170,7 +171,7 @@ LLM・AI エージェントを横断的に学ぶための案。
 | --- | --- | --- |
 | `figma` | Figma | リアルタイム共同編集 (CRDT) / multiplayer cursor / undo/redo の協調 |
 | `stripe` | Stripe | idempotency key 設計 / webhook 配信保証（at-least-once + 順序）/ 決済 state machine / 通貨計算 |
-| `shopify` | Shopify | **モジュラーモノリス (Rails Engine 分割)** / マルチテナント / 在庫整合性（同時減算）/ App プラットフォーム |
+| ~~`shopify`~~ → 着手 | Shopify | **モジュラーモノリス (Rails Engine 分割)** / マルチテナント / 在庫整合性（同時減算）/ App プラットフォーム (Phase 1 完了) |
 | `zoom` | Zoom | WebRTC SFU / 大規模 conference 参加者 / 録画パイプライン / 共有画面 |
 | `chatgpt` | ChatGPT | LLM streaming / context window 管理 / tool calling / 会話履歴の永続化と分岐 |
 | `cursor` | Cursor | コード補完 streaming / repository context window 管理 / agent edit loop / 差分適用 sandbox |
@@ -199,6 +200,7 @@ service-architecture-lab/
   instagram/              # Instagram 風 (Django/DRF / MVP 完成 / fan-out + Celery)
   discord/                # Discord 風 (Go / MVP 完成)
   reddit/                 # Reddit 風 (FastAPI / 設計フェーズ完了)
+  shopify/                # Shopify 風 (Rails 8 / モジュラーモノリス / Phase 1 完了)
   docs/                   # 共通ルール (走りながら整備)
     api-style.md          # REST/GraphQL 選定 + GraphQL 運用
     coding-rules/         # rails / frontend / python / go の規約

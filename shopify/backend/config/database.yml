@@ -1,0 +1,31 @@
+default: &default
+  adapter: mysql2
+  encoding: utf8mb4
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  username: <%= ENV.fetch("DB_USER") { "root" } %>
+  password: <%= ENV.fetch("DB_PASSWORD") { "root" } %>
+  host: <%= ENV.fetch("DB_HOST") { "127.0.0.1" } %>
+  port: <%= ENV.fetch("DB_PORT") { 3315 } %>
+
+development:
+  <<: *default
+  database: shopify_development
+
+test:
+  <<: *default
+  database: shopify_test
+
+production:
+  primary: &primary_production
+    <<: *default
+    database: shopify_production
+    username: shopify
+    password: <%= ENV["SHOPIFY_DATABASE_PASSWORD"] %>
+  cache:
+    <<: *primary_production
+    database: shopify_production_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_production
+    database: shopify_production_queue
+    migrations_paths: db/queue_migrate

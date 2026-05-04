@@ -1,0 +1,10 @@
+# Root package — main app shell. Engine 群を mount するだけで業務ロジックは持たない。
+# 5 Engine すべてに依存可能 (mount するため)。
+enforce_dependencies: true
+
+dependencies:
+  - "components/core"
+  - "components/catalog"
+  - "components/inventory"
+  - "components/orders"
+  - "components/apps"

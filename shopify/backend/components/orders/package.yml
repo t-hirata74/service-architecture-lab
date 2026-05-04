@@ -1,0 +1,7 @@
+# orders: Cart / Checkout / Order。inventory を経由して在庫減算 (ADR 0003)。
+enforce_dependencies: true
+
+dependencies:
+  - "components/inventory"
+  - "components/catalog"
+  - "components/core"

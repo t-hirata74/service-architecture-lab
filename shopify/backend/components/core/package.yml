@@ -1,0 +1,4 @@
+# core: tenant resolver / Shop / User / 認証。最下層、他 Engine に依存しない。
+enforce_dependencies: true
+
+dependencies: []

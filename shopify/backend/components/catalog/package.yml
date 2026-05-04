@@ -1,0 +1,5 @@
+# catalog: Product / Variant。core (Shop) のみ参照。
+enforce_dependencies: true
+
+dependencies:
+  - "components/core"

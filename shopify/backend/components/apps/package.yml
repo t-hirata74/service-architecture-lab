@@ -1,0 +1,9 @@
+# apps: App / WebhookSubscription / WebhookDelivery (ADR 0004)。
+# orders / inventory のドメインイベントを subscribe するため最上層。
+enforce_dependencies: true
+
+dependencies:
+  - "components/orders"
+  - "components/inventory"
+  - "components/catalog"
+  - "components/core"
