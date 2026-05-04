@@ -7,7 +7,7 @@ from app.clients import ai_worker
 from app.deps import CurrentUser, SessionDep
 from app.domain.posts.models import Post
 from app.domain.posts.ranking import hot_score
-from app.domain.posts.schemas import PostCreate, PostResponse
+from app.domain.posts.schemas import PostCreate, PostResponse, SummarizeProxyResponse
 from app.domain.subreddits.models import Subreddit
 
 router = APIRouter(tags=["posts"])
@@ -83,11 +83,12 @@ async def get_post(post_id: int, session: SessionDep) -> PostResponse:
     return PostResponse.model_validate(post)
 
 
-@router.post("/posts/{post_id}/summarize")
-async def summarize_post(post_id: int, session: SessionDep) -> dict:
+@router.post("/posts/{post_id}/summarize", response_model=SummarizeProxyResponse)
+async def summarize_post(post_id: int, session: SessionDep) -> SummarizeProxyResponse:
     post = (
         await session.execute(select(Post).where(Post.id == post_id, Post.deleted_at.is_(None)))
     ).scalar_one_or_none()
     if post is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "post not found")
-    return await ai_worker.summarize(title=post.title, body=post.body)
+    body = await ai_worker.summarize(title=post.title, body=post.body)
+    return SummarizeProxyResponse.model_validate(body)

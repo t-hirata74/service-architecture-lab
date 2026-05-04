@@ -58,6 +58,20 @@ async def test_summarize_degraded_on_5xx(client):
     assert body["reason"] == "upstream_503"
 
 
+@respx.mock
+async def test_summarize_degraded_on_4xx(client):
+    """4xx (token / schema 不一致) も degraded で吸収する."""
+    post_id = await _setup_post(client)
+    respx.post("http://127.0.0.1:8060/summarize").mock(
+        return_value=httpx.Response(401, json={"detail": "invalid internal token"})
+    )
+    res = await client.post(f"/posts/{post_id}/summarize")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["degraded"] is True
+    assert body["reason"] == "upstream_401"
+
+
 async def test_summarize_404_for_unknown_post(client):
     # ai-worker は呼ばれない (404 で短絡)
     res = await client.post("/posts/9999/summarize")

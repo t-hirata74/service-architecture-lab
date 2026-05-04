@@ -27,6 +27,7 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
     summary?: string;
     keywords?: string[];
     degraded: boolean;
+    reason?: string;
   } | null>(null);
 
   const refresh = async () => {
@@ -90,7 +91,7 @@ export default function PostPage({ params }: { params: Promise<{ id: string }> }
             <div className="mt-2 text-xs bg-[var(--panel-2)] border border-[var(--border)] rounded p-2">
               {summary.degraded ? (
                 <span className="text-[var(--muted)]">
-                  ai-worker degraded ({summary.degraded ? "true" : "false"})
+                  ai-worker degraded ({summary.reason ?? "unknown"})
                 </span>
               ) : (
                 <>

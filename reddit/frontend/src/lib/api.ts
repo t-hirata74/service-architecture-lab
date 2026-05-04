@@ -191,10 +191,6 @@ export async function createComment(
   });
 }
 
-export async function deleteComment(commentId: number): Promise<ApiComment> {
-  return apiFetch(`/comments/${commentId}`, { method: "DELETE" });
-}
-
 // ─── votes ────────────────────────────────────────────────────────────────
 
 export async function votePost(postId: number, value: -1 | 0 | 1): Promise<ApiVote> {
