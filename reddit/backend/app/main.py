@@ -1,5 +1,3 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,13 +9,8 @@ from app.domain.subreddits.router import router as subreddits_router
 from app.domain.votes.router import router as votes_router
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    yield
-
-
 def create_app() -> FastAPI:
-    app = FastAPI(title="Reddit clone (FastAPI)", lifespan=lifespan)
+    app = FastAPI(title="Reddit clone (FastAPI)")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3065"],

@@ -4,7 +4,6 @@ from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.db import get_session
 from app.domain.accounts.models import User
 from app.security import decode_token
@@ -47,11 +46,3 @@ async def get_current_user_optional(
 
 
 CurrentUserOptional = Annotated[User | None, Depends(get_current_user_optional)]
-
-
-async def require_internal_token(
-    x_internal_token: Annotated[str | None, Header(alias="X-Internal-Token")] = None,
-) -> None:
-    expected = get_settings().internal_token
-    if x_internal_token != expected:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "invalid internal token")

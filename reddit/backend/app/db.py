@@ -33,13 +33,6 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     return _sessionmaker
 
 
-def reset_engine_for_tests(url: str) -> None:
-    """Replace the global engine/sessionmaker; used by tests to swap to sqlite."""
-    global _engine, _sessionmaker
-    _engine = create_async_engine(url, future=True)
-    _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
-
-
 async def get_session() -> AsyncIterator[AsyncSession]:
     sm = get_sessionmaker()
     async with sm() as session:
