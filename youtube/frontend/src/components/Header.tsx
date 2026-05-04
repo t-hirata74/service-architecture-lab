@@ -4,20 +4,41 @@ import SearchBar from "./SearchBar";
 
 export default function Header() {
   return (
-    <header className="border-b border-white/10 bg-black/50 backdrop-blur sticky top-0 z-10">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">
-        <Link href="/" className="shrink-0 text-lg font-semibold tracking-tight">
-          <span className="text-accent">YouTube</span>-style
+    <header className="sticky top-0 z-10 border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur supports-[backdrop-filter]:bg-[var(--bg)]/75">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 h-14">
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-base font-semibold tracking-tight hover:opacity-90 transition-opacity"
+        >
+          <span
+            aria-hidden
+            className="size-7 rounded-md bg-[var(--accent)] grid place-items-center text-[var(--accent-fg)]"
+          >
+            ▶
+          </span>
+          <span className="text-[var(--fg)]">YouTube</span>
+          <span className="text-[var(--fg-muted)] text-xs">-style</span>
         </Link>
         <Suspense fallback={<div className="flex-1 max-w-md" />}>
           <SearchBar />
         </Suspense>
-        <nav className="flex items-center gap-4 text-sm opacity-80">
-          <Link href="/" className="hover:opacity-100">Home</Link>
-          <Link href="/upload" className="hover:opacity-100">Upload</Link>
-          <Link href="/diagnostics" className="hover:opacity-100">Diagnostics</Link>
+        <nav className="flex items-center gap-1 text-sm">
+          <NavLink href="/">Home</NavLink>
+          <NavLink href="/upload">Upload</NavLink>
+          <NavLink href="/diagnostics">Diagnostics</NavLink>
         </nav>
       </div>
     </header>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="px-3 h-8 inline-flex items-center rounded-md text-[var(--fg-muted)] hover:text-[var(--fg)] hover:bg-[var(--bg-subtle)] transition-colors"
+    >
+      {children}
+    </Link>
   );
 }

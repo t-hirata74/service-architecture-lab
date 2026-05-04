@@ -1,19 +1,44 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f0f0f;
-  --foreground: #f1f1f1;
-  --accent: #ff0033;
+  --bg:            #0a0a0c;
+  --bg-elevated:   #18181b;
+  --bg-subtle:     #232328;
+  --border:        #2a2a30;
+  --border-strong: #3f3f46;
+
+  --fg:            #fafafa;
+  --fg-muted:      #a1a1aa;
+  --fg-subtle:     #71717a;
+
+  --radius-sm:     4px;
+  --radius:        8px;
+  --radius-lg:     12px;
+
+  --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow:        0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-lg:     0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  --font-sans:     -apple-system, BlinkMacSystemFont, "Inter", "Roboto",
+                   "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif;
+
+  --accent:        #ff0033;
+  --accent-hover:  #cc0029;
+  --accent-fg:     #ffffff;
+
+  --background:    var(--bg);
+  --foreground:    var(--fg);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
   --color-accent: var(--accent);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
