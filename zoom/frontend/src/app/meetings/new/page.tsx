@@ -39,28 +39,33 @@ export default function NewMeetingPage() {
       <p className="text-xs text-zinc-500 mt-1">作成された会議は scheduled 状態。ホストが open すると waiting_room に進む (ADR 0001)。</p>
 
       <form className="mt-4 space-y-3" onSubmit={onSubmit}>
-        <label className="block">
-          <div className="text-xs text-zinc-500 mb-1">Title</div>
+        <div>
+          <label htmlFor="title" className="block text-xs text-zinc-500 mb-1">Title</label>
           <input
+            id="title"
+            data-testid="title-input"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
             className="w-full px-3 py-2 rounded-md border border-zinc-300 bg-white"
           />
-        </label>
-        <label className="block">
-          <div className="text-xs text-zinc-500 mb-1">Scheduled start</div>
+        </div>
+        <div>
+          <label htmlFor="scheduled_at" className="block text-xs text-zinc-500 mb-1">Scheduled start</label>
           <input
+            id="scheduled_at"
+            data-testid="scheduled-at-input"
             type="datetime-local"
             value={scheduledAt}
             onChange={(e) => setScheduledAt(e.target.value)}
             required
             className="w-full px-3 py-2 rounded-md border border-zinc-300 bg-white"
           />
-        </label>
+        </div>
         {error && <div className="text-sm text-[var(--color-danger)]">{error}</div>}
         <button
           type="submit"
+          data-testid="submit-button"
           disabled={busy}
           className="w-full px-4 py-2 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
         >

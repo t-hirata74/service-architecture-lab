@@ -1223,3 +1223,86 @@ jobs:
         run: npx tsc --noEmit
       - name: Build
         run: npm run build
+
+  zoom-playwright:
+    name: zoom / playwright (E2E lifecycle + dynamic host transfer)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: zoom_development
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+      RAILS_ENV: development
+      INTERNAL_INGRESS_TOKEN: dev-internal-token
+      AI_WORKER_URL: http://127.0.0.1:8080
+      SOLID_QUEUE_IN_PUMA: "1"
+      NEXT_PUBLIC_API_BASE: http://127.0.0.1:3090
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.1"
+          bundler-cache: true
+          working-directory: zoom/backend
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: zoom/ai-worker/requirements.txt
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            zoom/frontend/package-lock.json
+            zoom/playwright/package-lock.json
+
+      - name: Backend DB create + migrate (development)
+        working-directory: zoom/backend
+        run: bundle exec rails db:create db:migrate
+
+      - name: ai-worker install
+        working-directory: zoom/ai-worker
+        run: pip install -r requirements.txt
+
+      - name: Frontend install + build (production for hydration race 回避)
+        working-directory: zoom/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Playwright install (chromium)
+        working-directory: zoom/playwright
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright (Rails + ai-worker + Next start を webServer で起動)
+        working-directory: zoom/playwright
+        run: npx playwright test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zoom-playwright-report
+          path: zoom/playwright/playwright-report/
+          retention-days: 7

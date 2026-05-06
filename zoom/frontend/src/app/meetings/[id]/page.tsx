@@ -90,19 +90,19 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
         <h2 className="text-sm font-semibold text-zinc-900">Lifecycle (ADR 0001)</h2>
         <div className="flex flex-wrap gap-2 mt-3">
           {isHost && meeting.status === "scheduled" && (
-            <Btn onClick={() => action("/open")}>Open waiting room</Btn>
+            <Btn testid="btn-open" onClick={() => action("/open")}>Open waiting room</Btn>
           )}
           {isHost && meeting.status === "waiting_room" && (
-            <Btn onClick={() => action("/start")}>Go live</Btn>
+            <Btn testid="btn-start" onClick={() => action("/start")}>Go live</Btn>
           )}
           {isHost && meeting.status === "live" && (
-            <Btn variant="danger" onClick={() => action("/end")}>End meeting</Btn>
+            <Btn testid="btn-end" variant="danger" onClick={() => action("/end")}>End meeting</Btn>
           )}
           {isHost && meeting.status === "summarize_failed" && (
-            <Btn onClick={() => action("/retry_summary")}>Retry summary</Btn>
+            <Btn testid="btn-retry-summary" onClick={() => action("/retry_summary")}>Retry summary</Btn>
           )}
           {!isHost && !isCoHost && ["scheduled", "waiting_room", "live"].includes(meeting.status) && (
-            <Btn onClick={() => action("/join")}>Join (waiting)</Btn>
+            <Btn testid="btn-join" onClick={() => action("/join")}>Join (waiting)</Btn>
           )}
         </div>
       </section>
@@ -121,12 +121,17 @@ export default function MeetingDetailPage({ params }: { params: Promise<{ id: st
               </div>
               <div className="flex gap-2">
                 {(isHost || isCoHost) && p.status === "waiting" && (
-                  <Btn size="sm" onClick={() => action("/admit", { user_id: p.user_id })}>
+                  <Btn
+                    testid={`btn-admit-${p.user_id}`}
+                    size="sm"
+                    onClick={() => action("/admit", { user_id: p.user_id })}
+                  >
                     Admit
                   </Btn>
                 )}
                 {isHost && meeting.status === "live" && p.status === "live" && p.user_id !== meeting.host_id && (
                   <Btn
+                    testid={`btn-transfer-${p.user_id}`}
                     size="sm"
                     variant="ghost"
                     onClick={() => action("/transfer_host", { to_user_id: p.user_id, reason: "voluntary" })}
@@ -156,9 +161,10 @@ type BtnProps = {
   onClick: () => void;
   variant?: "primary" | "danger" | "ghost";
   size?: "md" | "sm";
+  testid?: string;
 };
 
-function Btn({ children, onClick, variant = "primary", size = "md" }: BtnProps) {
+function Btn({ children, onClick, variant = "primary", size = "md", testid }: BtnProps) {
   const base =
     "inline-flex items-center font-medium rounded-md border transition-colors disabled:opacity-50";
   const sizing = size === "sm" ? "px-2.5 py-1 text-xs" : "px-4 py-2 text-sm";
@@ -169,7 +175,7 @@ function Btn({ children, onClick, variant = "primary", size = "md" }: BtnProps) 
       ? "bg-white border-zinc-300 text-zinc-700 hover:bg-zinc-50"
       : "bg-[var(--color-accent)] text-white border-transparent hover:opacity-90";
   return (
-    <button type="button" onClick={onClick} className={`${base} ${sizing} ${styles}`}>
+    <button type="button" data-testid={testid} onClick={onClick} className={`${base} ${sizing} ${styles}`}>
       {children}
     </button>
   );

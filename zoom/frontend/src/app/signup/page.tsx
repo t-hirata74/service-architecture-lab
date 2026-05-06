@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { login } from "@/lib/api";
+import { login, signup } from "@/lib/api";
 
-export default function LoginPage() {
+export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -15,6 +16,7 @@ export default function LoginPage() {
     setError(null);
     setBusy(true);
     try {
+      await signup(email, password, displayName);
       await login(email, password);
       window.location.href = "/";
     } catch (err) {
@@ -27,9 +29,19 @@ export default function LoginPage() {
   return (
     <div className="max-w-md mx-auto">
       <div className="bg-white border border-zinc-200 rounded-md p-6">
-        <h1 className="text-xl font-semibold text-zinc-900">サインイン</h1>
+        <h1 className="text-xl font-semibold text-zinc-900">アカウント登録</h1>
 
         <form className="mt-4 space-y-3" onSubmit={onSubmit}>
+          <Field label="Display name" htmlFor="display_name">
+            <input
+              id="display_name"
+              data-testid="display-name-input"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              required
+              className="w-full px-3 py-2 rounded-md border border-zinc-300 bg-white"
+            />
+          </Field>
           <Field label="Email" htmlFor="email">
             <input
               id="email"
@@ -62,14 +74,14 @@ export default function LoginPage() {
             disabled={busy}
             className="w-full px-4 py-2 rounded-md bg-[var(--color-accent)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? "Processing…" : "Sign in"}
+            {busy ? "Processing…" : "Create account"}
           </button>
         </form>
 
         <div className="mt-4 text-xs text-zinc-500 text-center">
-          Need an account?{" "}
-          <Link href="/signup" className="text-[var(--color-accent)] hover:underline">
-            Sign up
+          Already have an account?{" "}
+          <Link href="/login" className="text-[var(--color-accent)] hover:underline">
+            Sign in
           </Link>
         </div>
       </div>

@@ -25,10 +25,11 @@ RSpec.describe MeetingPolicy do
     expect(described_class.new(co_host, meeting).admit?).to be true
   end
 
-  it "show? は co_host / live participant に許可" do
+  it "show? は認証済みなら誰でも許可 (招待リンク前提)、未認証は false" do
     expect(described_class.new(host, meeting).show?).to be true
     expect(described_class.new(co_host, meeting).show?).to be true
     expect(described_class.new(participant, meeting).show?).to be true
-    expect(described_class.new(create(:user), meeting).show?).to be false
+    expect(described_class.new(create(:user), meeting).show?).to be true
+    expect(described_class.new(nil, meeting).show?).to be false
   end
 end

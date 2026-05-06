@@ -1,8 +1,11 @@
 # ADR 0002: Pundit policy は MeetingPermissionResolver を呼ぶだけの薄い層に留める (github と同形 2 層)。
 # Resolver にロジックを集約することで、controller 以外 (job / GraphQL field) からも同じ判定を再利用できる。
 class MeetingPolicy < ApplicationPolicy
+  # 認証済みユーザは会議詳細 (タイトル / 状態 / 参加者一覧) を見られる。
+  # Zoom は招待リンクを共有する前提なので、リンクを持つ user は join できる程度の情報は見える。
+  # 録画・要約は別 endpoint (view_summary?) で再判定。
   def show?
-    resolver.host_or_co_host? || resolver.live_participant?
+    !user.nil?
   end
 
   def create?
