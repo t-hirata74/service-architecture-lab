@@ -28,9 +28,10 @@ export function setShop(sub: ShopSubdomain) {
 }
 
 export function useShop(): [ShopSubdomain, (s: ShopSubdomain) => void] {
-  const [shop, setShopState] = useState<ShopSubdomain>(DEFAULT);
+  // lazy initializer で localStorage を初回 render から反映する
+  // (auth.ts と同じ理由 — useEffect 反映前の判定で誤 redirect しないように)
+  const [shop, setShopState] = useState<ShopSubdomain>(() => getShop());
   useEffect(() => {
-    setShopState(getShop());
     const onChange = (e: Event) => setShopState((e as CustomEvent).detail as ShopSubdomain);
     window.addEventListener("shopify_lab:shop_changed", onChange);
     return () => window.removeEventListener("shopify_lab:shop_changed", onChange);

@@ -14,6 +14,7 @@
 require "sinatra/base"
 require "json"
 require "openssl"
+require "base64"
 require "time"
 
 class MockReceiver < Sinatra::Base
@@ -29,8 +30,9 @@ class MockReceiver < Sinatra::Base
   set :show_exceptions, false
 
   helpers do
-    def hmac_hex(body)
-      OpenSSL::HMAC.hexdigest("SHA256", SECRET, body)
+    # Rails 側 Apps::Signer と一致させる: HMAC-SHA256 → base64 strict (Shopify 形式)
+    def hmac_b64(body)
+      Base64.strict_encode64(OpenSSL::HMAC.digest("sha256", SECRET, body))
     end
   end
 
@@ -41,7 +43,7 @@ class MockReceiver < Sinatra::Base
     sig  = request.env["HTTP_X_HMAC_SHA256"].to_s
     did  = request.env["HTTP_X_WEBHOOK_DELIVERY_ID"].to_s
     topic = request.env["HTTP_X_WEBHOOK_TOPIC"].to_s
-    expected = hmac_hex(body)
+    expected = hmac_b64(body)
 
     verified = !sig.empty? && Rack::Utils.secure_compare(sig, expected)
 

@@ -32,7 +32,13 @@ export function getEmail(shopSubdomain: string): string | null {
 }
 
 export function useAuth(shopSubdomain: string): { email: string | null; token: string | null } {
-  const [state, setState] = useState<{ email: string | null; token: string | null }>({ email: null, token: null });
+  // 初回 render から localStorage を見る (lazy initializer)。
+  // useEffect で遅延ロードすると、cart 等の "未ログインなら /login へ" 判定が
+  // localStorage 反映前に走って誤 redirect する。
+  const [state, setState] = useState<{ email: string | null; token: string | null }>(() => ({
+    email: getEmail(shopSubdomain),
+    token: getToken(shopSubdomain),
+  }));
   useEffect(() => {
     const sync = () => setState({ email: getEmail(shopSubdomain), token: getToken(shopSubdomain) });
     sync();

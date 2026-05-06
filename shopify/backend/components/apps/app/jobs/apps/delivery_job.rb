@@ -1,3 +1,6 @@
+require "net/http"
+require "uri"
+
 module Apps
   # ADR 0004: webhook を受信側 endpoint に POST する worker。
   # 2xx → status=delivered。
