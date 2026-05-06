@@ -176,6 +176,45 @@ slack/playwright/
 - backend (`:3010`) / frontend (`:3005`) を `webServer` で起動。`reuseExistingServer: true`
 - ai-worker を要するスペックは `AI_WORKER_RUNNING=1` 環境変数でガード
 
+#### ジョブパイプラインを E2E で通すときは Solid Queue を Puma に同居させる (zoom)
+
+zoom の `01-meeting-lifecycle.spec.ts` のように **`ended → recorded → summarized` のジョブチェインを E2E で待つ** シナリオでは、`bin/jobs` を別プロセスで起動するのではなく `SOLID_QUEUE_IN_PUMA=1` で Puma に同居させる方が Playwright の `webServer` 設定が単純になる:
+
+```typescript
+// zoom/playwright/playwright.config.ts
+webServer: [
+  {
+    command: `zsh -lc 'SOLID_QUEUE_IN_PUMA=1 INTERNAL_INGRESS_TOKEN=dev-internal-token \
+              AI_WORKER_URL=${AI_WORKER_URL} bundle exec rails s -p 3090 -b 127.0.0.1'`,
+    cwd: "../backend",
+    url: `${BACKEND_URL}/up`,
+    reuseExistingServer: true,
+    timeout: 180_000,
+  },
+  // ai-worker, frontend は別エントリ
+],
+```
+
+- **rbenv が zsh の rc で初期化される環境では `zsh -lc` で叩く**。bash 直叩きだと bundler パスが解決しない (Apple Silicon / brew 環境で頻発)
+- **production 用ではない**: `SOLID_QUEUE_IN_PUMA` は dev/test 専用フラグの位置づけ。本番では `bin/jobs` を ECS task として独立させる (zoom Terraform は分離設計)
+- ジョブが long timeout (`{ timeout: 60_000 }`) で待つ E2E は CI ではぴったり、ローカル開発では `process.env.CI ? 60_000 : 5_000` のように環境別に切替可
+
+#### frontend は **production build で起動** する (hydration race 回避) (zoom)
+
+`npm run dev` (next dev) で立ち上げると、Next.js 16 + React 19 では **button click が React handler attach 前に native submit となる race** が頻発する。`form` の onSubmit を assert する E2E は `next start` (production build) で起動する:
+
+```typescript
+{
+  command: "npm run start",   // ❌ npm run dev だと hydration race
+  cwd: "../frontend",
+  url: FRONTEND_URL,
+  reuseExistingServer: true,
+}
+```
+
+- `npm run start` は事前に `npm run build` 済みであることを要求する。CI は build 済みアーティファクトを使う / ローカルは事前ビルドを Makefile に入れる
+- dev mode で書きやすいテストもあるので「**form 系の race が起きるテストだけ production build で動かす**」運用も可。ただし複数モード切替はメンテが重いので zoom では全テスト production 統一
+
 ### ヘルパ
 
 `tests/helpers.ts` に以下を集約し、各 spec から import:

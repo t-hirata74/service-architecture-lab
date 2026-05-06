@@ -4,7 +4,7 @@
 
 ADR は「コードからは読めない設計判断の理由」を残すための文書で、書式は [`adr-template.md`](adr-template.md) に従う。本リポでは各サービス最低 3 本を完成基準にしている（[完成の定義](service-architecture-lab-policy.md)）。
 
-**累計: 40 本 / 9 サービス**
+**累計: 43 本 / 10 サービス**
 
 ---
 
@@ -32,6 +32,7 @@ WebSocket / SSE / polling / fan-out 構造の選定。
 | [shopify/0003](../shopify/docs/adr/0003-inventory-conditional-update-decrement.md) | shopify | 在庫の同時減算整合性 — 条件付き UPDATE + ledger |
 | [reddit/0002](../reddit/docs/adr/0002-vote-integrity.md) | reddit | 投票の整合性と score の denormalize（truth + 相対加算 + reconcile） |
 | [slack/0002](../slack/docs/adr/0002-message-persistence-and-read-tracking.md) | slack | メッセージ永続化と既読管理の整合性モデル |
+| [zoom/0001](../zoom/docs/adr/0001-meeting-lifecycle-state-machine.md) | zoom | 会議ライフサイクルの状態機械（ENUM + `with_lock` + 結果テーブル UNIQUE で多層冪等） |
 
 ### 1.3 認可モデル
 
@@ -42,6 +43,7 @@ WebSocket / SSE / polling / fan-out 構造の選定。
 | [github/0002](../github/docs/adr/0002-permission-graph.md) | github | 権限グラフのモデリング（PermissionResolver + Pundit の 2 層） |
 | [shopify/0002](../shopify/docs/adr/0002-multi-tenancy-row-level-shop-scoping.md) | shopify | マルチテナント分離 — `shop_id` row-level scoping |
 | [shopify/0004](../shopify/docs/adr/0004-app-platform-webhook-delivery.md) | shopify | App プラットフォーム — Webhook 配信（HMAC + scope 認可） |
+| [zoom/0002](../zoom/docs/adr/0002-host-permission-and-dynamic-transfer.md) | zoom | ホスト・共同ホスト権限と動的譲渡（append-only `host_transfers` で監査） |
 
 ### 1.4 認証
 
@@ -97,6 +99,7 @@ WebSocket / SSE / polling / fan-out 構造の選定。
 | [reddit/0003](../reddit/docs/adr/0003-hot-ranking-batch.md) | reddit | Hot ランキングアルゴリズムと再計算バッチ（ai-worker APScheduler） |
 | [shopify/0004](../shopify/docs/adr/0004-app-platform-webhook-delivery.md) | shopify | Webhook 配信（at-least-once + Solid Queue + idempotency） |
 | [youtube/0001](../youtube/docs/adr/0001-upload-pipeline-state-machine.md) | youtube | Solid Queue + 同一トランザクションでの状態機械駆動 |
+| [zoom/0003](../zoom/docs/adr/0003-recording-summary-pipeline.md) | zoom | 録画→要約 at-least-once パイプライン（結果テーブル UNIQUE 冪等吸収 / shopify webhook の対称形） |
 
 ### 1.9 API スタイル
 
@@ -225,6 +228,14 @@ DB 選定 / オブジェクトストレージのモック戦略。
 2. [0002 マルチテナント (`shop_id` row-level scoping)](../shopify/docs/adr/0002-multi-tenancy-row-level-shop-scoping.md)
 3. [0003 在庫の同時減算整合性 (条件付き UPDATE + ledger)](../shopify/docs/adr/0003-inventory-conditional-update-decrement.md)
 4. [0004 Webhook 配信 (at-least-once + HMAC + idempotency)](../shopify/docs/adr/0004-app-platform-webhook-delivery.md)
+
+### zoom — Zoom 風オンライン会議 (Rails 8)
+
+主要技術課題: 長寿命エンティティの状態機械 / 動的ホスト譲渡 + append-only 監査 / 録画→要約 at-least-once パイプライン (WebRTC SFU は scope 外)
+
+1. [0001 会議ライフサイクルの状態機械](../zoom/docs/adr/0001-meeting-lifecycle-state-machine.md)
+2. [0002 ホスト・共同ホスト権限と動的譲渡](../zoom/docs/adr/0002-host-permission-and-dynamic-transfer.md)
+3. [0003 録画→要約 at-least-once パイプライン](../zoom/docs/adr/0003-recording-summary-pipeline.md)
 
 ---
 
