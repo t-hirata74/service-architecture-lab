@@ -50,6 +50,7 @@
 | [`instagram`](instagram/README.md#e2e-デモ-playwright-で録画) | 3 | self-timeline / **alice/bob hstack で fan-out on write** / like toggle |
 | [`reddit`](reddit/README.md#e2e-デモ-playwright-で録画) | 3 | anonymous 閲覧 / 認証フロー (post→vote→comment→reply) / ai-worker proxy |
 | [`discord`](discord/README.md#e2e-デモ-playwright-で録画) | 2 | WebSocket fan-out (READY snapshot 込み) / presence offline、共に 2 BrowserContext hstack |
+| [`shopify`](shopify/README.md#e2e-デモ-playwright-で録画) | 4 | 5 Engine + packwerk pass / tenant switcher で acme↔globex / 同時 checkout で **片方だけ成功** (hstack) / checkout → mock receiver に **HMAC verified webhook** 着 (hstack) |
 
 ---
 
@@ -132,7 +133,7 @@ GraphQL 採用時の **N+1 / Dataloader / field 認可** は `github` で実装�
 | キュー | (なし) | **Solid Queue** (DB-driven) | (Solid Queue 同梱だが未使用) | (なし / SSE は同期接続) | **Solid Queue** (webhook 配信 at-least-once + retry) |
 | 検索 | (なし) | **MySQL FULLTEXT (ngram)** | (なし) | **Hybrid (FULLTEXT ngram + 擬似ベクタ cosine)** | (なし) |
 | streaming | **WebSocket** (ActionCable + Redis) | (なし / polling) | (なし / polling) | **SSE** (ActionController::Live + fetch ReadableStream) | **HTTP outbound webhook** (HMAC + delivery_id) |
-| E2E | Playwright (chromium) 6 件 | Playwright 4 件 | Playwright 4 件 | (Phase 5 で追加予定) | (派生 ADR で追加予定) |
+| E2E | Playwright (chromium) 6 件 | Playwright 4 件 | Playwright 4 件 | (Phase 5 で追加予定) | Playwright 4 件 (ADR 0001-0004 各 1 本 / 03 と 04 は hstack 2 context) |
 | CI | github-actions | 同左 | 同左 (4 ジョブ × 3 プロジェクト = 12 ジョブ並列) | (Phase 5 で追加予定) | 5 ジョブ (backend / packwerk / ai-worker / frontend / terraform) |
 
 ---

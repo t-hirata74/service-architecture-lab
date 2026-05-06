@@ -133,6 +133,26 @@ cd ../playwright && npm test
 | App プラットフォーム         | 🟢 Phase 5 完了 (orders → apps の dependency inversion を ActiveSupport::Notifications で実装 / `orders.order_created` を apps Engine の after_initialize subscriber が拾って配信予約) |
 | インフラ設計図 (Terraform)   | 🟢 Phase 5 完了 (VPC / ALB / ECS Fargate / RDS MySQL / Secrets / CloudWatch、`terraform validate` pass) |
 | CI (GitHub Actions)          | 🟢 Phase 5 完了 (5 ジョブ: backend / packwerk / ai-worker / frontend / terraform) |
+| Playwright E2E + gif         | 🟢 ADR 0001-0004 各 1 本の gif 完成 (`playwright/captures/*.gif` / mock receiver `apps/mock_receiver` 同梱 / `bin/jobs` global-setup spawn) |
+
+---
+
+## E2E デモ (Playwright で録画)
+
+`shopify/playwright/captures/` に置かれた gif は ADR 0001-0004 を 1 本ずつ E2E で動かしたもの。再生成は `cd shopify/playwright && npm run capture` (ffmpeg 必須)。
+
+| # | ADR | gif | 何が映っているか |
+| --- | --- | --- | --- |
+| 01 | [ADR 0001](docs/adr/0001-modular-monolith-rails-engine.md) (modular monolith) | ![](playwright/captures/01-modular-monolith.gif) | `/admin/system` に 5 Engine (`core / catalog / inventory / orders / apps`) + 許可された依存方向 + `packwerk: 0 violations` バッジ + 禁止依存 (循環防止 / 逆参照 / `ActiveSupport::Notifications` 経由の dependency inversion) を表示 |
+| 02 | [ADR 0002](docs/adr/0002-multi-tenancy-row-level-shop-scoping.md) (`shop_id` row-level scoping) | ![](playwright/captures/02-multi-tenancy.gif) | tenant switcher で **acme ↔ globex** を切替。同 slug `t-shirt` が `ACME Logo Tee` / `Globex Engineer Tee` で**別行**として表示され、`X-Shop-Subdomain` だけで scope が切り替わることを視覚化 |
+| 03 | [ADR 0003](docs/adr/0003-inventory-conditional-update-decrement.md) (条件付き UPDATE) | ![](playwright/captures/03-inventory-race.gif) | `on_hand=1` の `ACM-HOOD-LMT` を **alice / bob が同時に checkout** (hstack 2 context)。**片方だけ** order #1 が確定し、もう片方は「在庫不足: 別の購入者が先に確保しました」を表示 — 悲観/楽観ロックなしの compare-and-decrement が有効に効いている |
+| 04 | [ADR 0004](docs/adr/0004-app-platform-webhook-delivery.md) (Webhook at-least-once) | ![](playwright/captures/04-webhook-delivery.gif) | 左 = mock 3rd-party App receiver (`apps/mock_receiver` :4321) / 右 = storefront cart。checkout 完了 → Solid Queue の `Apps::DeliveryJob` が dispatch → mock receiver UI に `order_created` topic + **`HMAC verified` バッジ** + `delivery_id` (UUID) + payload JSON が表示される |
+
+仕組み (リポ全体共通):
+
+- `playwright/scripts/record-captures.sh`: Playwright で `PLAYWRIGHT_VIDEO=on` でテスト実行 → `test-results/**/*.webm` を ffmpeg で gif 化。2 context のテストは `hstack=inputs=2` で side-by-side
+- `playwright/scripts/global-setup.ts`: Solid Queue worker (`bin/jobs`) を spawn し、test 全体で 1 つだけ起動。`globalTeardown` で kill する
+- webServer: backend (Rails :3090) / mock_receiver (:4321) / frontend (:3085) を Playwright が自動起動。**rbenv は zsh init なので `zsh -lc` で起動** (bash login shell だとシステム Ruby を拾って Bundler が転ぶ)
 
 ---
 
