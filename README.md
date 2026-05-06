@@ -8,6 +8,18 @@
 
 ---
 
+## このリポの読み方
+
+時間予算別に推奨ルートを置いた。**詳細な思想・スコープ判定・ADR 運用は [`docs/how-to-read.md`](docs/how-to-read.md) と [`docs/service-architecture-lab-policy.md`](docs/service-architecture-lab-policy.md)。**
+
+- **3 分で要点を見たい** → 下の [プロジェクト横断のハイライト](#プロジェクト横断のハイライト) — API / queue / 認可 / モノリス境界 / 整合性パターンの 5 対比表
+- **30 分かけて深く読みたい** → [`shopify/`](shopify/) または [`perplexity/`](perplexity/) の `architecture.md` + ADR 一式（設計判断の密度が一番濃い 2 サービス）
+- **設計思想を先に掴みたい** → [`docs/how-to-read.md`](docs/how-to-read.md) — なぜローカル完結 / なぜ ADR 必須 / 完成の定義
+- **判断ログを通読したい** → [`docs/adr-index.md`](docs/adr-index.md) — 9 サービス × ADR 40 本をテーマ別 / サービス別の 2 軸で索引化
+- **失敗・宿題・反省を見たい** → 各サービスの `architecture.md` 末尾「学びログ」（書式は [`docs/learning-log-template.md`](docs/learning-log-template.md)）
+
+---
+
 ## プロジェクト一覧
 
 | プロジェクト | サービス | 主な技術課題 | ステータス | ドキュメント |
