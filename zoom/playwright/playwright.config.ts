@@ -27,15 +27,22 @@ export default defineConfig({
       // Rails backend。Solid Queue は SOLID_QUEUE_IN_PUMA=1 で puma に同居させ、
       // ADR 0003 のジョブチェイン (FinalizeRecordingJob → SummarizeMeetingJob) を
       // 1 プロセスで pickup できるようにする。
-      // rbenv が zsh 側で初期化されているため zsh -lc で叩く。
-      command: `zsh -lc 'SOLID_QUEUE_IN_PUMA=1 INTERNAL_INGRESS_TOKEN=dev-internal-token AI_WORKER_URL=${AI_WORKER_URL} bundle exec rails s -p 3090 -b 127.0.0.1'`,
+      // ローカル: rbenv が zsh 側で初期化されているため zsh -lc で叩く。
+      // CI (Ubuntu / zsh 不在 / ruby/setup-ruby が PATH を整備済み): 直接 bundle exec。
+      command: process.env.CI
+        ? `env SOLID_QUEUE_IN_PUMA=1 INTERNAL_INGRESS_TOKEN=dev-internal-token AI_WORKER_URL=${AI_WORKER_URL} bundle exec rails s -p 3090 -b 127.0.0.1`
+        : `zsh -lc 'SOLID_QUEUE_IN_PUMA=1 INTERNAL_INGRESS_TOKEN=dev-internal-token AI_WORKER_URL=${AI_WORKER_URL} bundle exec rails s -p 3090 -b 127.0.0.1'`,
       cwd: "../backend",
       url: `${BACKEND_URL}/up`,
       reuseExistingServer: true,
       timeout: 180_000,
     },
     {
-      command: ".venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080",
+      // ローカル: venv の uvicorn を直叩き。CI (actions/setup-python が PATH を整備済み): system uvicorn。
+      // INTERNAL_TOKEN のデフォルト ("dev-internal-token") は ai-worker/app/config.py 側で定義。
+      command: process.env.CI
+        ? "uvicorn app.main:app --host 127.0.0.1 --port 8080"
+        : ".venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8080",
       cwd: "../ai-worker",
       url: `${AI_WORKER_URL}/health`,
       reuseExistingServer: true,

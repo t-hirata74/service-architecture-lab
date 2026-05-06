@@ -196,6 +196,14 @@ webServer: [
 ```
 
 - **rbenv が zsh の rc で初期化される環境では `zsh -lc` で叩く**。bash 直叩きだと bundler パスが解決しない (Apple Silicon / brew 環境で頻発)
+- **CI (Ubuntu) は zsh が無い + `ruby/setup-ruby@v1` が PATH を整備済み**なので `process.env.CI` で分岐して直接 `bundle exec` を叩く。同様に ai-worker も `actions/setup-python` 環境では `.venv/bin/uvicorn` が無いので CI では system `uvicorn` に切り替える:
+
+  ```typescript
+  command: process.env.CI
+    ? `env SOLID_QUEUE_IN_PUMA=1 ... bundle exec rails s -p 3090 -b 127.0.0.1`
+    : `zsh -lc 'SOLID_QUEUE_IN_PUMA=1 ... bundle exec rails s -p 3090 -b 127.0.0.1'`,
+  ```
+
 - **production 用ではない**: `SOLID_QUEUE_IN_PUMA` は dev/test 専用フラグの位置づけ。本番では `bin/jobs` を ECS task として独立させる (zoom Terraform は分離設計)
 - ジョブが long timeout (`{ timeout: 60_000 }`) で待つ E2E は CI ではぴったり、ローカル開発では `process.env.CI ? 60_000 : 5_000` のように環境別に切替可
 
