@@ -69,13 +69,19 @@ service-architecture-lab/
 | `uber` | Go | 地理空間索引 / goroutine + channel / 配車 state machine |
 | `figma` | 未定 | リアルタイム共同編集 (CRDT) / multiplayer cursor |
 | `stripe` | 未定 | idempotency / at-least-once webhook / 決済 state machine |
-| ~~`zoom`~~ → 着手 | Rails | 会議ライフサイクル state machine / ホスト権限 / 録画→要約パイプライン (Phase 1) |
+| ~~`zoom`~~ → MVP 完成 | Rails | 長寿命 state machine / 動的ホスト譲渡 + append-only 監査 / 録画→要約 at-least-once |
 | `chatgpt` | 未定 | LLM streaming / context window 管理 / tool calling |
 | `cursor` | 未定 | コード補完 streaming / repository context / agent edit loop |
 | `notebooklm` | 未定 | マルチドキュメント RAG / 埋め込み / ノート単位権限 |
 | AI Coding Agent | 未定 | LLM tool use ループ / sandbox 隔離 / agent state machine |
 | AI Workflow 自動化 | 未定 | trigger→action DAG / connector プラグイン / 冪等性 |
 | AI カスタマーサポート | 未定 | KB の RAG 検索 / human-in-the-loop / エスカレーション |
+| `calendly` | 未定 | 期間 overlap / `EXCLUDE` 排他制約 / RRULE 展開 / timezone 永続化 |
+| `pagerduty` | 未定 | incident escalation state machine / alert dedup (fingerprint + TTL) / on-call rotation |
+| `dropbox` | 未定 | content-defined chunking / delta sync / version graph / conflict resolution |
+| `freee` | 未定 | 複式簿記の不変条件 (借方 = 貸方) / 仕訳 ledger append-only / 期末締め state machine / 逆仕訳パターン |
+| `mercari` | 未定 | C2C 取引 state machine / escrow (代金保留 → 受取確認後リリース) / 検索ランキング |
+| `timee` | 未定 | 時刻オフセット付きマッチング / 当日キャンセル再アサイン / 勤怠打刻 + 給与計算 |
 
 機能詳細・ai-worker 役割・棲み分けは [README 候補プロジェクト節](README.md#候補プロジェクト検討中) と policy。LLM 本体は方針どおり **ローカル完結・モック可**（実 SDK 不使用）。
 

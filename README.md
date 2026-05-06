@@ -209,6 +209,12 @@ LLM・AI エージェントを横断的に学ぶための案。
 | `chatgpt` | ChatGPT | LLM streaming / context window 管理 / tool calling / 会話履歴の永続化と分岐 |
 | `cursor` | Cursor | コード補完 streaming / repository context window 管理 / agent edit loop / 差分適用 sandbox |
 | `notebooklm` | NotebookLM | マルチドキュメント取り込み / 埋め込み・ベクタ検索 / ノート単位権限 / 引用付き回答 |
+| `calendly` | Calendly / Cal.com | 複数カレンダーの availability merge / **同時予約レース防止 (`tstzrange` + `EXCLUDE` 排他制約)** / RRULE 展開 / timezone 永続化 |
+| `pagerduty` | PagerDuty / Opsgenie | incident escalation state machine / **alert dedup (fingerprint + TTL window)** / on-call rotation の recurrence / SLA tracking |
+| `dropbox` | Dropbox / Google Drive | **content-defined chunking (rolling hash)** / delta sync / ファイル version graph / conflict resolution (offline-first) |
+| `freee` | freee / マネーフォワード | **複式簿記の不変条件 (借方 = 貸方)** / 仕訳 ledger は append-only / 期末締め state machine / 帳票生成 / 「変更は逆仕訳で表現する」原則 |
+| `mercari` | メルカリ | C2C 取引 state machine (出品→購入→入金→発送→受取→評価) / **escrow** (代金を運営側で保留 → 受取確認後にリリース) / 検索ランキング / 出品制限 |
+| `timee` | タイミー | **時刻オフセット付きマッチング** (来週 9-13 時のシフト割当) / **当日キャンセル時の再アサイン** / 勤怠打刻 + 給与計算 / 評価ループ |
 
 ### 候補同士の組み合わせ・棲み分け
 
@@ -219,6 +225,12 @@ LLM・AI エージェントを横断的に学ぶための案。
 - **`notebooklm`** は本リポの `perplexity` (広域取得 / 引用 streaming) と対比して **ユーザー所有ドキュメントへの限定取得 + ノート単位権限** が中心テーマ。同じ RAG でも入力側 (web 検索 vs ユーザコーパス) と権限モデルで差別化
 - **`zoom`** は voice / video を中心に学びたい場合の候補。`discord` で扱う fan-out との差は WebRTC の有無
 - **AI Workflow** は microservices の練習に最適（trigger / executor / connector の自然な分割）
+- **`calendly`** は本リポにまだない「**時刻ドメイン + 制約充足**」軸。`zoom` (会議の状態機械) と接続して "招待 → 予約 → 開催" を描くこともできるが、密結合させずに独立 ADR で扱う方が学習価値が高い (期間 overlap / `EXCLUDE` 排他制約 / RRULE 展開)
+- **`pagerduty`** は **`zoom` (長寿命 meeting)** との対比で「**短寿命 incident + 集約**」の state machine。alert dedup の TTL window アルゴリズム + on-call rotation の recurrence は本リポで未踏領域
+- **`dropbox`** は **`figma` (CRDT)** と将来の sync engine (Linear 系) の **中間** に位置するので、3 つ揃うと "**リアルタイム協調の 3 流派 (CRDT / OT / sync log)**" の比較表が成立する。content-defined chunking + block-level dedup は単独でも価値が高い
+- **`freee`** は **複式簿記の不変条件** が他のドメインで絶対に出てこない題材。`zoom` の append-only 監査 + `shopify` の ledger と合流して **「金額 + 不変条件 + ledger」三位一体** になる。会計知識ゼロから始めても借方 = 貸方の制約を押さえれば設計できる
+- **`mercari`** の **escrow** (購入金を運営側で保留 → 受取確認後にリリース) は `stripe` 候補と相補的で、`shopify` (在庫減算) とも違う **「第三者保留 state machine」** 軸。発送通知 / 受取評価 / 期限切れ自動完了など取引フローの分岐が題材として豊富
+- **`timee`** は `uber` 配車の **「時間オフセット版」**。即時マッチングではなく「事前予約された労働時間に人を割当て、当日キャンセル時に再アサインする」という **時刻制約付きマッチング + キャンセル耐性** が新規論点。`calendly` との対比で「予約 vs 労働マッチング」も成立
 
 ---
 
