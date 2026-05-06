@@ -32,6 +32,7 @@
 | [`discord`](discord/) | Discord 風リアルタイムチャット (Go) | ギルド単位シャーディング + 単一プロセス Hub / goroutine + channel CSP pattern / プレゼンスハートビート / WebSocket fan-out (slack Rails ActionCable との対比) | 🟢 MVP 完成 (Go gateway + WS Hub + Next.js 16 + ai-worker + Playwright fan-out / presence offline 2 ケース通過 / Terraform validate / CI 5 ジョブ) | [README](discord/README.md) ・ [Architecture](discord/docs/architecture.md) ・ [ADR (4)](discord/docs/adr/) |
 | [`reddit`](reddit/) | Reddit 風 forum (FastAPI / async) | コメントツリー (Adjacency List + Materialized Path) / 投票整合性 (votes truth + posts.score 相対加算) / Hot ランキング (Reddit 公式式 + ai-worker APScheduler 60s 再計算) / FastAPI async + SQLAlchemy 2.0 async + aiomysql + HS256 JWT | 🟢 MVP 完成 (FastAPI 32 + ai-worker 19 + Next.js build + Playwright 3 / Terraform validate / CI 5 ジョブ) | [README](reddit/README.md) ・ [Architecture](reddit/docs/architecture.md) ・ [ADR (4)](reddit/docs/adr/) |
 | [`shopify`](shopify/) | Shopify 風 EC プラットフォーム (Rails 8) | モジュラーモノリス (Rails Engine + packwerk) / マルチテナント (`shop_id` row-level scoping) / 在庫の同時減算 (条件付き UPDATE + ledger) / App プラットフォーム (Webhook at-least-once + HMAC + idempotency) | 🟢 MVP 完成 + 高精度レビュー反映 (Phase 1-5 + cart lock! / UNIQUE 制約 / Order#number atomic counter / Solid Queue / Apps API / ai-worker 統合 / RSpec 89 + pytest 7 + Terraform validate / CI 5 ジョブ) | [README](shopify/README.md) ・ [Architecture](shopify/docs/architecture.md) ・ [ADR (4)](shopify/docs/adr/) |
+| [`zoom`](zoom/) | Zoom 風オンライン会議 (Rails 8) | 会議ライフサイクル state machine / ホスト・共同ホスト権限 / 録画→要約 at-least-once パイプライン (WebRTC SFU は scope 外) | 🔴 Phase 1 設計フェーズ (ADR 0001-0003 計画済 / 実装未着手) | [README](zoom/README.md) ・ [Architecture](zoom/docs/architecture.md) ・ [ADR](zoom/docs/adr/) |
 
 各プロジェクトは **backend (Rails 8) + frontend (Next.js 16) + ai-worker (Python / FastAPI) + MySQL** という同形構成。違いは **API スタイル / キュー / 認可モデル / 検索エンジン / streaming プロトコル** といった技術課題ごとの選択にある。
 
@@ -201,7 +202,7 @@ LLM・AI エージェントを横断的に学ぶための案。
 | `figma` | Figma | リアルタイム共同編集 (CRDT) / multiplayer cursor / undo/redo の協調 |
 | `stripe` | Stripe | idempotency key 設計 / webhook 配信保証（at-least-once + 順序）/ 決済 state machine / 通貨計算 |
 | ~~`shopify`~~ → 着手 | Shopify | **モジュラーモノリス (Rails Engine 分割)** / マルチテナント / 在庫整合性（同時減算）/ App プラットフォーム (Phase 1 完了) |
-| `zoom` | Zoom | WebRTC SFU / 大規模 conference 参加者 / 録画パイプライン / 共有画面 |
+| ~~`zoom`~~ → 着手 | Zoom | 会議ライフサイクル状態機械 / ホスト・共同ホスト権限 / 録画→要約パイプライン (Phase 1 着手 / WebRTC SFU は scope 外) |
 | `chatgpt` | ChatGPT | LLM streaming / context window 管理 / tool calling / 会話履歴の永続化と分岐 |
 | `cursor` | Cursor | コード補完 streaming / repository context window 管理 / agent edit loop / 差分適用 sandbox |
 | `notebooklm` | NotebookLM | マルチドキュメント取り込み / 埋め込み・ベクタ検索 / ノート単位権限 / 引用付き回答 |

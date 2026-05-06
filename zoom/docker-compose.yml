@@ -1,0 +1,44 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: zoom-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: zoom_development
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "3316:3306"
+    volumes:
+      - zoom-mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # backend / frontend / ai-worker は実装フェーズで Dockerfile 整備後に有効化する想定。
+  # それまではホスト側で `make zoom-backend` 等で起動する（Solid Queue は Rails 8 標準で同居）。
+  # backend:
+  #   build: ./backend
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3090:3000"
+  #   environment:
+  #     DATABASE_URL: mysql2://root:root@mysql:3306/zoom_development
+  # frontend:
+  #   build: ./frontend
+  #   depends_on: [backend]
+  #   ports:
+  #     - "3095:3000"
+  # ai-worker:
+  #   build: ./ai-worker
+  #   ports:
+  #     - "8080:8000"
+
+volumes:
+  zoom-mysql-data:
