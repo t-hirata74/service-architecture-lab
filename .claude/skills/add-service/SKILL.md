@@ -130,11 +130,11 @@ ai-worker / frontend は対応する場合のみ追加。**生成後、ユーザ
 
 ## root README.md 更新
 
-`README.md` のサービス一覧表（`## 想定プロジェクトとバックエンド言語` 配下、または既に着手済みプロジェクトを列挙している節）を読み、新サービスを **追記**する。既存行は変更しない。表が見つからない場合はユーザーに「どこに追記すべきか」を確認。
+`README.md` の `## 候補プロジェクト（検討中）` 表を読み、新サービスの行を `~~<service>~~ → 着手` に書き換える（既存表は CLAUDE.md と同期される運用）。`プロジェクト一覧` 表にも 1 行追加（ステータスは 🔴 Phase 1 設計フェーズ）。
 
 ## root CLAUDE.md の表も同様
 
-`CLAUDE.md` の「想定プロジェクトとバックエンド言語」表に行を追加。
+`CLAUDE.md` の「候補プロジェクト（検討中）」表で同じサービス行を着手済みに書き換える。CLAUDE.md と README は同期する方針 (CLAUDE.md ルール参照)。
 
 ## 完了後にユーザーに伝えること
 
@@ -144,6 +144,21 @@ ai-worker / frontend は対応する場合のみ追加。**生成後、ユーザ
   2. ADR 0001 の執筆（`docs/adr-template.md` をコピー）
   3. `docker-compose.yml` の Dockerfile 整備
 - ADR 候補 3 本のたたき台（学習テーマからの提案）
+
+## Phase 進行の運用 (CLAUDE.md ルール 6 と整合)
+
+スキャフォールド完了後の進行は概ね以下の Phase に分かれる。**Phase 番号と粒度は zoom で確立済**。ユーザに順序確認を取らず推奨順で進めて良い (CLAUDE.md ルール 6)。
+
+- **Phase 1**: スキャフォールド + ADR 0001-0003 執筆 + `docs/architecture.md` の見出し
+- **Phase 2**: backend 初期化 (rails new / django-admin / npx create-next-app / go mod init) + 主要 migration + DB セットアップ
+- **Phase 3**: Models / 状態機械 / Permission Resolver / Jobs (実装の核 + spec)
+- **Phase 4**:
+  - Phase 4-3: 認証 (rodauth / DRF auth / FastAPI auth など)
+  - Phase 4-1: Controllers / Routes / Request spec
+  - Phase 4-2: ai-worker (FastAPI) mock + 内部 ingress
+- **Phase 5**: CI 設定 (`.github/workflows/ci.yml` に backend / ai-worker / frontend / terraform ジョブ追加) → Frontend (Next.js) → E2E (Playwright + gif) → Terraform (本番想定設計図) の順を推奨
+
+順序は手戻り最小と「人が触れる API が早く立つ」体感のバランスで決める。設計の選択肢提示 (CLAUDE.md ルール 1) は守り、順序判断 (本ルール) はユーザに振らない。
 
 ## 注意
 
