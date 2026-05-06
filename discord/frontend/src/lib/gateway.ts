@@ -25,6 +25,7 @@ export type ReadyPayload = {
   user: { id: number; username: string };
   guild: { id: number; name: string };
   channels: { id: number; name: string }[];
+  presences: { user_id: number; username: string }[];
 };
 
 export type MessageCreatePayload = {

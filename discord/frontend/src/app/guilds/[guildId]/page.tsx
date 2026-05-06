@@ -73,9 +73,16 @@ function GuildPageInner({ guildId }: { guildId: number }) {
     if (!token) return;
 
     const handlers = {
-      onReady: (_d: ReadyPayload) => {
+      onReady: (d: ReadyPayload) => {
         // REST already populated channels with full metadata; READY is just
-        // the gateway ack here. Don't overwrite with the slimmer shape.
+        // the gateway ack for that. The presences array however is the
+        // authoritative seed for who is *currently* online (ADR 0003 snapshot
+        // on join) — late joiners must not wait for the next PRESENCE_UPDATE.
+        setPresences(() => {
+          const next = new Map<number, string>();
+          for (const p of d.presences ?? []) next.set(p.user_id, p.username);
+          return next;
+        });
       },
       onMessageCreate: (d: MessageCreatePayload) => {
         // Append only when it's the channel we're viewing

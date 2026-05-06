@@ -71,6 +71,21 @@ unregister → offline → broadcast PRESENCE_UPDATE(offline)
 
 state は `Hub.presences[user_id]` (Hub goroutine 専有) で持つ。1 user が同 guild に複数接続している場合 (multi-tab) は **接続数カウント**で状態を決める (count > 0 なら online)。
 
+### READY フレームに presence snapshot を載せる (join 時の初期同期)
+
+新しい client は WS 接続直後に、既に online な他メンバーを **即座に** 観測できる必要がある。後発の `PRESENCE_UPDATE` 配信を待つ実装だと「自分が join した後に状態変化が無いメンバー」は永久に online list に出ない。
+
+そこで Hub の register handler は次の 2 つを **同一の goroutine ステップで** 実行する:
+
+1. 既存 client へ `PRESENCE_UPDATE(online)` を fanout（既存通り）
+2. 現在の `presence` map から **自分以外** をスナップショット化し、register リクエストに付随する response channel に送り返す
+
+gateway は `RequestRegisterWithSnapshot()` を呼んで snapshot を受け取り、それを `READY.presences` に詰めて送信する。これにより以下の不変条件が成立する:
+
+- **ある時点で online だったメンバーは、新規接続者の READY で必ず観測できる**
+- snapshot の取得と client の clients map 追加は Hub goroutine 内で atomic（CSP / ADR 0002）
+- 自分自身は snapshot から除外する（READY.user で別途渡しているため）
+
 ## 検討した選択肢
 
 ### 1. app 層 HEARTBEAT + Hub 監視 ticker ← 採用

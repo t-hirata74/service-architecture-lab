@@ -113,6 +113,17 @@ cd ../playwright && npm test
 
 ---
 
+## E2E デモ (Playwright で録画)
+
+`cd discord/playwright && npm run capture` で再生成。alice / bob の 2 BrowserContext を `ffmpeg hstack` で side-by-side に並べた gif。仕組みは [docs/testing-strategy.md キャプチャ節](../docs/testing-strategy.md#キャプチャ-gif-を-readme-に埋め込む仕組み)。
+
+| # | シナリオ | キャプチャ |
+| --- | --- | --- |
+| 01 | WebSocket fan-out: alice / bob 別 context、片方の発言が WS 経由で相手に即時反映 / 双方向 / READY 時点で相手が online で見える (ADR 0003 snapshot) | ![websocket fanout](playwright/captures/01-websocket-fanout.gif) |
+| 02 | presence offline: 片タブ close で相手の online list から消える (ADR 0003 offline broadcast) | ![presence offline](playwright/captures/02-presence-offline-on-tab-close.gif) |
+
+---
+
 ## ステータス
 
 | コンポーネント | ステータス |

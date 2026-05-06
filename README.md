@@ -37,7 +37,7 @@
 | [`perplexity`](perplexity/README.md#e2e-デモ-playwright-で録画) | 2 | SSE streaming (12s trim) / 空クエリ validation |
 | [`instagram`](instagram/README.md#e2e-デモ-playwright-で録画) | 3 | self-timeline / **alice/bob hstack で fan-out on write** / like toggle |
 | [`reddit`](reddit/README.md#e2e-デモ-playwright-で録画) | 3 | anonymous 閲覧 / 認証フロー (post→vote→comment→reply) / ai-worker proxy |
-| `discord` | 0 (未生成) | Go backend で capture 用 mechanism は配置済みだが手元環境に Go なしで未実行 |
+| [`discord`](discord/README.md#e2e-デモ-playwright-で録画) | 2 | WebSocket fan-out (READY snapshot 込み) / presence offline、共に 2 BrowserContext hstack |
 
 ---
 

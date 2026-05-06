@@ -14,7 +14,7 @@ type Hub struct {
 	HeartbeatInterval time.Duration
 	Log               *slog.Logger
 
-	register   chan *Client
+	register   chan registerReq
 	unregister chan *Client
 	broadcast  chan []byte
 
@@ -28,6 +28,14 @@ type presenceEntry struct {
 	conns    int
 }
 
+// registerReq is queued onto Hub.register. snapshot, when non-nil, receives the
+// current presence list (excluding the registering user) atomically with the
+// register, so the new client can seed its READY frame without races.
+type registerReq struct {
+	client   *Client
+	snapshot chan []ReadyPresence
+}
+
 func NewHub(guildID int64, hbInterval time.Duration, log *slog.Logger) *Hub {
 	if hbInterval <= 0 {
 		hbInterval = 10 * time.Second
@@ -36,7 +44,7 @@ func NewHub(guildID int64, hbInterval time.Duration, log *slog.Logger) *Hub {
 		GuildID:           guildID,
 		HeartbeatInterval: hbInterval,
 		Log:               log,
-		register:          make(chan *Client, 16),
+		register:          make(chan registerReq, 16),
 		unregister:        make(chan *Client, 16),
 		broadcast:         make(chan []byte, 256),
 		clients:           make(map[*Client]struct{}),
@@ -44,12 +52,36 @@ func NewHub(guildID int64, hbInterval time.Duration, log *slog.Logger) *Hub {
 	}
 }
 
-// RequestRegister enqueues a register event for the Hub goroutine.
+// RequestRegister enqueues a register event without requesting a snapshot.
 // Returns false if the Hub queue is full or the Hub has stopped; the caller
 // should treat this as a failed handshake and close the client.
 func (h *Hub) RequestRegister(c *Client) bool {
+	return h.requestRegister(registerReq{client: c})
+}
+
+// RequestRegisterWithSnapshot registers c and waits for the current presence
+// snapshot (excluding c) to be returned atomically by the Hub goroutine. The
+// snapshot becomes the seed for the client's READY frame, so a late joiner
+// observes already-online peers (ADR 0003: presence snapshot on join).
+//
+// Returns (snapshot, true) on success, (nil, false) if the Hub queue is full
+// or the Hub does not respond within timeout (e.g. shutting down).
+func (h *Hub) RequestRegisterWithSnapshot(c *Client, timeout time.Duration) ([]ReadyPresence, bool) {
+	resp := make(chan []ReadyPresence, 1)
+	if !h.requestRegister(registerReq{client: c, snapshot: resp}) {
+		return nil, false
+	}
 	select {
-	case h.register <- c:
+	case snap := <-resp:
+		return snap, true
+	case <-time.After(timeout):
+		return nil, false
+	}
+}
+
+func (h *Hub) requestRegister(req registerReq) bool {
+	select {
+	case h.register <- req:
 		return true
 	default:
 		return false
@@ -100,10 +132,11 @@ func (h *Hub) Run(ctx context.Context) {
 			h.presence = nil
 			return
 
-		case c := <-h.register:
+		case req := <-h.register:
+			c := req.client
 			// Broadcast PRESENCE_UPDATE(online) to *existing* clients before
-			// adding c. The new client will get presence state via READY-side
-			// flows and doesn't need its own online event.
+			// adding c. The new client gets the current online set back via
+			// req.snapshot so its READY frame can seed presence atomically.
 			entry, ok := h.presence[c.UserID]
 			if !ok {
 				h.fanoutPresence(c.UserID, c.Username, "online")
@@ -112,6 +145,16 @@ func (h *Hub) Run(ctx context.Context) {
 				entry.conns++
 			}
 			h.clients[c] = struct{}{}
+			if req.snapshot != nil {
+				snap := make([]ReadyPresence, 0, len(h.presence))
+				for uid, e := range h.presence {
+					if uid == c.UserID {
+						continue
+					}
+					snap = append(snap, ReadyPresence{UserID: uid, Username: e.username})
+				}
+				req.snapshot <- snap
+			}
 
 		case c := <-h.unregister:
 			h.removeClient(c)

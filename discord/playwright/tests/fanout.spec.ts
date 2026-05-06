@@ -16,19 +16,21 @@ function captureCtxOpts(testInfo: TestInfo): { recordVideo?: { dir: string } } {
 
 async function register(page: Page, username: string, password: string) {
   await page.goto("/login");
-  await page.getByRole("button", { name: "register" }).click();
+  // mode toggle button (outside the form)
+  await page.locator('button:not([type="submit"])', { hasText: "register" }).click();
   await page.getByLabel("username").fill(username);
   await page.getByLabel("password").fill(password);
-  await page.getByRole("button", { name: "register" }).click();
+  // submit button (inside the form)
+  await page.locator('button[type="submit"]').click();
   await expect(page).toHaveURL("/", { timeout: 15_000 });
 }
 
 async function login(page: Page, username: string, password: string) {
   await page.goto("/login");
-  await page.getByRole("button", { name: "login" }).click();
+  await page.locator('button:not([type="submit"])', { hasText: "login" }).click();
   await page.getByLabel("username").fill(username);
   await page.getByLabel("password").fill(password);
-  await page.getByRole("button", { name: "login" }).click();
+  await page.locator('button[type="submit"]').click();
   await expect(page).toHaveURL("/", { timeout: 15_000 });
 }
 

@@ -194,3 +194,50 @@ func TestHubMultiTabPresence(t *testing.T) {
 		t.Errorf("expected 1 PRESENCE_UPDATE(offline) after last tab, got %d", got)
 	}
 }
+
+// A late joiner must observe peers that were already online — the snapshot is
+// returned synchronously by the Hub goroutine alongside register, so the
+// READY frame can seed presence without racing the next PRESENCE_UPDATE.
+func TestHubRegisterWithSnapshotReturnsExistingOnlineUsers(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	hub := NewHub(1, time.Second, discardLogger())
+	go hub.Run(ctx)
+
+	alice := fakeClient(hub, 10, "alice", 0)
+	if !hub.RequestRegister(alice) {
+		t.Fatal("alice register should not be full")
+	}
+	time.Sleep(20 * time.Millisecond)
+
+	bob := fakeClient(hub, 11, "bob", 0)
+	snap, ok := hub.RequestRegisterWithSnapshot(bob, time.Second)
+	if !ok {
+		t.Fatal("bob register-with-snapshot should succeed")
+	}
+	if len(snap) != 1 || snap[0].UserID != 10 || snap[0].Username != "alice" {
+		t.Fatalf("expected snapshot=[alice], got %+v", snap)
+	}
+	for _, p := range snap {
+		if p.UserID == bob.UserID {
+			t.Errorf("snapshot must exclude self, got %+v", p)
+		}
+	}
+}
+
+// The first member to join sees an empty snapshot — they are alone in the guild.
+func TestHubRegisterWithSnapshotEmptyForFirstMember(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	hub := NewHub(1, time.Second, discardLogger())
+	go hub.Run(ctx)
+
+	first := fakeClient(hub, 10, "alice", 0)
+	snap, ok := hub.RequestRegisterWithSnapshot(first, time.Second)
+	if !ok {
+		t.Fatal("register should succeed")
+	}
+	if len(snap) != 0 {
+		t.Errorf("expected empty snapshot for first member, got %+v", snap)
+	}
+}

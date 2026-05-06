@@ -146,23 +146,26 @@ func (s *Service) handshake(conn *websocket.Conn, user *store.User, originalToke
 	// Start writePump so READY can drain.
 	go client.WritePump()
 
-	// Enqueue READY *before* registering. The Hub register handler broadcasts
-	// PRESENCE_UPDATE(online) to existing clients (not c itself), so the new
-	// client's first frame after HELLO is always READY.
+	// Register first to obtain the current presence snapshot atomically. The
+	// Hub goroutine broadcasts PRESENCE_UPDATE(online) to existing clients and
+	// returns the set of users that were already online, so the new client's
+	// READY frame seeds presence without races.
+	snapshot, ok := hub.RequestRegisterWithSnapshot(client, 2*time.Second)
+	if !ok {
+		s.Log.Warn("hub register failed; closing connection",
+			slog.Int64("guild_id", id.GuildID), slog.Int64("user_id", user.ID))
+		client.Close()
+		return errors.New("hub register failed")
+	}
+
 	ready, err := MarshalFrame(OpDispatch, EventReady, ReadyData{
-		User:     ReadyUser{ID: user.ID, Username: user.Username},
-		Guild:    ReadyGuild{ID: guild.ID, Name: guild.Name},
-		Channels: rChannels,
+		User:      ReadyUser{ID: user.ID, Username: user.Username},
+		Guild:     ReadyGuild{ID: guild.ID, Name: guild.Name},
+		Channels:  rChannels,
+		Presences: snapshot,
 	})
 	if err == nil {
 		client.trySend(ready)
-	}
-
-	if !hub.RequestRegister(client) {
-		s.Log.Warn("hub register queue full; closing connection",
-			slog.Int64("guild_id", id.GuildID), slog.Int64("user_id", user.ID))
-		client.Close()
-		return errors.New("hub register queue full")
 	}
 
 	client.ReadPump() // blocks until disconnect

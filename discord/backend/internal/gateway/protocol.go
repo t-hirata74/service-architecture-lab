@@ -48,10 +48,16 @@ type ReadyChannel struct {
 	Name string `json:"name"`
 }
 
+type ReadyPresence struct {
+	UserID   int64  `json:"user_id"`
+	Username string `json:"username"`
+}
+
 type ReadyData struct {
-	User     ReadyUser      `json:"user"`
-	Guild    ReadyGuild     `json:"guild"`
-	Channels []ReadyChannel `json:"channels"`
+	User      ReadyUser       `json:"user"`
+	Guild     ReadyGuild      `json:"guild"`
+	Channels  []ReadyChannel  `json:"channels"`
+	Presences []ReadyPresence `json:"presences"`
 }
 
 type PresenceUpdateData struct {
