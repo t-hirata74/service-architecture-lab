@@ -10,7 +10,37 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_06_000008) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_06_100002) do
+  create_table "account_login_change_keys", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.datetime "deadline", null: false
+    t.string "key", null: false
+    t.string "login", null: false
+  end
+
+  create_table "account_password_reset_keys", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.datetime "deadline", null: false
+    t.datetime "email_last_sent", default: -> { "CURRENT_TIMESTAMP(6)" }, null: false
+    t.string "key", null: false
+  end
+
+  create_table "account_remember_keys", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.datetime "deadline", null: false
+    t.string "key", null: false
+  end
+
+  create_table "account_verification_keys", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.datetime "email_last_sent", default: -> { "CURRENT_TIMESTAMP(6)" }, null: false
+    t.string "key", null: false
+    t.datetime "requested_at", default: -> { "CURRENT_TIMESTAMP(6)" }, null: false
+  end
+
+  create_table "accounts", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
+    t.string "email", null: false
+    t.string "password_hash"
+    t.integer "status", default: 1, null: false
+    t.index ["email"], name: "index_accounts_on_email", unique: true
+  end
+
   create_table "host_transfers", charset: "utf8mb4", collation: "utf8mb4_unicode_ci", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "from_user_id", null: false
@@ -210,11 +240,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_000008) do
     t.datetime "created_at", null: false
     t.string "display_name", null: false
     t.string "email", null: false
-    t.string "password_digest", null: false
     t.datetime "updated_at", null: false
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
+  add_foreign_key "account_login_change_keys", "accounts", column: "id"
+  add_foreign_key "account_password_reset_keys", "accounts", column: "id"
+  add_foreign_key "account_remember_keys", "accounts", column: "id"
+  add_foreign_key "account_verification_keys", "accounts", column: "id"
   add_foreign_key "host_transfers", "meetings"
   add_foreign_key "host_transfers", "users", column: "from_user_id"
   add_foreign_key "host_transfers", "users", column: "to_user_id"
