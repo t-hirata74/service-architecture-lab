@@ -1306,3 +1306,18 @@ jobs:
           name: zoom-playwright-report
           path: zoom/playwright/playwright-report/
           retention-days: 7
+
+  zoom-terraform:
+    name: zoom / terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: zoom/infra/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
