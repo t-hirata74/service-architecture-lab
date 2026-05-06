@@ -50,4 +50,11 @@ Rails.application.configure do
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
+
+  # ApplicationJob.enqueue_after_transaction_commit = true は本番では正しいが、
+  # use_transactional_fixtures = true の RSpec では outermost transaction が rollback されるため
+  # after_commit callback が走らず perform_later が空振りする。test 環境ではバイパスする。
+  config.after_initialize do
+    ApplicationJob.enqueue_after_transaction_commit = false
+  end
 end

@@ -1,7 +1,7 @@
 class ApplicationJob < ActiveJob::Base
-  # Automatically retry jobs that encountered a deadlock
-  # retry_on ActiveRecord::Deadlocked
+  # ADR 0001 / 0003: トランザクション commit 後に enqueue。
+  # 状態遷移を含む transaction の途中で job が走り始めるのを防ぐ (orphan 化防止)。
+  self.enqueue_after_transaction_commit = true
 
-  # Most jobs are safe to ignore if the underlying records are no longer available
-  # discard_on ActiveJob::DeserializationError
+  retry_on ActiveRecord::Deadlocked
 end
