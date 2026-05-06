@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Header } from "@/components/Header";
 
 export const metadata: Metadata = {
   title: "Shopify (lab)",
@@ -9,13 +10,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ja" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">
-        <header className="border-b border-zinc-200 bg-white">
-          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <h1 className="font-semibold tracking-tight text-zinc-900">shopify-lab</h1>
-            <span className="text-xs text-zinc-500">storefront</span>
-          </div>
-        </header>
+      <body className="min-h-full flex flex-col bg-zinc-50">
+        <Header />
         <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">{children}</main>
       </body>
     </html>
