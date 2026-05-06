@@ -1145,3 +1145,61 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false -input=false
       - run: terraform validate
+
+  zoom-backend:
+    name: zoom / backend (Rails + RSpec)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: zoom_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: zoom/backend
+
+    env:
+      RAILS_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3.1"
+          bundler-cache: true
+          working-directory: zoom/backend
+      - name: DB create + migrate
+        run: bundle exec rails db:create db:migrate
+      - name: RSpec (state machine + permission resolver + jobs + auth + meetings request)
+        run: bundle exec rspec
+
+  zoom-ai-worker:
+    name: zoom / ai-worker (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: zoom/ai-worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: zoom/ai-worker/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Pytest (deterministic /summarize mock + Bearer auth)
+        run: pytest -q
