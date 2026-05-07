@@ -6,7 +6,8 @@
 
 ## 技術スタック
 
-- Rails 8 (API mode) / Ruby 3.3
+- Rails 8 (API mode)
+- Ruby: **新規プロジェクトは Ruby 4 系で開始**、既存プロジェクト (slack / youtube / github / perplexity / shopify / zoom) は **Ruby 3.3.1 据え置き**。理由は [policy `Ruby バージョン方針` 節](../service-architecture-lab-policy.md#ruby-バージョン方針)。新規で Namespace / YJIT 強化等のナレッジを溜め、既存への波及は段階的に判断する
 - DB: MySQL 8 / Cache & Queue: solid_cache + solid_queue（DB-backed）
 - リアルタイム: ActionCable + Redis Pub/Sub adapter
 - 認証: rodauth-rails + JWT (cookie / session を使わない)

@@ -186,6 +186,36 @@ service-architecture-lab/
 
 ---
 
+## Ruby バージョン方針
+
+<a id="ruby-バージョン方針"></a>
+
+Ruby 4.0 (2025-12 リリース) と Ruby 3.3.1 系の二本立てで運用する。
+
+### 方針
+
+- **新規 Rails プロジェクトは Ruby 4 系で開始する** — Namespace / YJIT 強化を題材として ADR に残せる
+- **既存 6 プロジェクト** (slack / youtube / github / perplexity / shopify / zoom) は **Ruby 3.3.1 据え置き** — 動作中の RSpec / Playwright / pytest 群を壊すリスクを取らない
+- **波及判断は新規での蓄積後**に行う — 新規プロジェクトで gem 互換性 (rodauth-rails / solid_queue / packwerk / graphql-ruby 等) を実地検証し、安定したと判断できた段階で既存プロジェクトを段階的に移行する
+
+### なぜ一括 upgrade しないか
+
+- 本リポの主旨は **「各サービスのアーキテクチャ学習」**であり、Ruby のバージョンアップ検証ではない
+- 一括 upgrade は 6 サービスのリグレッションテスト全件 + gem 互換調整のコストが学習主旨を逸脱する
+- Python / Go プロジェクトでも言語バージョンは揃えていない (Django=3.12 / FastAPI=3.13 / Go=最新) ので、リポの慣行と一貫する
+
+### 移行の発火条件 (将来判断)
+
+新規プロジェクト 1〜2 個を Ruby 4 で完成させた段階で以下を確認:
+
+1. 主要 gem (rodauth-rails / solid_queue / packwerk / graphql-ruby / pundit) の Ruby 4 対応が安定版に取り込まれているか
+2. Rails 8.x の Ruby 4 対応が実質完成しているか
+3. 既存プロジェクトの ADR / 動作確認に upgrade コストが見合うか (見合わない場合は据え置き継続)
+
+満たせば既存プロジェクトに展開する派生 ADR を起こす。満たさないなら継続据え置きで支障なし。
+
+---
+
 ## インフラ設計（任意）
 
 Terraform で以下を定義する（**実行はしない**）：VPC、ECS/Lambda、RDS、ElastiCache、S3、SQS、CloudFront、ALB、IAM、CloudWatch。
