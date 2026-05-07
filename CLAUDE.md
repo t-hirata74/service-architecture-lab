@@ -76,7 +76,7 @@ service-architecture-lab/
 | AI Coding Agent | 未定 | LLM tool use ループ / sandbox 隔離 / agent state machine |
 | AI Workflow 自動化 | 未定 | trigger→action DAG / connector プラグイン / 冪等性 |
 | AI カスタマーサポート | 未定 | KB の RAG 検索 / human-in-the-loop / エスカレーション |
-| `calendly` | 未定 | 期間 overlap / `EXCLUDE` 排他制約 / RRULE 展開 / timezone 永続化 |
+| ~~`calendly`~~ → 着手 | Rails 8 / **Ruby 4** | 期間 overlap / MySQL における `EXCLUDE` 代替 / RRULE 展開 / timezone 永続化 |
 | `pagerduty` | 未定 | incident escalation state machine / alert dedup (fingerprint + TTL) / on-call rotation |
 | `dropbox` | 未定 | content-defined chunking / delta sync / version graph / conflict resolution |
 | `freee` | 未定 | 複式簿記の不変条件 (借方 = 貸方) / 仕訳 ledger append-only / 期末締め state machine / 逆仕訳パターン |

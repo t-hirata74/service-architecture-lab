@@ -1,0 +1,22 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: calendly_development
+    ports:
+      - "3326:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - calendly_mysql:/var/lib/mysql
+
+# backend / frontend / ai-worker は実装フェーズで Dockerfile を整備して追加する。
+# ローカル開発はホスト側 (rbenv / nvm / pyenv) で動かし、compose は MySQL のみ起動するのが
+# zoom / shopify と同じ運用 (本番想定の Dockerfile は infra/terraform 側で参照される)。
+
+volumes:
+  calendly_mysql:

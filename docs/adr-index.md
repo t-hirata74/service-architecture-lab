@@ -4,7 +4,7 @@
 
 ADR は「コードからは読めない設計判断の理由」を残すための文書で、書式は [`adr-template.md`](adr-template.md) に従う。本リポでは各サービス最低 3 本を完成基準にしている（[完成の定義](service-architecture-lab-policy.md)）。
 
-**累計: 43 本 / 10 サービス**
+**累計: 46 本 / 11 サービス**
 
 ---
 
@@ -33,6 +33,8 @@ WebSocket / SSE / polling / fan-out 構造の選定。
 | [reddit/0002](../reddit/docs/adr/0002-vote-integrity.md) | reddit | 投票の整合性と score の denormalize（truth + 相対加算 + reconcile） |
 | [slack/0002](../slack/docs/adr/0002-message-persistence-and-read-tracking.md) | slack | メッセージ永続化と既読管理の整合性モデル |
 | [zoom/0001](../zoom/docs/adr/0001-meeting-lifecycle-state-machine.md) | zoom | 会議ライフサイクルの状態機械（ENUM + `with_lock` + 結果テーブル UNIQUE で多層冪等） |
+| [calendly/0001](../calendly/docs/adr/0001-availability-merge-algorithm.md) | calendly | availability merge — 都度 SQL 集合演算 + 閉開区間統一 |
+| [calendly/0002](../calendly/docs/adr/0002-booking-race-mysql-exclude-alternative.md) | calendly | 同時予約レース防止 — MySQL における `EXCLUDE` 排他制約代替 |
 
 ### 1.3 認可モデル
 
@@ -56,6 +58,14 @@ WebSocket / SSE / polling / fan-out 構造の選定。
 | [reddit/0004](../reddit/docs/adr/0004-async-stack-fastapi.md) | reddit | FastAPI + HS256 JWT（async スタック選定と同梱） |
 | [instagram/0004](../instagram/docs/adr/0004-auth-drf-token.md) | instagram | DRF TokenAuthentication（1 経路） |
 | [discord/0004](../discord/docs/adr/0004-auth-jwt-bearer.md) | discord | JWT bearer / WebSocket query param |
+
+### 1.4.x 時刻 / カレンダー / RRULE
+
+iCalendar 互換 RRULE / timezone 永続化 / DST 跨ぎ。
+
+| ADR | サービス | タイトル |
+| --- | --- | --- |
+| [calendly/0003](../calendly/docs/adr/0003-rrule-expansion-and-timezone.md) | calendly | RRULE 展開と timezone 永続化（壁時計 + tz_id / lazy 展開 / DST 跨ぎは壁時計連続性） |
 
 ### 1.5 データモデル
 
@@ -236,6 +246,14 @@ DB 選定 / オブジェクトストレージのモック戦略。
 1. [0001 会議ライフサイクルの状態機械](../zoom/docs/adr/0001-meeting-lifecycle-state-machine.md)
 2. [0002 ホスト・共同ホスト権限と動的譲渡](../zoom/docs/adr/0002-host-permission-and-dynamic-transfer.md)
 3. [0003 録画→要約 at-least-once パイプライン](../zoom/docs/adr/0003-recording-summary-pipeline.md)
+
+### calendly — Calendly 風日程調整 (Rails 8 + Ruby 4 / 設計フェーズ)
+
+主要技術課題: availability merge / 同時予約レース防止 (MySQL における `EXCLUDE` 代替) / RRULE 展開 + timezone 永続化。本リポ初の Ruby 4 採用プロジェクト。
+
+1. [0001 availability merge アルゴリズム](../calendly/docs/adr/0001-availability-merge-algorithm.md)
+2. [0002 同時予約レース防止 — MySQL における EXCLUDE 代替](../calendly/docs/adr/0002-booking-race-mysql-exclude-alternative.md)
+3. [0003 RRULE 展開と timezone 永続化](../calendly/docs/adr/0003-rrule-expansion-and-timezone.md)
 
 ---
 
