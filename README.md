@@ -216,6 +216,9 @@ LLM・AI エージェントを横断的に学ぶための案。
 | `freee` | freee / マネーフォワード | **複式簿記の不変条件 (借方 = 貸方)** / 仕訳 ledger は append-only / 期末締め state machine / 帳票生成 / 「変更は逆仕訳で表現する」原則 |
 | `mercari` | メルカリ | C2C 取引 state machine (出品→購入→入金→発送→受取→評価) / **escrow** (代金を運営側で保留 → 受取確認後にリリース) / 検索ランキング / 出品制限 |
 | `timee` | タイミー | **時刻オフセット付きマッチング** (来週 9-13 時のシフト割当) / **当日キャンセル時の再アサイン** / 勤怠打刻 + 給与計算 / 評価ループ |
+| `airflow` | Apache Airflow / Prefect / Dagster | **DAG 表現 + 依存解決** / scheduler + worker 分離 / **タスク間データ受け渡し (XCom)** / 冪等性 + リトライ戦略 / sensor (Python 候補) |
+| `datadog` | Datadog / Honeycomb | 高基数 (high-cardinality) イベント ingestion / 列指向 time-series 集計 / **alert rule engine** / cardinality 制御 / span/trace 親子関係 (Python 候補) |
+| `deepl` | DeepL / Grammarly | **文書構造を壊さない翻訳/校正パイプライン** (Markdown / HTML 維持) / 翻訳メモリ (TM) キャッシュ / **glossary 強制** / 段落並列処理 (Python 候補) |
 
 ### 候補同士の組み合わせ・棲み分け
 
@@ -232,6 +235,9 @@ LLM・AI エージェントを横断的に学ぶための案。
 - **`freee`** は **複式簿記の不変条件** が他のドメインで絶対に出てこない題材。`zoom` の append-only 監査 + `shopify` の ledger と合流して **「金額 + 不変条件 + ledger」三位一体** になる。会計知識ゼロから始めても借方 = 貸方の制約を押さえれば設計できる
 - **`mercari`** の **escrow** (購入金を運営側で保留 → 受取確認後にリリース) は `stripe` 候補と相補的で、`shopify` (在庫減算) とも違う **「第三者保留 state machine」** 軸。発送通知 / 受取評価 / 期限切れ自動完了など取引フローの分岐が題材として豊富
 - **`timee`** は `uber` 配車の **「時間オフセット版」**。即時マッチングではなく「事前予約された労働時間に人を割当て、当日キャンセル時に再アサインする」という **時刻制約付きマッチング + キャンセル耐性** が新規論点。`calendly` との対比で「予約 vs 労働マッチング」も成立
+- **`airflow`** は本リポの **「ワークフロー orchestration 軸」** が完全に欠けている領域を埋める。`AI Workflow` (ユーザー向け trigger→action) とは違い「**運用者がコードで書く DAG**」が中心。reddit の APScheduler を発展させた形で、Python のデコレータ + dynamic class が DAG 定義に活きる
+- **`datadog`** は `reddit` の Hot ランキングを数桁スケールアップした **「OLAP 風観測」** 軸。`mixpanel` (前候補に追加未) と近接だが「**alert rule engine**」が datadog 固有の論点。実運用で必ず見るので学習効率も高い
+- **`deepl`** は `perplexity` (検索 + 引用) や `notebooklm` (multi-doc RAG) と完全に別軸の **「入出力 1:1 の文書変換」**。「**文書構造を壊さない**」「**翻訳メモリのキャッシュヒット率**」「**glossary 強制**」という制約が独自
 
 ---
 

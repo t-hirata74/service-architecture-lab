@@ -82,6 +82,9 @@ service-architecture-lab/
 | `freee` | 未定 | 複式簿記の不変条件 (借方 = 貸方) / 仕訳 ledger append-only / 期末締め state machine / 逆仕訳パターン |
 | `mercari` | 未定 | C2C 取引 state machine / escrow (代金保留 → 受取確認後リリース) / 検索ランキング |
 | `timee` | 未定 | 時刻オフセット付きマッチング / 当日キャンセル再アサイン / 勤怠打刻 + 給与計算 |
+| `airflow` | **Python** | DAG 表現 + 依存解決 / scheduler + worker 分離 / XCom (タスク間データ受け渡し) / sensor / 冪等性 + リトライ |
+| `datadog` | **Python** | 高基数イベント ingestion / 列指向 time-series 集計 / alert rule engine / cardinality 制御 |
+| `deepl` | **Python** | 文書構造を壊さない翻訳パイプライン / 翻訳メモリ (TM) キャッシュ / glossary 強制 / 段落並列処理 |
 
 機能詳細・ai-worker 役割・棲み分けは [README 候補プロジェクト節](README.md#候補プロジェクト検討中) と policy。LLM 本体は方針どおり **ローカル完結・モック可**（実 SDK 不使用）。
 
