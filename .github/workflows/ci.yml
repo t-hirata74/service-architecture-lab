@@ -1404,3 +1404,85 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+
+  calendly-playwright:
+    name: calendly / playwright (E2E booking flow + 409 conflict)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: calendly_development
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+      RAILS_ENV: development
+      INTERNAL_INGRESS_TOKEN: dev-internal-token
+      AI_WORKER_URL: http://127.0.0.1:8090
+      NEXT_PUBLIC_API_BASE: http://127.0.0.1:3100
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.3"
+          bundler-cache: true
+          working-directory: calendly/backend
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: calendly/ai-worker/requirements.txt
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            calendly/frontend/package-lock.json
+            calendly/playwright/package-lock.json
+
+      - name: Backend DB prepare (multi-db)
+        working-directory: calendly/backend
+        run: bundle exec rails db:prepare
+
+      - name: ai-worker install
+        working-directory: calendly/ai-worker
+        run: pip install -r requirements.txt
+
+      - name: Frontend install + build (production for hydration race 回避)
+        working-directory: calendly/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Playwright install (chromium)
+        working-directory: calendly/playwright
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright (Rails + ai-worker + Next start を webServer で起動)
+        working-directory: calendly/playwright
+        run: npx playwright test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendly-playwright-report
+          path: calendly/playwright/playwright-report/
+          retention-days: 7
