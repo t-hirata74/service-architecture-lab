@@ -35,6 +35,7 @@ gem "rack-cors"
 
 # 認証 (rodauth-rails JWT bearer / perplexity / shopify / zoom と同形)
 gem "rodauth-rails"
+gem "jwt"  # rodauth `:jwt` feature の依存
 
 # 認可 (PermissionResolver + Pundit policy の 2 層 / github / zoom と同形)
 gem "pundit"
@@ -59,3 +60,9 @@ group :development, :test do
   gem "rspec-rails", "~> 8.0"
   gem "factory_bot_rails"
 end
+# Enables Sequel to use Active Record's database connection
+gem "sequel-activerecord_connection", "~> 2.0", require: false
+# Used by Rodauth for password hashing
+gem "bcrypt", "~> 3.1", require: false
+# Used by Rodauth for rendering built-in view and email templates
+gem "tilt", "~> 2.4", require: false
