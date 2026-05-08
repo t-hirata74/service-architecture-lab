@@ -1384,3 +1384,23 @@ jobs:
         run: pip install -r requirements.txt
       - name: Pytest (deterministic /recommend_slots mock + Bearer auth)
         run: pytest -q
+
+  calendly-frontend:
+    name: calendly / frontend (Next.js 16 typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: calendly/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: calendly/frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
