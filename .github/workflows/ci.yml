@@ -1321,3 +1321,66 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false -input=false
       - run: terraform validate
+
+  # ============================================================================
+  # calendly (本リポ初の Ruby 4 採用 / Phase 5-1 で追加)
+  # ============================================================================
+
+  calendly-backend:
+    name: calendly / backend (Rails 8 + Ruby 4 + RSpec)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: calendly_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: calendly/backend
+
+    env:
+      RAILS_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.3"
+          bundler-cache: true
+          working-directory: calendly/backend
+      # multi-db (primary / cache / queue / cable) を一括で作成 + schema 適用
+      - name: DB prepare (multi-db, loads queue/cache/cable schemas)
+        run: bundle exec rails db:prepare
+      - name: RSpec (Models + Service + Resolver/Policy + Job + Auth + REST request)
+        run: bundle exec rspec
+
+  calendly-ai-worker:
+    name: calendly / ai-worker (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: calendly/ai-worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: calendly/ai-worker/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Pytest (deterministic /recommend_slots mock + Bearer auth)
+        run: pytest -q
