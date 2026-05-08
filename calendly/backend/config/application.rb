@@ -41,8 +41,11 @@ module Backend
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
 
-    # ADR 0002: 全環境で Solid Queue を採用 (DB-backed at-least-once)。
+    # ADR 0002: dev / production で Solid Queue を採用 (DB-backed at-least-once)。
     # Rails 再起動でジョブが消えない (`:async` を使わない方針) / shopify / zoom と同形。
+    # test 環境は environments/test.rb で `:test` adapter に上書きする (unit test の決定性確保)。
     config.active_job.queue_adapter = :solid_queue
+    # Solid Queue の永続化先を queue DB に分離する (multi-db 構成と整合)。
+    config.solid_queue.connects_to = { database: { writing: :queue } }
   end
 end

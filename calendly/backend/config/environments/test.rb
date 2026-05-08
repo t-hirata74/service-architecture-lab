@@ -50,4 +50,10 @@ Rails.application.configure do
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true
+
+  # ActiveJob の `:test` adapter は perform_later をキューに積むだけで実行せず、
+  # perform_now は inline 実行する。SolidQueue の DB 依存 (calendly_test_queue) を
+  # unit test から切り離せる。integration test で実 enqueue を見たい時は
+  # use_transactional_fixtures: false + :solid_queue にローカルで切替えれば良い。
+  config.active_job.queue_adapter = :test
 end

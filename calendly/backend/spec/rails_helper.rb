@@ -65,6 +65,9 @@ RSpec.configure do |config|
   # To enable this behaviour uncomment the line below.
   # config.infer_spec_type_from_file_location!
 
+  # FactoryBot 短縮形 (`create(:host)` 等) を全 spec で使えるように。
+  config.include FactoryBot::Syntax::Methods
+
   # Filter lines from Rails gems in backtraces.
   config.filter_rails_from_backtrace!
   # arbitrary gems may also be filtered via:
