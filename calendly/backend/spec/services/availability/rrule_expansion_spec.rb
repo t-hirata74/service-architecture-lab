@@ -59,6 +59,33 @@ RSpec.describe Availability::RruleExpansion do
     end
   end
 
+  describe "DST 跨ぎ — America/New_York 秋の切替 fallback (review fix I-E-1)" do
+    let(:rule) do
+      create(:availability_rule,
+             host: host,
+             rrule: "FREQ=WEEKLY;BYDAY=WE",
+             start_time_of_day: "14:00:00",
+             end_time_of_day:   "15:00:00",
+             tz_id: "America/New_York")
+    end
+
+    it "壁時計 14:00 が 秋 DST 跨ぎ前後でも維持される (UTC offset は EDT→EST に動く)" do
+      # 2026 年 米国 DST 終了は 11/1 (Sun) 02:00 EDT → 01:00 EST。
+      # 10/28 (Wed) は EDT = UTC-4 → 14:00 EDT = 18:00 UTC
+      # 11/4 (Wed) は EST = UTC-5 → 14:00 EST = 19:00 UTC
+      from = Time.utc(2026, 10, 25, 0, 0)
+      to   = Time.utc(2026, 11, 8, 0, 0)
+      result = described_class.new(rule).expand(from, to)
+      expect(result.size).to eq(2)
+
+      oct28 = result[0]
+      nov4  = result[1]
+      expect(oct28[0]).to eq(Time.utc(2026, 10, 28, 18, 0)) # 14:00 EDT
+      expect(nov4[0]).to eq(Time.utc(2026, 11, 4, 19, 0))   # 14:00 EST
+      # 壁時計は両方 14:00。秋切替で UTC offset は -4 → -5 に増えるが、壁時計は連続。
+    end
+  end
+
   describe "rejects unsupported FREQ" do
     let(:rule) do
       AvailabilityRule.new(host: host, rrule: "FREQ=DAILY",

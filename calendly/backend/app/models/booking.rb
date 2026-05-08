@@ -11,7 +11,7 @@ class Booking < ApplicationRecord
 
   validates :start_at, :end_at, :invitee_email, :invitee_tz_id, presence: true
   validates :status, inclusion: { in: STATUSES }
-  validates :invitee_tz_id, inclusion: { in: ->(_) { ActiveSupport::TimeZone::MAPPING.values } }
+  validate :invitee_tz_id_must_be_resolvable
   validate :start_before_end
 
   STATUSES.each do |s|
@@ -41,5 +41,10 @@ class Booking < ApplicationRecord
   def start_before_end
     return if start_at.nil? || end_at.nil?
     errors.add(:end_at, "must be after start_at") if end_at <= start_at
+  end
+
+  def invitee_tz_id_must_be_resolvable
+    return if invitee_tz_id.blank?
+    errors.add(:invitee_tz_id, "must be IANA tz id or Rails friendly tz name") if ActiveSupport::TimeZone[invitee_tz_id].nil?
   end
 end

@@ -69,5 +69,15 @@ RSpec.describe "EventTypes API", type: :request do
       get "/event_types/#{et.id}/slots", params: { from: "2026-05-31T15:00:00Z", to: "2026-06-01T15:00:00Z" }
       expect(response).to have_http_status(:not_found)
     end
+
+    # review fix C-A-2 / M-D-3: silent fallback ではなく 422 + errors 配列で集約する
+    it "returns 422 collecting multiple errors (invalid from / invalid tz)" do
+      get "/event_types/#{et.id}/slots", params: { from: "BOGUS", to: "2026-06-01T15:00:00Z", tz: "Mars/Olympus" }
+      expect(response).to have_http_status(:unprocessable_entity)
+      body = JSON.parse(response.body)
+      expect(body["error"]).to eq("invalid_param")
+      params = body["errors"].map { |e| e["param"] }
+      expect(params).to include("from", "tz")
+    end
   end
 end

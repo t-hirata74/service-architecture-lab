@@ -44,6 +44,27 @@ RSpec.describe "Bookings API", type: :request do
            headers: { "Content-Type" => "application/json" }
       expect(response).to have_http_status(:not_found)
     end
+
+    # review fix I-E-3: invitee からの不正入力を controller 層で 422 で弾けるか
+    it "returns 422 with invalid_param for non-ISO8601 start_at (review fix C-A-1)" do
+      post "/bookings",
+           params: { event_type_id: event_type.id, start_at: "2026-99-99",
+                     invitee_email: "guest@example.com", invitee_tz_id: "UTC" }.to_json,
+           headers: { "Content-Type" => "application/json" }
+      expect(response).to have_http_status(:unprocessable_entity)
+      body = JSON.parse(response.body)
+      expect(body["error"]).to eq("invalid_param")
+      expect(body["param"]).to eq("start_at")
+    end
+
+    it "returns 422 with invalid_param for unknown invitee_tz_id" do
+      post "/bookings",
+           params: { event_type_id: event_type.id, start_at: "2026-06-01T09:00:00Z",
+                     invitee_email: "guest@example.com", invitee_tz_id: "Mars/Olympus" }.to_json,
+           headers: { "Content-Type" => "application/json" }
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["param"]).to eq("invitee_tz_id")
+    end
   end
 
   describe "GET /bookings (host)" do

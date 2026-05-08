@@ -11,17 +11,14 @@ class HostPermissionResolver
     @record = record
   end
 
-  # event_type / availability_rule / busy_period / booking が host のものか
+  # event_type / availability_rule / busy_period / booking が host のものか。
+  # review fix M-D-1: case 文の型判定 → duck typing (`respond_to?(:host_id)`) に変更。
+  # 新規 host-scoped リソース追加時に Resolver の更新が不要になる。
   def owner?
     return false if @host.nil?
-    case @record
-    when EventType, AvailabilityRule, BusyPeriod, Booking
-      @record.host_id == @host.id
-    when Host
-      @record.id == @host.id
-    else
-      false
-    end
+    return @record.id == @host.id if @record.is_a?(Host)
+    return @record.host_id == @host.id if @record.respond_to?(:host_id)
+    false
   end
 
   # 公開 event_type は誰でも slot 取得 / 予約可能

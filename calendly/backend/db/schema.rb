@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_08_054052) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_08_074433) do
   create_table "account_login_change_keys", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.datetime "deadline", null: false
     t.string "key", null: false
@@ -83,6 +83,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_08_054052) do
     t.string "source", default: "manual", null: false
     t.datetime "start_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["host_id", "external_id"], name: "index_busy_periods_on_host_external_unique", unique: true
     t.index ["host_id", "start_at", "end_at"], name: "index_busy_periods_on_host_id_and_start_at_and_end_at"
     t.index ["host_id"], name: "index_busy_periods_on_host_id"
     t.check_constraint "`start_at` < `end_at`", name: "busy_periods_start_before_end"

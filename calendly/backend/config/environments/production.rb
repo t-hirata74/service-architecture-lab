@@ -84,4 +84,12 @@ Rails.application.configure do
   #
   # Skip DNS rebinding protection for the default health check endpoint.
   # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+
+  # review fix I-B-2: production では JWT 署名鍵 / 内部 ingress トークンを必須にする。
+  # 未設定だと Rails.application.secret_key_base にフォールバックされ、Rails master key で
+  # JWT が sign されてしまう (運用で master key を rotate しづらくなる) ので boot 時に raise する。
+  config.after_initialize do
+    raise "RODAUTH_JWT_SECRET must be set in production" if ENV["RODAUTH_JWT_SECRET"].blank?
+    raise "INTERNAL_INGRESS_TOKEN must be set in production" if ENV["INTERNAL_INGRESS_TOKEN"].blank?
+  end
 end

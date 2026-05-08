@@ -5,20 +5,28 @@ RSpec.describe BookingNotificationJob do
 
   it 'logs 2 notifications on "created" event (host + invitee)' do
     expect(Rails.logger).to receive(:info)
-      .with(/\[BookingNotificationJob\].*New booking from/).once
+      .with(/\[BookingNotificationJob\].*subject="\[mock\] new_booking"/).once
     expect(Rails.logger).to receive(:info)
-      .with(/\[BookingNotificationJob\].*Your booking is confirmed/).once
+      .with(/\[BookingNotificationJob\].*subject="\[mock\] booking_confirmed"/).once
     allow(Rails.logger).to receive(:info).and_call_original
     described_class.perform_now(booking.id, "created")
   end
 
   it 'logs 2 notifications on "cancelled" event' do
     expect(Rails.logger).to receive(:info)
-      .with(/\[BookingNotificationJob\].*cancelled by/).once
-    expect(Rails.logger).to receive(:info)
-      .with(/\[BookingNotificationJob\].*has been cancelled/).once
+      .with(/\[BookingNotificationJob\].*subject="\[mock\] booking_cancelled"/).twice
     allow(Rails.logger).to receive(:info).and_call_original
     described_class.perform_now(booking.id, "cancelled")
+  end
+
+  it "does not include raw email in log output (PII hash review fix I-B-1)" do
+    captured = []
+    allow(Rails.logger).to receive(:info) { |msg| captured << msg.to_s }
+    described_class.perform_now(booking.id, "created")
+    expect(captured.join("\n")).not_to include(booking.invitee_email)
+    expect(captured.join("\n")).not_to include(booking.host.email)
+    # 代わりに recipient_hash がある
+    expect(captured.join("\n")).to match(/recipient_hash=[0-9a-f]{8}/)
   end
 
   it "is idempotent on missing booking_id (deleted booking)" do

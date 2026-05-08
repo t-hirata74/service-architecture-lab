@@ -20,32 +20,39 @@ RSpec.describe Bookings::CreateService, "concurrent INSERT", use_transactional_f
     Host.delete_all
   end
 
-  it "100 並行 thread のうち 1 件だけが confirmed、残り 99 件は BookingConflict" do
-    threads = []
-    successes = Concurrent::AtomicFixnum.new(0)
-    conflicts = Concurrent::AtomicFixnum.new(0)
-    barrier = Concurrent::CyclicBarrier.new(100)
+  # review fix I-E-2: 1 回だけだとスケジューラ偶然で race が起きない false positive 可能性。
+  # 5 回繰り返して常に「1 件成立 + 99 件 conflict」が成り立つことを fixate する。
+  it "100 並行 thread × 5 ラウンド: 各ラウンドで 1 件だけ confirmed、残り 99 件は BookingConflict" do
+    5.times do |round|
+      Booking.where(host_id: host.id).delete_all
+      slot = Time.utc(2026, 6, 1, 9, 0) + round.hours
 
-    100.times do |i|
-      threads << Thread.new do
-        barrier.wait
-        Bookings::CreateService.new(
-          event_type: event_type,
-          start_at: Time.utc(2026, 6, 1, 9, 0),
-          invitee_email: "invitee#{i}@example.com",
-          invitee_tz_id: "Asia/Tokyo"
-        ).call
-        successes.increment
-      rescue Bookings::CreateService::BookingConflict
-        conflicts.increment
-      ensure
-        ActiveRecord::Base.connection_pool.release_connection
+      threads = []
+      successes = Concurrent::AtomicFixnum.new(0)
+      conflicts = Concurrent::AtomicFixnum.new(0)
+      barrier = Concurrent::CyclicBarrier.new(100)
+
+      100.times do |i|
+        threads << Thread.new do
+          barrier.wait
+          Bookings::CreateService.new(
+            event_type: event_type,
+            start_at: slot,
+            invitee_email: "round#{round}-invitee#{i}@example.com",
+            invitee_tz_id: "Asia/Tokyo"
+          ).call
+          successes.increment
+        rescue Bookings::CreateService::BookingConflict
+          conflicts.increment
+        ensure
+          ActiveRecord::Base.connection_pool.release_connection
+        end
       end
-    end
-    threads.each(&:join)
+      threads.each(&:join)
 
-    expect(successes.value).to eq(1)
-    expect(conflicts.value).to eq(99)
-    expect(Booking.where(host_id: host.id, status: "confirmed").count).to eq(1)
+      expect(successes.value).to eq(1), "round #{round}: successes=#{successes.value}"
+      expect(conflicts.value).to eq(99), "round #{round}: conflicts=#{conflicts.value}"
+      expect(Booking.where(host_id: host.id, status: "confirmed").count).to eq(1)
+    end
   end
 end

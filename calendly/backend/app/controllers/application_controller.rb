@@ -3,6 +3,20 @@ class ApplicationController < ActionController::API
 
   class Unauthorized < StandardError; end
 
+  # ホスト / invitee の public 入力で 422 を返すための共通エラー (review fix C-A-1 / C-A-2)。
+  class InvalidParam < StandardError
+    attr_reader :param
+    def initialize(param, msg = nil)
+      @param = param
+      super(msg || "invalid parameter: #{param}")
+    end
+  end
+
+  rescue_from InvalidParam do |e|
+    render json: { error: "invalid_param", param: e.param.to_s, message: e.message },
+           status: :unprocessable_entity
+  end
+
   rescue_from Unauthorized do |_e|
     render json: { error: "unauthorized" }, status: :unauthorized
   end
@@ -39,6 +53,21 @@ class ApplicationController < ActionController::API
 
   def authenticate_host!
     current_host
+  end
+
+  protected
+
+  # ISO8601 文字列を Time にパース。失敗は 422 (review fix C-A-1)。
+  def parse_iso8601!(str, param)
+    Time.iso8601(str)
+  rescue ArgumentError
+    raise InvalidParam.new(param, "must be ISO8601 datetime")
+  end
+
+  # IANA tz id / Rails friendly tz name のどちらかを受け入れる (model 側と同形)。
+  # ActiveSupport::TimeZone[] は両方を解釈し、不正なら nil を返す。
+  def valid_tz_id?(tz)
+    ActiveSupport::TimeZone[tz].present?
   end
 
   private

@@ -18,12 +18,16 @@ class BookingsController < ApplicationController
     et = EventType.find(params.require(:event_type_id))
     raise ActiveRecord::RecordNotFound unless et.active?
 
+    start_at = parse_iso8601!(params.require(:start_at), :start_at)
+    tz_id = params.require(:invitee_tz_id)
+    raise InvalidParam.new(:invitee_tz_id, "must be IANA tz id") unless valid_tz_id?(tz_id)
+
     booking = Bookings::CreateService.new(
       event_type: et,
-      start_at: Time.iso8601(params.require(:start_at)),
+      start_at: start_at,
       invitee_email: params.require(:invitee_email),
       invitee_name:  params[:invitee_name],
-      invitee_tz_id: params.require(:invitee_tz_id)
+      invitee_tz_id: tz_id
     ).call
 
     render json: booking_json(booking), status: :created

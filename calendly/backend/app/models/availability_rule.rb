@@ -7,7 +7,8 @@ class AvailabilityRule < ApplicationRecord
 
   validates :rrule, presence: true
   validates :start_time_of_day, :end_time_of_day, presence: true
-  validates :tz_id, presence: true, inclusion: { in: ->(_) { ActiveSupport::TimeZone::MAPPING.values } }
+  validates :tz_id, presence: true
+  validate :tz_id_must_be_resolvable
 
   validate :end_after_start
   validate :rrule_supported
@@ -23,6 +24,11 @@ class AvailabilityRule < ApplicationRecord
     if end_time_of_day <= start_time_of_day
       errors.add(:end_time_of_day, "must be after start_time_of_day")
     end
+  end
+
+  def tz_id_must_be_resolvable
+    return if tz_id.blank?
+    errors.add(:tz_id, "must be IANA tz id or Rails friendly tz name") if ActiveSupport::TimeZone[tz_id].nil?
   end
 
   def rrule_supported

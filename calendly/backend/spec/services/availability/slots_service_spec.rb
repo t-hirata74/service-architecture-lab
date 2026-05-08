@@ -87,6 +87,20 @@ RSpec.describe Availability::SlotsService do
     end
   end
 
+  # review fix I-C-4: host-global rule (event_type_id=NULL) と event_type 固有 rule の併存挙動を fixate。
+  describe "host-global rule と event_type 固有 rule の併用" do
+    it "host-global と event_type 固有が重なる時間帯は merge して重複 slot を生まない" do
+      # host-global は同じ MO-FR 09:00-17:00 (factory のデフォルト)
+      # event_type 固有として MO-FR 09:00-12:00 (短縮) を追加
+      create(:availability_rule, host: host, event_type: event_type,
+             rrule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+             start_time_of_day: "09:00:00", end_time_of_day: "12:00:00", tz_id: "Asia/Tokyo")
+      slots = described_class.new(event_type: event_type, from: mon_window_from, to: mon_window_to, now: fixed_now).call
+      # global 09-17 と event 09-12 の合算 = 09-17 のまま (merge_overlapping)。slot 数は 8 で変わらない。
+      expect(slots.size).to eq(8)
+    end
+  end
+
   describe "隣接予約は OK (closed-open ADR 0001)" do
     it "allows back-to-back slots without overlap" do
       create(:booking, host: host, event_type: event_type,
