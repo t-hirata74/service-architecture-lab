@@ -15,6 +15,25 @@
 - 静的解析: brakeman（CI で実行）
 - テスト: **RSpec (rspec-rails) + FactoryBot**（共通方針）。詳細は [`docs/testing-strategy.md`](../testing-strategy.md)
 
+### Ruby 4 採用の実地検証 (calendly が初検証 / 2026-05)
+
+calendly が本リポ初の Ruby 4.0.3 採用プロジェクト。policy 「Ruby バージョン方針」の発火条件を評価するための材料を残す:
+
+- **環境構築**: `brew upgrade ruby-build`(20260503+) → `rbenv install 4.0.3` で 10-20 分の compile。ruby-build が 2025-02 版だと 4.x が listing に出ない
+- **Rails 8.1.3** で問題なく動作。`config.load_defaults 8.1` をそのまま使える
+- **gem 互換性 (calendly で確認済)**:
+  - `rodauth-rails` 2.1+ / `rodauth` 2.43+ — JWT bearer 含めて互換性 OK
+  - `solid_queue` / `solid_cache` / `solid_cable` — multi-db 構成 + `connects_to` 含めて OK
+  - `pundit` — 2 層認可 (Resolver + Policy) OK
+  - `factory_bot_rails` / `rspec-rails` 8.0 — OK
+  - `httpx` (内部 ingress 用) — OK
+  - `mysql2` 0.5+ — OK
+- **互換性のために特殊な hack は不要**。既存 (Ruby 3.3.1) コードをほぼそのまま動かせる
+- **`+PRISM`** (Ruby 4 のデフォルトパーサ) でも parse 周りで問題なし
+- **CI**: `ruby/setup-ruby@v1` の `ruby-version: "4.0.3"` で取得可能
+
+**判定**: 既存 6 サービス (slack / youtube / github / perplexity / shopify / zoom) を Ruby 4 に上げる障壁は技術的にはほぼない。ただし「**学習主旨と移行コストの見合い**」という policy 発火条件 3 番に照らすと、**現時点では据え置き継続が妥当**。新規プロジェクトを 1-2 個追加して継続検証してから判断する。
+
 ---
 
 ## Lint / Style
@@ -40,7 +59,8 @@
 - `only_json? true`、`require_password_confirmation? false`（confirm はクライアント側）
 - `account` (rodauth が管理) と `user` (アプリのドメイン) はテーブル分離。`account.id == user.id` を `after_create_account` フックで揃える
 - パスワードは min 8 / max 72 bytes（OWASP 準拠）
-- JWT secret は `Rails.application.secret_key_base` から取得
+- JWT secret は `RODAUTH_JWT_SECRET` env を読み、未設定時は `Rails.application.secret_key_base` にフォールバック。**production env では未設定なら boot 時 raise** する (calendly review fix I-B-2)
+- 関連 model 同期 (User / Host) は `after_create_account` で行い、その逆方向 (model.email 変更時に Account.email 反映) は **`after_save :sync_email_to_account, if: :saved_change_to_email?`** を model 側に置く (calendly review fix I-C-1)。両 UNIQUE が drift しない
 
 ---
 
@@ -51,6 +71,35 @@
 - **シリアライザ gem は導入しない**。controller 内に `serialize_message` のようなプライベートメソッドを書く（学習プロジェクトでは見通しが優先）
 - ページネーションは **cursor 方式**（`before` パラメータ + limit cap）。offset は使わない
 - エラーは `rescue_from` または個別 `rescue` で `render json: { error: ... }, status: :xxx`
+- public エンドポイント (invitee / 未認証ユーザーが叩く) では **入力検証を 422 で明示的に弾く**。`Time.iso8601` などの素朴 parse は ArgumentError → 500 になるので必ず `rescue` する。silent fallback (= デフォルト値で続行) は UX が悪いので **避ける**
+- 共通例外で 422 を統一する idiom (calendly):
+
+  ```ruby
+  # ApplicationController
+  class InvalidParam < StandardError
+    attr_reader :param
+    def initialize(param, msg = nil)
+      @param = param
+      super(msg || "invalid parameter: #{param}")
+    end
+  end
+  rescue_from InvalidParam do |e|
+    render json: { error: "invalid_param", param: e.param.to_s, message: e.message },
+           status: :unprocessable_entity
+  end
+
+  protected
+  def parse_iso8601!(str, param)
+    Time.iso8601(str)
+  rescue ArgumentError
+    raise InvalidParam.new(param, "must be ISO8601 datetime")
+  end
+  def valid_tz_id?(tz)
+    ActiveSupport::TimeZone[tz].present?  # IANA id / friendly name 両受け
+  end
+  ```
+
+  複数フィールドを一度に検証したい場合 (例: `from` + `to` + `tz`) は **errors 配列に集約** して 1 回の 422 で返す。同じ意味でも 422 を 2 回返すと invitee UI の retry ループが煩雑になる
 
 例:
 ```ruby

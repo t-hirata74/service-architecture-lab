@@ -132,6 +132,68 @@ WebMock.disable_net_connect!(allow_localhost: true)
 `stub_request(:post, "#{base}/...")` を明示する。詳細は
 [`coding-rules/rails.md`](coding-rules/rails.md) の「ai-worker 境界（共通方針）」を参照。
 
+#### DB CHECK 制約 と アプリ層 enum 定数の整合を `information_schema` 経由で守る (calendly)
+
+「`STATUSES = %w[pending confirmed cancelled completed]`」のようなアプリ層定数と
+「`add_check_constraint :bookings, "status IN (...)"`」の DB 側 CHECK 制約を**両方持つ**
+場合、片方を変えてもう片方を忘れる罠がある。spec で DB の CHECK_CLAUSE を
+読み取り、アプリ層定数と完全一致を assert する **single source of truth ガード spec** を置く:
+
+```ruby
+RSpec.describe "Booking status — STATUSES と CHECK 制約の整合" do
+  it "DB の bookings_status_enum CHECK 制約が STATUSES と完全一致する" do
+    row = Booking.connection.exec_query(<<~SQL.squish).first
+      SELECT CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS
+      WHERE CONSTRAINT_NAME = 'bookings_status_enum'
+    SQL
+    # MySQL は `_utf8mb4\'pending\'` のように quote をエスケープして返す
+    in_args = row["CHECK_CLAUSE"][/in \((.+)\)/, 1].to_s
+    db_values = in_args.scan(/\\'([a-z_]+)\\'/).flatten.uniq.sort
+    expect(db_values).to eq(Booking::STATUSES.sort)
+  end
+
+  it "不正な status を直接 INSERT すると ActiveRecord::StatementInvalid" do
+    expect {
+      Booking.connection.execute(
+        "INSERT INTO bookings (..., status, ...) VALUES (..., 'BOGUS', ...)"
+      )
+    }.to raise_error(ActiveRecord::StatementInvalid)
+  end
+end
+```
+
+ポイント:
+- MySQL の `information_schema.CHECK_CONSTRAINTS` は SQL で取れる。PostgreSQL は `pg_constraint`
+- MySQL の CHECK_CLAUSE は `_utf8mb4\'pending\'` 形式 (charset prefix + escaped quote) なので、
+  正規表現で `\\'(...)\\'` から値を抽出する
+- アプリ層 validation 側 spec とは別に、**直接 SQL INSERT で bypass** して DB 制約が効くことも fixate する
+
+shopify §19 の `stock_movements` ledger / zoom §22 の `host_transfers` でも応用できる。
+
+#### multi-db (`primary` / `cache` / `queue` / `cable`) で test 環境のみ ActiveJob を `:test` adapter に切替 (calendly)
+
+Rails 8 の `solid_queue` / `solid_cache` / `solid_cable` を multi-db で別 schema に分離して使う場合、
+test 環境では `connects_to = { database: { writing: :queue } }` だけだと spec が
+`<service>_test_queue` の存在に依存してしまう。**unit test の決定性を確保するため、test 環境のみ
+`:test` adapter に切替えて enqueue を mock する**:
+
+```ruby
+# config/application.rb
+config.active_job.queue_adapter = :solid_queue
+config.solid_queue.connects_to = { database: { writing: :queue } }
+
+# config/environments/test.rb
+# unit test では `:test` adapter で enqueue を queue array に積むだけ。perform_now は inline で実行される。
+config.active_job.queue_adapter = :test
+```
+
+代償: ジョブの**永続化を含む**統合テストはこの設定では試せない。実 enqueue を見たい時は
+spec ごとに `use_transactional_fixtures: false` + ローカルだけ `:solid_queue` に切替で対応。
+calendly では Playwright E2E 側で `SOLID_QUEUE_IN_PUMA=1` で実 Queue を回しているのでカバー範囲は十分。
+
+zoom (single-db) と calendly (multi-db) の差: zoom は SolidQueue tables が primary DB に同居している
+ので test 環境で adapter 切替不要。**multi-db を採用するときだけ test adapter 切替が必要**になる。
+
 ### OpenAPI 契約検証
 
 REST + OpenAPI を採用するプロジェクト（slack / youtube）では、request spec が

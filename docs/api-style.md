@@ -230,6 +230,155 @@ scope 不足は **403 Forbidden** + `{ error: "missing_scope", scope: "read_orde
 
 ---
 
+## 自社プロダクト認証: rodauth-rails JWT bearer + shared PK (perplexity / shopify / zoom / calendly で 4 連続採用)
+
+slack ADR 0004 で初導入後、**perplexity / shopify / zoom / calendly が同形を踏襲**して安定化したパターン。4 サービス × 各 ADR で十分検証された自社向け認証方式として共通化する。
+
+### 規律 1: JWT のみ enable / cookie や session は使わない
+
+```ruby
+# app/misc/rodauth_main.rb
+class RodauthMain < Rodauth::Rails::Auth
+  configure do
+    enable :create_account, :login, :logout, :json, :jwt, :change_password, :close_account
+
+    only_json? true
+    require_password_confirmation? false
+    require_login_confirmation? false
+
+    login_param "email"
+    password_minimum_length 8
+    password_maximum_bytes 72
+
+    jwt_secret { ENV.fetch("RODAUTH_JWT_SECRET", Rails.application.secret_key_base) }
+  end
+end
+```
+
+- `:remember` (cookie 系) は JSON-only / SPA 構成と相性が悪いので **enable しない**。生成時に `app/misc/rodauth_app.rb` の `r.load_memory` も削除する
+- `only_json? true` で view を持たず、エラーは JSON 200 + body 内 `{"field-error": ...}` で返る (rodauth の挙動)
+- パスワードは min 8 / max 72 bytes (OWASP 準拠)
+- production env では `RODAUTH_JWT_SECRET` 未設定時に boot raise する規律 (calendly review fix I-B-2)。Rails master key へのフォールバックは dev/test のみ許容
+
+### 規律 2: `accounts` (rodauth) と ドメイン model (User / Host / Shop) は **shared PK で 1:1**
+
+```ruby
+# rodauth_main.rb
+before_create_account do
+  display_name = param_or_nil("display_name")
+  throw_error_status(422, "display_name", "display_name required") if display_name.blank?
+  @display_name_for_user = display_name
+end
+
+after_create_account do
+  account_record = Account.find(account_id)
+  account_record.update!(status: "verified")  # メール検証スキップ (ローカル完結方針)
+  User.create!(id: account_id, email: account[:email], display_name: @display_name_for_user)
+end
+```
+
+- `accounts.id == users.id` で関連付け (zoom: User / shopify: Shop / calendly: Host も同形)
+- model 側は `belongs_to :account, foreign_key: :id, primary_key: :id, optional: true`
+- メール検証 (`verify_account` feature) は **本リポでは無効化**: ローカル完結方針 + 学習目的では SMTP 不要
+
+### 規律 3: ApplicationController の `current_*` は **rodauth.session_value** から引く
+
+```ruby
+# app/controllers/application_controller.rb
+class ApplicationController < ActionController::API
+  include Pundit::Authorization
+
+  class Unauthorized < StandardError; end
+  rescue_from Unauthorized do
+    render json: { error: "unauthorized" }, status: :unauthorized
+  end
+
+  def current_user
+    @current_user ||= find_current_user!
+  end
+  alias_method :authenticate_user!, :current_user  # before_action :authenticate_user! 用
+
+  private
+
+  def find_current_user!
+    account_id = rodauth.session_value
+    raise Unauthorized, "invalid or expired JWT" if account_id.nil?
+    User.find_by(id: account_id) || raise(Unauthorized, "user not provisioned")
+  end
+end
+```
+
+- `rodauth.session_value` が JWT 検証 + account_id 取得を担う
+- Pundit の `current_user` 規約に合わせて alias 公開 (calendly では `current_host` を主役にして `current_user` を alias)
+
+### 規律 4: ドメイン model の email 変更は Account 側にも同期 (calendly review fix I-C-1)
+
+`accounts.email` UNIQUE と `<domain_model>.email` UNIQUE が並列で存在する設計のため、**ドメイン model 側で email を update した時に drift する** リスクがある:
+
+```ruby
+# app/models/host.rb (or User.rb)
+after_save :sync_email_to_account, if: :saved_change_to_email?
+
+private
+
+def sync_email_to_account
+  return unless account
+  account.update_columns(email: email) unless account.email == email
+end
+```
+
+- `update_columns` で validation/callback をスキップ (account の他の callback を起こさない)
+- 逆方向 (Account 側から email を変更する) はそもそも rodauth の `change_login` 経由で行われるはず — そこに到達するなら別途 sync が必要
+
+### 規律 5: frontend は `Authorization` レスポンスヘッダから JWT を取り出して localStorage 保持
+
+```typescript
+// frontend/src/lib/api.ts
+export async function login(email: string, password: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error(`login failed (${res.status})`);
+  const token = res.headers.get("Authorization");  // rodauth-jwt が素の JWT を返す
+  if (!token) throw new Error("no Authorization header");
+  setToken(token);
+  return token;
+}
+```
+
+- rodauth-jwt は `Authorization: <token>` (Bearer 接頭辞なし) で返すので、そのまま `localStorage.setItem(...)` し、次回リクエストで `Authorization: Bearer <token>` として送る
+- backend 側の CORS は `expose: %w[Authorization]` を必ず付ける (これを忘れると frontend がヘッダを読めない)
+
+### 規律 6: signup も同じ Authorization ヘッダ経由で auto-login する
+
+```typescript
+export async function signup(email: string, password: string, name: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/create-account`, { ... });
+  const token = res.headers.get("Authorization");  // signup → そのままログイン状態に
+  setToken(token);
+  return token;
+}
+```
+
+これで「signup → そのままダッシュボードへ遷移」が 1 リクエストで成立する (UX 改善)。
+
+### 4 サービスでの差分 (テンプレを使い回せる範囲)
+
+| サービス | ドメイン model | 必須カスタム param |
+| --- | --- | --- |
+| `perplexity` | User | display_name |
+| `shopify` | Shop (multi-tenant) | shop_name + subdomain |
+| `zoom` | User | display_name |
+| `calendly` | Host | name + default_tz_id |
+
+`before_create_account` で必須 param を `throw_error_status(422, ...)`、`after_create_account` で domain model を shared PK で `create!` するパターンが完全に揃う。**新規 Rails プロジェクトはこの 6 規律を起点にコピーで開始可能**。
+
+詳細実装: perplexity ADR 0007 / shopify ADR 0004 (Apps API も同形 Bearer) / zoom Phase 4-3 / calendly Phase 4-3。
+
+---
+
 ## 現時点の宿題
 
 - `slack/backend` と `youtube/backend` の OpenAPI 契約検証は導入済み (e94df38)
