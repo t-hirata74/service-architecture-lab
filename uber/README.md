@@ -10,7 +10,7 @@ slack / youtube / github / perplexity / instagram / discord / reddit / shopify /
 
 ## 見どころハイライト
 
-> 🔴 **Phase 1 設計フェーズ**: ADR 0001-0003 起こし中、実装は未着手
+> 🟡 **Phase 2 完了**: backend skeleton (chi / `/healthz` / graceful shutdown) + migrations (users / drivers / trips / trip_events) + H3 wrapper + state machine 純粋関数 + 単体テスト。matcher / WS / auth / frontend / ai-worker は Phase 3 以降。
 
 - **H3 cell-index で近傍ドライバを O(1) 探索** — S2 / Geohash / MySQL Spatial Index を却下、H3 採用 ([ADR 0001](docs/adr/0001-geospatial-index-h3.md))
 - **二者間 trip state machine** — `requested → matching → driver_accepted → arriving → arrived → in_trip → completed | canceled` の trip と `offline / idle / matched / en_route_pickup / on_trip` の driver を併走、`UPDATE ... WHERE status = ?` の compare-and-set でドライバ二重取得を防ぐ ([ADR 0002](docs/adr/0002-trip-dispatch-state-machine.md))
@@ -95,25 +95,52 @@ Redis は **不使用**。matcher は in-memory channel で十分 (ADR 0003)。
 
 ## ローカル起動
 
-> 🔴 Phase 1 ではまだ実装が無いので docker compose / go run / npm run dev のいずれも 立ち上がりません。Phase 2 で `go mod init` + 主要 migration が入り次第更新。
+> 🟡 Phase 2 完了: backend (Go) の `go mod init` / migrations / `/healthz` まで実装。
+> frontend / ai-worker / matcher 実装 / WS は Phase 3 以降。
 
 ```sh
-# Phase 2 以降に更新予定
-docker compose up -d mysql
-cd backend && go run ./cmd/dispatch
-cd ai-worker && uvicorn app.main:app --port 8100
-cd frontend && npm run dev
+# 1. MySQL 起動 (host port 3327)
+make uber-deps-up
+
+# 2. migrations 適用 (schema_migrations 経由で冪等)
+make uber-migrate
+
+# 3. backend 起動 (:3110 / /healthz のみ)
+make uber-backend
+
+# 4. テスト (go test -race ./...)
+make uber-backend-test
 ```
+
+backend は CGO ありの `uber/h3-go/v4` を利用する。docker 経由で `golang:1.24` image を使う場合は同 image に gcc が同梱されているのでそのまま `go build ./...` が通る。
+
+## 構成 (Phase 2 時点)
+
+```text
+uber/backend/
+├── go.mod
+├── migrations/
+│   └── 001_init.up.sql            # users / drivers / trips / trip_events (ADR 0001/0002 に対応)
+├── cmd/
+│   ├── dispatch/main.go           # サーバ起動 (chi + /healthz + graceful shutdown)
+│   └── migrate/main.go            # schema_migrations を使った冪等な migrate runner
+└── internal/
+    ├── config/                    # env 読み込み (DATABASE_URL / JWT_SECRET / H3_RESOLUTION)
+    ├── store/                     # Store{DB *sql.DB}, User/Driver/Trip/TripEvent 型 (CRUD は Phase 3)
+    ├── geo/                       # H3 wrapper (Encode / KRing) + unit test
+    └── dispatch/                  # TripStatus / DriverStatus + Transitions + IsValidTransition + test
+```
+
+frontend / ai-worker / playwright は Phase 3 以降で `.gitkeep` を置き換えていく。
 
 ---
 
-## 初期化コマンド (Phase 2 で実行予定)
+## 初期化コマンド (Phase 3 以降で実行予定)
 
-<!-- このセクションは初期化が終わったら削除する -->
+<!-- 初期化が終わったら削除する -->
 
-- `cd uber/backend && go mod init github.com/t-hirata74/service-architecture-lab/uber/backend`
 - `cd uber/frontend && npx create-next-app@latest . --typescript --tailwind --app --eslint --no-src-dir --import-alias '@/*'`
-- `cd uber/ai-worker && python -m venv .venv && .venv/bin/pip install fastapi uvicorn pydantic h3`
+- `cd uber/ai-worker && python -m venv .venv && .venv/bin/pip install fastapi uvicorn pydantic`
 - `cd uber/playwright && npm init -y && npm install -D @playwright/test`
 
 ---

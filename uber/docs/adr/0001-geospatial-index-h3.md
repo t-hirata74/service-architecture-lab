@@ -37,7 +37,7 @@ resolution 9 を採用する根拠: Uber の公式資料でも近距離マッチ
 
 - 利点: **六角形は隣接 cell が 6 個固定** で「角の歪み」が無い (geohash の 8 隣接 + 角度依存の歪みを避けられる)
 - 利点: `KRing(cell, k)` で **k-ring 展開が距離単調**。「2 リング = だいたい 350m 圏」のような直感が効く
-- 利点: Uber 公式ライブラリ (h3-go v4) が **MIT で公開済み**、CGO なし pure Go バインディングあり (v4 から)
+- 利点: Uber 公式ライブラリ (h3-go v4) が **Apache 2.0 で公開済み**。CGO バインディングだが `golang:1.24` の標準 docker image には gcc が同梱されているため CI 追加コストは無視できる
 - 利点: 実プロダクション (Uber, Foursquare, lyft) で実績、学習素材として最良
 - 欠点: `uber/h3-go` 依存追加 (これは新規依存だが、policy 上「外部 SaaS / マネージドサービス」ではなくただの Go library なので追加可)
 
