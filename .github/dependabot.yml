@@ -1,26 +1,39 @@
 # 各サービスの依存関係を集約して Dependabot で更新追従する。
 # 個別 .github/dependabot.yml は持たず、ルートに集約する。
+#
+# 配線方針:
+#   - 全サービス (slack / youtube / github / perplexity / instagram /
+#     discord / reddit / shopify / zoom / calendly) に同一の 5 軸
+#     (backend / frontend / playwright / ai-worker / infra/terraform) を配線。
+#   - backend の package-ecosystem はサービスごとに異なる:
+#       Rails 系 (slack / youtube / github / perplexity / shopify / zoom / calendly)
+#         → bundler
+#       Django (instagram) / FastAPI (reddit) → pip
+#       Go (discord) → gomod
+#   - frontend の Next.js 関連は `next` group で 1 PR に集約。
+#   - patch + minor は .github/workflows/dependabot-auto-merge.yml で自動 merge。
+#     major は手動 review。
 version: 2
 updates:
-  # ==== GitHub Actions ====
+  # ==== GitHub Actions (共通) ====
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "ci"]
 
   # ==== slack ====
   - package-ecosystem: bundler
     directory: /slack/backend
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "slack/backend"]
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
     directory: /slack/frontend
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "slack/frontend"]
     open-pull-requests-limit: 5
     groups:
@@ -33,33 +46,33 @@ updates:
   - package-ecosystem: npm
     directory: /slack/playwright
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "slack/playwright"]
 
   - package-ecosystem: pip
     directory: /slack/ai-worker
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "slack/ai-worker"]
 
   - package-ecosystem: terraform
     directory: /slack/infra/terraform
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "slack/infra"]
 
   # ==== youtube ====
   - package-ecosystem: bundler
     directory: /youtube/backend
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "youtube/backend"]
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
     directory: /youtube/frontend
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "youtube/frontend"]
     open-pull-requests-limit: 5
     groups:
@@ -72,17 +85,329 @@ updates:
   - package-ecosystem: npm
     directory: /youtube/playwright
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "youtube/playwright"]
 
   - package-ecosystem: pip
     directory: /youtube/ai-worker
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "youtube/ai-worker"]
 
   - package-ecosystem: terraform
     directory: /youtube/infra/terraform
     schedule:
-      interval: weekly
+      interval: daily
     labels: ["deps", "youtube/infra"]
+
+  # ==== github ====
+  - package-ecosystem: bundler
+    directory: /github/backend
+    schedule:
+      interval: daily
+    labels: ["deps", "github/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /github/frontend
+    schedule:
+      interval: daily
+    labels: ["deps", "github/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /github/playwright
+    schedule:
+      interval: daily
+    labels: ["deps", "github/playwright"]
+
+  - package-ecosystem: pip
+    directory: /github/ai-worker
+    schedule:
+      interval: daily
+    labels: ["deps", "github/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /github/infra/terraform
+    schedule:
+      interval: daily
+    labels: ["deps", "github/infra"]
+
+  # ==== perplexity ====
+  - package-ecosystem: bundler
+    directory: /perplexity/backend
+    schedule:
+      interval: daily
+    labels: ["deps", "perplexity/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /perplexity/frontend
+    schedule:
+      interval: daily
+    labels: ["deps", "perplexity/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /perplexity/playwright
+    schedule:
+      interval: daily
+    labels: ["deps", "perplexity/playwright"]
+
+  - package-ecosystem: pip
+    directory: /perplexity/ai-worker
+    schedule:
+      interval: daily
+    labels: ["deps", "perplexity/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /perplexity/infra/terraform
+    schedule:
+      interval: daily
+    labels: ["deps", "perplexity/infra"]
+
+  # ==== instagram (Django/DRF) ====
+  - package-ecosystem: pip
+    directory: /instagram/backend
+    schedule:
+      interval: daily
+    labels: ["deps", "instagram/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /instagram/frontend
+    schedule:
+      interval: daily
+    labels: ["deps", "instagram/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /instagram/playwright
+    schedule:
+      interval: daily
+    labels: ["deps", "instagram/playwright"]
+
+  - package-ecosystem: pip
+    directory: /instagram/ai-worker
+    schedule:
+      interval: daily
+    labels: ["deps", "instagram/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /instagram/infra/terraform
+    schedule:
+      interval: daily
+    labels: ["deps", "instagram/infra"]
+
+  # ==== discord (Go) ====
+  - package-ecosystem: gomod
+    directory: /discord/backend
+    schedule:
+      interval: daily
+    labels: ["deps", "discord/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /discord/frontend
+    schedule:
+      interval: daily
+    labels: ["deps", "discord/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /discord/playwright
+    schedule:
+      interval: daily
+    labels: ["deps", "discord/playwright"]
+
+  - package-ecosystem: pip
+    directory: /discord/ai-worker
+    schedule:
+      interval: daily
+    labels: ["deps", "discord/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /discord/infra/terraform
+    schedule:
+      interval: daily
+    labels: ["deps", "discord/infra"]
+
+  # ==== reddit (FastAPI) ====
+  - package-ecosystem: pip
+    directory: /reddit/backend
+    schedule:
+      interval: daily
+    labels: ["deps", "reddit/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /reddit/frontend
+    schedule:
+      interval: daily
+    labels: ["deps", "reddit/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /reddit/playwright
+    schedule:
+      interval: daily
+    labels: ["deps", "reddit/playwright"]
+
+  - package-ecosystem: pip
+    directory: /reddit/ai-worker
+    schedule:
+      interval: daily
+    labels: ["deps", "reddit/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /reddit/infra/terraform
+    schedule:
+      interval: daily
+    labels: ["deps", "reddit/infra"]
+
+  # ==== shopify ====
+  - package-ecosystem: bundler
+    directory: /shopify/backend
+    schedule:
+      interval: daily
+    labels: ["deps", "shopify/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /shopify/frontend
+    schedule:
+      interval: daily
+    labels: ["deps", "shopify/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /shopify/playwright
+    schedule:
+      interval: daily
+    labels: ["deps", "shopify/playwright"]
+
+  - package-ecosystem: pip
+    directory: /shopify/ai-worker
+    schedule:
+      interval: daily
+    labels: ["deps", "shopify/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /shopify/infra/terraform
+    schedule:
+      interval: daily
+    labels: ["deps", "shopify/infra"]
+
+  # ==== zoom ====
+  - package-ecosystem: bundler
+    directory: /zoom/backend
+    schedule:
+      interval: daily
+    labels: ["deps", "zoom/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /zoom/frontend
+    schedule:
+      interval: daily
+    labels: ["deps", "zoom/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /zoom/playwright
+    schedule:
+      interval: daily
+    labels: ["deps", "zoom/playwright"]
+
+  - package-ecosystem: pip
+    directory: /zoom/ai-worker
+    schedule:
+      interval: daily
+    labels: ["deps", "zoom/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /zoom/infra/terraform
+    schedule:
+      interval: daily
+    labels: ["deps", "zoom/infra"]
+
+  # ==== calendly ====
+  - package-ecosystem: bundler
+    directory: /calendly/backend
+    schedule:
+      interval: daily
+    labels: ["deps", "calendly/backend"]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directory: /calendly/frontend
+    schedule:
+      interval: daily
+    labels: ["deps", "calendly/frontend"]
+    open-pull-requests-limit: 5
+    groups:
+      next:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@types/react*"
+
+  - package-ecosystem: npm
+    directory: /calendly/playwright
+    schedule:
+      interval: daily
+    labels: ["deps", "calendly/playwright"]
+
+  - package-ecosystem: pip
+    directory: /calendly/ai-worker
+    schedule:
+      interval: daily
+    labels: ["deps", "calendly/ai-worker"]
+
+  - package-ecosystem: terraform
+    directory: /calendly/infra/terraform
+    schedule:
+      interval: daily
+    labels: ["deps", "calendly/infra"]
