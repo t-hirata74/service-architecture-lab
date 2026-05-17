@@ -10,7 +10,7 @@ slack / youtube / github / perplexity / instagram / discord / reddit / shopify /
 
 ## 見どころハイライト
 
-> 🟡 **Phase 4-3 完了**: auth (HS256 JWT + bcrypt) + REST register/login/me + role claim (rider/driver)。driver 登録時は `drivers` 行も自動作成。8 integration test pass (MySQL 実機)。WS / trip controllers / ai-worker は Phase 4-1 / 4-2 以降。
+> 🟢 **Phase 4-1 完了 / MVP 動作**: trip REST (POST/GET/cancel) + driver WS gateway (go_online / position / accept / reject) + matcher 配線。E2E 統合テスト (MySQL 実機) で **rider POST /trips → driver WS offer → accept → driver_accepted** の完全フローが 4 秒で通過。Phase 4-2 (ai-worker) と Phase 5 (frontend / Playwright / Terraform / CI) は残り。
 
 - **H3 cell-index で近傍ドライバを O(1) 探索** — S2 / Geohash / MySQL Spatial Index を却下、H3 採用 ([ADR 0001](docs/adr/0001-geospatial-index-h3.md))
 - **二者間 trip state machine** — `requested → matching → driver_accepted → arriving → arrived → in_trip → completed | canceled` の trip と `offline / idle / matched / en_route_pickup / on_trip` の driver を併走、`UPDATE ... WHERE status = ?` の compare-and-set でドライバ二重取得を防ぐ ([ADR 0002](docs/adr/0002-trip-dispatch-state-machine.md))

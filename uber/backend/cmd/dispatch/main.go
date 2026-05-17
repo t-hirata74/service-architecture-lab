@@ -1,5 +1,5 @@
-// Package main は uber backend のエントリポイント (Phase 2 スケルトン)。
-// Phase 2 では DB 接続 + /healthz だけ。matcher / WS / auth は Phase 3 以降。
+// Package main は uber backend のエントリポイント。
+// Phase 4-1 で REST trip endpoints + WS gateway + matcher 配線まで載っている。
 package main
 
 import (
@@ -20,7 +20,9 @@ import (
 
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/api"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/config"
+	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/dispatch"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/store"
+	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/ws"
 )
 
 func main() {
@@ -45,7 +47,22 @@ func main() {
 	defer db.Close()
 
 	st := &store.Store{DB: db}
+
+	// matcher 配線 (ADR 0003)
+	matcherCtx, matcherCancel := context.WithCancel(context.Background())
+	defer matcherCancel()
+	acceptor := &dispatch.StoreAcceptor{Store: st}
+	registry := dispatch.NewCellRegistry(matcherCtx, dispatch.DefaultMatcherConfig(), log, acceptor)
+
 	h := api.NewHandler(log, st, []byte(cfg.JWTSecret))
+	h.Registry = registry
+	h.H3Resolution = cfg.H3Resolution
+
+	gw := &ws.Service{
+		Log: log, Store: st, JWTSecret: []byte(cfg.JWTSecret),
+		Registry: registry, H3Resolution: cfg.H3Resolution,
+		AllowedOrigins: []string{"http://localhost:3115"},
+	}
 
 	root := chi.NewRouter()
 	root.Use(middleware.RealIP)
@@ -57,6 +74,9 @@ func main() {
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		AllowCredentials: true,
 	}))
+
+	// /ws は long-lived なので middleware.Timeout の外に置く
+	root.Get("/ws", gw.HandleWS)
 
 	root.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(120 * time.Second))
@@ -87,6 +107,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(ctx)
+	matcherCancel() // matcher goroutines 全停止
 	log.Info("shutdown complete")
 }
 

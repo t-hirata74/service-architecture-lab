@@ -29,7 +29,8 @@ func DefaultMatcherConfig() MatcherConfig {
 
 // Offer は driver の WS goroutine が受け取る offer メッセージ。
 // driver client は WS で {op: "accept", trip_id} / {op: "reject", trip_id} を返す。
-// その応答は matcher の offerResponse chan に流れる (driver WS goroutine 経由)。
+// Source は driver の応答を戻すべき matcher の参照 (ws code が
+// offer.Source.HandleOfferResponse(...) を呼ぶことで matcher.offerResponses に流れる)。
 type Offer struct {
 	TripID     int64
 	PickupLat  float64
@@ -37,10 +38,12 @@ type Offer struct {
 	DropoffLat float64
 	DropoffLng float64
 	ExpiresAt  time.Time
+	Source     *Matcher
 }
 
-// offerResponse は driver からの accept/reject。driver_id と trip_id の組で一意。
-type offerResponse struct {
+// OfferResponse は driver からの accept/reject。
+// 公開型にしたのは ws 等の外部 package から HandleOfferResponse を呼ぶため。
+type OfferResponse struct {
 	TripID       int64
 	DriverUserID int64
 	Accepted     bool
@@ -91,7 +94,7 @@ type Matcher struct {
 	// channels (外部から push)
 	requests        chan TripRequest
 	positionUpdates chan PositionUpdate
-	offerResponses  chan offerResponse
+	offerResponses  chan OfferResponse
 
 	// goroutine 専有 state
 	idleDrivers map[int64]*driverState
@@ -119,7 +122,7 @@ func NewMatcher(cell geo.Cell, cfg MatcherConfig, log *slog.Logger, acceptor Acc
 		candidatesFn:    sameCellCandidates,
 		requests:        make(chan TripRequest, 16),
 		positionUpdates: make(chan PositionUpdate, 64),
-		offerResponses:  make(chan offerResponse, 64),
+		offerResponses:  make(chan OfferResponse, 64),
 		idleDrivers:     map[int64]*driverState{},
 	}
 }
@@ -170,7 +173,8 @@ func (m *Matcher) NotifyPosition(pu PositionUpdate) {
 }
 
 // HandleOfferResponse は driver の accept/reject を matcher に届ける。
-func (m *Matcher) HandleOfferResponse(resp offerResponse) {
+// 外部 (ws 等) から Offer.Source.HandleOfferResponse(...) で呼ぶ。
+func (m *Matcher) HandleOfferResponse(resp OfferResponse) {
 	m.offerResponses <- resp
 }
 
@@ -218,6 +222,7 @@ func (m *Matcher) handleRequest(ctx context.Context, req TripRequest) {
 				DropoffLat: req.DropoffLat,
 				DropoffLng: req.DropoffLng,
 				ExpiresAt:  expires,
+				Source:     m,
 			}
 			// non-blocking send + drop (ADR 0003)
 			select {

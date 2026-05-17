@@ -142,6 +142,15 @@ func AcceptTrip(ctx context.Context, st *store.Store, tripID, driverUserID int64
 	return true, nil
 }
 
+// StoreAcceptor は Matcher.Acceptor インタフェース実装。本番 wiring で main.go に注入される。
+type StoreAcceptor struct {
+	Store *store.Store
+}
+
+func (a *StoreAcceptor) AcceptTrip(ctx context.Context, tripID, driverUserID int64) (bool, error) {
+	return AcceptTrip(ctx, a.Store, tripID, driverUserID)
+}
+
 // sqlNow は MySQL CURRENT_TIMESTAMP(6) と同等のリテラルを SET 側へ渡すための raw SQL。
 // driver の time.Now() ではなく DB 側の時刻にしたいので *sql.RawBytes は使えず、
 // Go 側で time.Now() を採用するか、sql.Expr 相当の機構が要るところだが、

@@ -16,6 +16,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/auth"
+	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/dispatch"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/store"
 )
 
@@ -24,13 +25,15 @@ const mysqlErrDuplicate = 1062
 const jwtTTL = 7 * 24 * time.Hour
 
 type Handler struct {
-	Log       *slog.Logger
-	Store     *store.Store
-	JWTSecret []byte
+	Log          *slog.Logger
+	Store        *store.Store
+	JWTSecret    []byte
+	Registry     *dispatch.CellRegistry // optional, trip エンドポイント用 (Phase 4-1 で注入)
+	H3Resolution int                    // 9 by default (ADR 0001)
 }
 
 func NewHandler(log *slog.Logger, st *store.Store, jwtSecret []byte) *Handler {
-	return &Handler{Log: log, Store: st, JWTSecret: jwtSecret}
+	return &Handler{Log: log, Store: st, JWTSecret: jwtSecret, H3Resolution: 9}
 }
 
 func (h *Handler) Routes() chi.Router {
@@ -41,6 +44,9 @@ func (h *Handler) Routes() chi.Router {
 	r.Group(func(r chi.Router) {
 		r.Use(h.AuthMiddleware)
 		r.Get("/me", h.GetMe)
+		r.Post("/trips", h.PostTrip)
+		r.Get("/trips/{id}", h.GetTrip)
+		r.Post("/trips/{id}/cancel", h.PostTripCancel)
 	})
 	return r
 }

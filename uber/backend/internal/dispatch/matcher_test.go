@@ -59,7 +59,7 @@ func TestMatcher_SingleHappyPath(t *testing.T) {
 		if offer.TripID != 100 {
 			t.Fatalf("expected offer for trip 100, got %d", offer.TripID)
 		}
-		m.HandleOfferResponse(offerResponse{TripID: 100, DriverUserID: 42, Accepted: true})
+		m.HandleOfferResponse(OfferResponse{TripID: 100, DriverUserID: 42, Accepted: true})
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("driver did not receive offer in 500ms")
 	}
@@ -112,7 +112,7 @@ func TestMatcher_TimeoutThenNext(t *testing.T) {
 			case <-silentCh:
 				// silent: 何もしない (timeout 発火を待つ)
 			case <-respondingCh:
-				m.HandleOfferResponse(offerResponse{TripID: 200, DriverUserID: 2, Accepted: true})
+				m.HandleOfferResponse(OfferResponse{TripID: 200, DriverUserID: 2, Accepted: true})
 			case <-time.After(1 * time.Second):
 				return
 			}
