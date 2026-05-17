@@ -302,3 +302,26 @@ discord-e2e: ## discord E2E (Playwright)
 
 .PHONY: discord-test
 discord-test: discord-backend-test discord-ai-test discord-frontend-lint ## discord の backend + ai-worker + frontend をまとめて実行
+
+.PHONY: uber-deps-up
+uber-deps-up: ## uber 依存コンテナ (mysql:3327) を起動
+	cd uber && docker compose up -d mysql
+
+.PHONY: uber-deps-down
+uber-deps-down: ## uber 依存コンテナを停止
+	cd uber && docker compose down
+
+.PHONY: uber-migrate
+uber-migrate: ## uber backend: migrations を MySQL に適用 (schema_migrations 経由で冪等)
+	cd uber/backend && go run ./cmd/migrate
+
+.PHONY: uber-backend
+uber-backend: ## uber backend (Go dispatch) を :3110 で起動 (Phase 2 では /healthz のみ)
+	cd uber/backend && go run ./cmd/dispatch
+
+.PHONY: uber-backend-test
+uber-backend-test: ## uber backend テスト (go test -race)
+	cd uber/backend && go test -race ./...
+
+.PHONY: uber-test
+uber-test: uber-backend-test ## uber の backend テストを実行 (Phase 2 では backend のみ)
