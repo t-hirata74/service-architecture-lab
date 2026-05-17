@@ -18,6 +18,7 @@ import (
 	chicors "github.com/go-chi/cors"
 	"github.com/go-sql-driver/mysql"
 
+	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/api"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/config"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/store"
 )
@@ -44,6 +45,7 @@ func main() {
 	defer db.Close()
 
 	st := &store.Store{DB: db}
+	h := api.NewHandler(log, st, []byte(cfg.JWTSecret))
 
 	root := chi.NewRouter()
 	root.Use(middleware.RealIP)
@@ -59,6 +61,7 @@ func main() {
 	root.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(120 * time.Second))
 		r.Get("/healthz", healthz(st))
+		r.Mount("/", h.Routes())
 	})
 
 	srv := &http.Server{
