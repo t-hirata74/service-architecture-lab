@@ -1,0 +1,92 @@
+name: Dependabot Auto-merge
+
+# patch / minor の Dependabot PR を CI green 確認後に squash merge する。
+# major は手動 review のためコメントだけ残してスキップ。
+#
+# 設計メモ:
+#   - branch protection を設定していないので `gh pr merge --auto` は使えない
+#     (`Protected branch rules not configured` で失敗する)。
+#   - 代わりに `gh run list --workflow CI` で CI workflow の完了を polling し、
+#     成功したら直接 squash merge する。
+#   - 自分自身を watch すると deadlock するため、CI workflow に絞った polling
+#     にしている (gh pr checks --watch は使わない)。
+#   - pull_request_target で発火することで dependabot 由来 PR にも GITHUB_TOKEN
+#     の write 権限を持たせる (公式ドキュメントの推奨パターン)。
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: auto-merge patch/minor
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Skip major updates (manual review required)
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$PR" --body "⏸️ Major version update detected — auto-merge skipped, requires manual review."
+          echo "Major update: skipping auto-merge"
+
+      - name: Wait for CI workflow to complete
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.head_ref }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # CI workflow の run を head SHA で照合して完了を待つ。最大 30 分 (60 × 30s)。
+          for i in $(seq 1 60); do
+            RUN_JSON=$(gh run list \
+              --workflow CI \
+              --branch "$BRANCH" \
+              --limit 1 \
+              --json status,conclusion,headSha)
+            HEAD_SHA=$(echo "$RUN_JSON" | jq -r '.[0].headSha // ""')
+            STATUS=$(echo "$RUN_JSON" | jq -r '.[0].status // ""')
+            CONCLUSION=$(echo "$RUN_JSON" | jq -r '.[0].conclusion // ""')
+            echo "[try $i] CI: status=$STATUS conclusion=$CONCLUSION (head=$HEAD_SHA expect=$SHA)"
+
+            if [ "$HEAD_SHA" != "$SHA" ]; then
+              # head SHA の CI run がまだ登録されていない
+              sleep 15
+              continue
+            fi
+
+            if [ "$STATUS" = "completed" ]; then
+              if [ "$CONCLUSION" = "success" ]; then
+                echo "✅ CI passed"
+                exit 0
+              fi
+              echo "❌ CI conclusion=$CONCLUSION — skipping auto-merge"
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "⏰ Timed out waiting for CI (30 min)"
+          exit 1
+
+      - name: Squash merge
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr merge "$PR" --squash --delete-branch
