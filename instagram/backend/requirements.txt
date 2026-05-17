@@ -6,6 +6,6 @@ python-decouple>=3.8
 celery>=5.3,<6.0
 redis>=5.0,<6.0
 pytest>=8.0
-pytest-django>=4.8
+pytest-django>=4.12.0
 requests>=2.32
 django-cors-headers>=4.4
