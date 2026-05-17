@@ -10,7 +10,7 @@ slack / youtube / github / perplexity / instagram / discord / reddit / shopify /
 
 ## 見どころハイライト
 
-> 🟡 **Phase 2 完了**: backend skeleton (chi / `/healthz` / graceful shutdown) + migrations (users / drivers / trips / trip_events) + H3 wrapper + state machine 純粋関数 + 単体テスト。matcher / WS / auth / frontend / ai-worker は Phase 3 以降。
+> 🟡 **Phase 3 完了**: store CRUD + dispatch DB 反映層 (compare-and-set + 監査ログ) + per-H3-cell Matcher goroutine + CellRegistry。100 並行 accept race 統合テスト (MySQL 実機) で **勝者 1 / 敗者 99** を ADR 0002 通り検証。WS / auth / frontend / ai-worker は Phase 4 以降。
 
 - **H3 cell-index で近傍ドライバを O(1) 探索** — S2 / Geohash / MySQL Spatial Index を却下、H3 採用 ([ADR 0001](docs/adr/0001-geospatial-index-h3.md))
 - **二者間 trip state machine** — `requested → matching → driver_accepted → arriving → arrived → in_trip → completed | canceled` の trip と `offline / idle / matched / en_route_pickup / on_trip` の driver を併走、`UPDATE ... WHERE status = ?` の compare-and-set でドライバ二重取得を防ぐ ([ADR 0002](docs/adr/0002-trip-dispatch-state-machine.md))
