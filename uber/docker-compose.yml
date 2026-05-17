@@ -1,0 +1,59 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: uber_development
+      MYSQL_USER: uber
+      MYSQL_PASSWORD: uber
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3327:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "uber", "-puber"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # backend / frontend / ai-worker は Phase 2 以降で uncomment
+  # backend:
+  #   build: ./backend
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3110:8080"
+  #   environment:
+  #     DATABASE_URL: uber:uber@tcp(mysql:3306)/uber_development?parseTime=true
+  #     JWT_SECRET: dev-secret-do-not-use-in-prod
+  #     AI_WORKER_URL: http://ai-worker:8000
+
+  # frontend:
+  #   build: ./frontend
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "3115:3000"
+  #   environment:
+  #     NEXT_PUBLIC_API_URL: http://localhost:3110
+  #     NEXT_PUBLIC_WS_URL: ws://localhost:3110/ws
+
+  # ai-worker:
+  #   image: python:3.13
+  #   working_dir: /work
+  #   volumes:
+  #     - ./ai-worker:/work
+  #   command: sh -c "pip install -q -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+  #   ports:
+  #     - "8100:8000"
+  #   environment:
+  #     INTERNAL_TOKEN: dev-internal-token
+
+volumes:
+  mysql_data:
