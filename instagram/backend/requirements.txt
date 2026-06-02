@@ -8,4 +8,4 @@ redis>=8.0.0,<9.0
 pytest>=9.0.3
 pytest-django>=4.12.0
 requests>=2.34.2
-django-cors-headers>=4.4
+django-cors-headers>=4.9.0
