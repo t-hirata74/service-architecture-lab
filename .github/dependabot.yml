@@ -43,6 +43,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /slack/playwright
@@ -82,6 +89,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /youtube/playwright
@@ -121,6 +135,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /github/playwright
@@ -160,6 +181,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /perplexity/playwright
@@ -199,6 +227,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /instagram/playwright
@@ -238,6 +273,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /discord/playwright
@@ -277,6 +319,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /reddit/playwright
@@ -316,6 +365,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /shopify/playwright
@@ -355,6 +411,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /zoom/playwright
@@ -394,6 +457,13 @@ updates:
           - "next"
           - "eslint-config-next"
           - "@types/react*"
+          - "react"
+          - "react-dom"
+    # eslint 10 は flat config 必須で eslint-config-next 側が未対応のため、
+    # major 更新は当面 ignore する (patch/minor は追従)。
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /calendly/playwright
