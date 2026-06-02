@@ -18,6 +18,7 @@ import (
 	chicors "github.com/go-chi/cors"
 	"github.com/go-sql-driver/mysql"
 
+	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/ai"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/api"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/config"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/dispatch"
@@ -54,8 +55,17 @@ func main() {
 	acceptor := &dispatch.StoreAcceptor{Store: st}
 	registry := dispatch.NewCellRegistry(matcherCtx, dispatch.DefaultMatcherConfig(), log, acceptor)
 
+	// ai-worker クライアント (ADR 0004)。AI_WORKER_URL 未設定なら Enabled()==false で degrade。
+	aiClient := ai.NewClient(cfg.AIWorkerURL, cfg.AIInternalToken)
+	if aiClient.Enabled() {
+		log.Info("ai-worker configured", slog.String("url", cfg.AIWorkerURL))
+	} else {
+		log.Info("ai-worker not configured; ETA / demand will degrade")
+	}
+
 	h := api.NewHandler(log, st, []byte(cfg.JWTSecret))
 	h.Registry = registry
+	h.AI = aiClient
 	h.H3Resolution = cfg.H3Resolution
 
 	gw := &ws.Service{

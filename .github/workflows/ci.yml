@@ -1563,3 +1563,21 @@ jobs:
             sleep 1
           done
           curl -fsS "http://${HTTP_ADDR}/healthz"
+
+  uber-ai-worker:
+    name: uber / ai-worker (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uber/ai-worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: uber/ai-worker/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Pytest
+        run: pytest -q

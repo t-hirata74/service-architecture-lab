@@ -1,13 +1,16 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/ai"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/dispatch"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/geo"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/store"
@@ -29,6 +32,9 @@ func validCoord(lat, lng float64) bool {
 //   2. store.CreateTrip (status=requested)
 //   3. dispatch.TransitionTrip で requested → matching へ + trip_event(matching_started) 記録
 //   4. CellRegistry.GetOrCreate(cell).EnqueueRequest(...) で matcher へ投入
+//   5. ai-worker /eta を同期 call し eta_seconds を 201 に含める (ADR 0004)。
+//      ai-worker 不在/遅延/エラー時は eta=null に degrade し trip は止めない。
+//      matcher への enqueue は ETA call より前に済ませ、matching を ai-worker RTT で遅延させない。
 //
 // 戻り値は trip_id を含む 201 created。matching の完了は async (poll or WS で確認)。
 func (h *Handler) PostTrip(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +102,32 @@ func (h *Handler) PostTrip(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	jsonWrite(w, http.StatusCreated, map[string]any{"trip": tripView(tr)})
+
+	// ETA は ai-worker への同期 call (ADR 0004)。落ちても trip は作成済みなので止めず、
+	// eta_seconds=null で degrade する。matcher への enqueue は上で済んでいるので
+	// この RTT が matching を遅らせることはない (rider への 201 応答だけが遅れる)。
+	var etaSeconds *int
+	if h.AI.Enabled() {
+		etaCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		res, aiErr := h.AI.ETA(etaCtx, ai.ETARequest{
+			PickupLat:  body.PickupLat,
+			PickupLng:  body.PickupLng,
+			DropoffLat: body.DropoffLat,
+			DropoffLng: body.DropoffLng,
+		})
+		cancel()
+		if aiErr != nil {
+			h.Log.Warn("eta degraded", slog.Any("err", aiErr), slog.Int64("trip_id", tripID))
+		} else {
+			v := res.ETASeconds
+			etaSeconds = &v
+		}
+	}
+
+	jsonWrite(w, http.StatusCreated, map[string]any{
+		"trip":        tripView(tr),
+		"eta_seconds": etaSeconds, // ai-worker degrade 時は null
+	})
 }
 
 // GetTrip は rider 本人または assigned driver のみ閲覧可。
@@ -205,6 +236,51 @@ func (h *Handler) PostTripCancel(w http.ResponseWriter, r *http.Request) {
 
 	fresh, _ := h.Store.TripByID(r.Context(), id)
 	jsonWrite(w, http.StatusOK, map[string]any{"trip": tripView(fresh)})
+}
+
+// GetDemandForecast は lat/lng から H3 cell を求め、ai-worker /demand-forecast を引く。
+// 認証済みなら rider / driver どちらでも叩ける (surge 表示 / 配置判断の補助)。
+// ai-worker degrade 時は「surge なし」の中立値 (demand_index=0, surge_multiplier=1.0) を返し、
+// degraded=true を添える (GET なので 503 ではなく中立 fallback の方が UI が扱いやすい)。
+func (h *Handler) GetDemandForecast(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.requireUID(w, r); !ok {
+		return
+	}
+	lat, err1 := strconv.ParseFloat(r.URL.Query().Get("lat"), 64)
+	lng, err2 := strconv.ParseFloat(r.URL.Query().Get("lng"), 64)
+	if err1 != nil || err2 != nil || !validCoord(lat, lng) {
+		jsonError(w, http.StatusBadRequest, "valid lat & lng query params required")
+		return
+	}
+	cell, err := geo.Encode(lat, lng, h.H3Resolution)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "invalid coordinates")
+		return
+	}
+
+	if h.AI.Enabled() {
+		fcCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		res, aiErr := h.AI.DemandForecast(fcCtx, ai.DemandForecastRequest{H3Cell: string(cell)})
+		cancel()
+		if aiErr == nil {
+			jsonWrite(w, http.StatusOK, map[string]any{
+				"h3_cell":          res.H3Cell,
+				"demand_index":     res.DemandIndex,
+				"surge_multiplier": res.SurgeMultiplier,
+				"degraded":         false,
+			})
+			return
+		}
+		h.Log.Warn("demand forecast degraded", slog.Any("err", aiErr))
+	}
+
+	// neutral fallback (ai-worker 未設定 or 障害)
+	jsonWrite(w, http.StatusOK, map[string]any{
+		"h3_cell":          string(cell),
+		"demand_index":     0.0,
+		"surge_multiplier": 1.0,
+		"degraded":         true,
+	})
 }
 
 // nowProvider は test で差し替え可能な時刻取得。

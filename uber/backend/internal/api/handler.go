@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-sql-driver/mysql"
 
+	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/ai"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/auth"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/dispatch"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/store"
@@ -29,6 +30,7 @@ type Handler struct {
 	Store        *store.Store
 	JWTSecret    []byte
 	Registry     *dispatch.CellRegistry // optional, trip エンドポイント用 (Phase 4-1 で注入)
+	AI           *ai.Client             // optional, ETA / demand-forecast 用 (Phase 4-2 で注入); nil/未設定なら degrade
 	H3Resolution int                    // 9 by default (ADR 0001)
 }
 
@@ -47,6 +49,7 @@ func (h *Handler) Routes() chi.Router {
 		r.Post("/trips", h.PostTrip)
 		r.Get("/trips/{id}", h.GetTrip)
 		r.Post("/trips/{id}/cancel", h.PostTripCancel)
+		r.Get("/demand", h.GetDemandForecast)
 	})
 	return r
 }

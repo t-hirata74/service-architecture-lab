@@ -316,12 +316,20 @@ uber-migrate: ## uber backend: migrations を MySQL に適用 (schema_migrations
 	cd uber/backend && go run ./cmd/migrate
 
 .PHONY: uber-backend
-uber-backend: ## uber backend (Go dispatch) を :3110 で起動 (Phase 2 では /healthz のみ)
+uber-backend: ## uber backend (Go dispatch) を :3110 で起動 (REST + /ws + matcher)
 	cd uber/backend && go run ./cmd/dispatch
 
 .PHONY: uber-backend-test
 uber-backend-test: ## uber backend テスト (go test -race)
 	cd uber/backend && go test -race ./...
 
+.PHONY: uber-ai
+uber-ai: ## uber ai-worker (FastAPI) を :8100 で起動 (ETA / demand-forecast mock)
+	cd uber/ai-worker && .venv/bin/uvicorn main:app --port 8100
+
+.PHONY: uber-ai-test
+uber-ai-test: ## uber ai-worker テスト (pytest)
+	cd uber/ai-worker && .venv/bin/python -m pytest
+
 .PHONY: uber-test
-uber-test: uber-backend-test ## uber の backend テストを実行 (Phase 2 では backend のみ)
+uber-test: uber-backend-test uber-ai-test ## uber の backend + ai-worker テストを実行

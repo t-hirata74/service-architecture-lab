@@ -21,7 +21,19 @@ services:
       timeout: 5s
       retries: 10
 
-  # backend / frontend / ai-worker は Phase 2 以降で uncomment
+  ai-worker:
+    image: python:3.13
+    working_dir: /work
+    volumes:
+      - ./ai-worker:/work
+    command: sh -c "pip install -q -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8100:8000"
+    environment:
+      INTERNAL_TOKEN: dev-internal-token
+
+  # backend / frontend は Phase 5 (compose 同梱) で uncomment。
+  # 現状 backend はホストで `make uber-backend`、frontend は Phase 5 で実装。
   # backend:
   #   build: ./backend
   #   depends_on:
@@ -33,6 +45,7 @@ services:
   #     DATABASE_URL: uber:uber@tcp(mysql:3306)/uber_development?parseTime=true
   #     JWT_SECRET: dev-secret-do-not-use-in-prod
   #     AI_WORKER_URL: http://ai-worker:8000
+  #     AI_INTERNAL_TOKEN: dev-internal-token
 
   # frontend:
   #   build: ./frontend
@@ -43,17 +56,6 @@ services:
   #   environment:
   #     NEXT_PUBLIC_API_URL: http://localhost:3110
   #     NEXT_PUBLIC_WS_URL: ws://localhost:3110/ws
-
-  # ai-worker:
-  #   image: python:3.13
-  #   working_dir: /work
-  #   volumes:
-  #     - ./ai-worker:/work
-  #   command: sh -c "pip install -q -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000"
-  #   ports:
-  #     - "8100:8000"
-  #   environment:
-  #     INTERNAL_TOKEN: dev-internal-token
 
 volumes:
   mysql_data:

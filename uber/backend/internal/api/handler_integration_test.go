@@ -15,12 +15,13 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/ai"
 	"github.com/hiratatomoaki/service-architecture-lab/uber/backend/internal/store"
 )
 
 // 統合テストは UBER_TEST_DB env が設定されているときだけ走る。
 // dispatch package の integration_test.go と同じ pattern。
-func openTestServer(t *testing.T) (*httptest.Server, *store.Store) {
+func openTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("UBER_TEST_DB")
 	if dsn == "" {
@@ -39,11 +40,19 @@ func openTestServer(t *testing.T) (*httptest.Server, *store.Store) {
 		t.Fatalf("ping: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
 
-	st := &store.Store{DB: db}
+func newTestHandler(st *store.Store) *Handler {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewHandler(log, st, []byte("test-secret-do-not-use-in-prod"))
-	srv := httptest.NewServer(h.Routes())
+	return NewHandler(log, st, []byte("test-secret-do-not-use-in-prod"))
+}
+
+func openTestServer(t *testing.T) (*httptest.Server, *store.Store) {
+	t.Helper()
+	db := openTestDB(t)
+	st := &store.Store{DB: db}
+	srv := httptest.NewServer(newTestHandler(st).Routes())
 	t.Cleanup(srv.Close)
 	return srv, st
 }
@@ -198,6 +207,99 @@ func TestIntegration_LoginFlow(t *testing.T) {
 	code, _ = doJSON(t, "POST", srv.URL+"/auth/login", "", map[string]any{"email": "no-such@test.local", "password": pw})
 	if code != http.StatusUnauthorized {
 		t.Errorf("unknown email login: status = %d, want 401", code)
+	}
+}
+
+// rider が POST /trips すると、ai-worker /eta の結果が eta_seconds として 201 に乗る (ADR 0004)。
+// Registry を注入しないので matcher への enqueue は skip され、ETA 配線だけを切り出して検証する。
+func TestIntegration_PostTrip_IncludesETAFromAIWorker(t *testing.T) {
+	db := openTestDB(t)
+	st := &store.Store{DB: db}
+
+	// channel で token を受け渡し、race detector に捕捉変数の data race を出させない。
+	tokenCh := make(chan string, 1)
+	aiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokenCh <- r.Header.Get("X-Internal-Token")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"eta_seconds":777,"distance_meters":1234}`))
+	}))
+	defer aiSrv.Close()
+
+	h := newTestHandler(st)
+	h.AI = ai.NewClient(aiSrv.URL, "secret-token")
+	srv := httptest.NewServer(h.Routes())
+	defer srv.Close()
+
+	// rider を register して token を得る
+	email := uniqueEmail(t, "eta-rider")
+	code, body := doJSON(t, "POST", srv.URL+"/auth/register", "", map[string]any{
+		"email":        email,
+		"password":     "rider-pw-12345",
+		"role":         "rider",
+		"display_name": "ETA Rider",
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("register: status %d body %v", code, body)
+	}
+	token := body["token"].(string)
+
+	code, body = doJSON(t, "POST", srv.URL+"/trips", token, map[string]any{
+		"pickup_lat":  37.78,
+		"pickup_lng":  -122.41,
+		"dropoff_lat": 37.79,
+		"dropoff_lng": -122.40,
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("create trip: status %d body %v", code, body)
+	}
+	eta, ok := body["eta_seconds"].(float64)
+	if !ok {
+		t.Fatalf("eta_seconds missing or not a number: %v", body["eta_seconds"])
+	}
+	if int(eta) != 777 {
+		t.Errorf("eta_seconds = %v, want 777", eta)
+	}
+	if got := <-tokenCh; got != "secret-token" {
+		t.Errorf("ai-worker did not receive internal token, got %q", got)
+	}
+}
+
+// ai-worker 未設定なら eta_seconds は null に degrade し、trip 作成自体は成功する (ADR 0004)。
+func TestIntegration_PostTrip_DegradesETAWhenNoAIWorker(t *testing.T) {
+	db := openTestDB(t)
+	st := &store.Store{DB: db}
+
+	h := newTestHandler(st) // h.AI は nil → Enabled()==false
+	srv := httptest.NewServer(h.Routes())
+	defer srv.Close()
+
+	email := uniqueEmail(t, "noeta-rider")
+	code, body := doJSON(t, "POST", srv.URL+"/auth/register", "", map[string]any{
+		"email":        email,
+		"password":     "rider-pw-12345",
+		"role":         "rider",
+		"display_name": "NoETA Rider",
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("register: status %d body %v", code, body)
+	}
+	token := body["token"].(string)
+
+	code, body = doJSON(t, "POST", srv.URL+"/trips", token, map[string]any{
+		"pickup_lat":  37.78,
+		"pickup_lng":  -122.41,
+		"dropoff_lat": 37.79,
+		"dropoff_lng": -122.40,
+	})
+	if code != http.StatusCreated {
+		t.Fatalf("create trip: status %d body %v", code, body)
+	}
+	if body["eta_seconds"] != nil {
+		t.Errorf("eta_seconds = %v, want null (degraded)", body["eta_seconds"])
+	}
+	trip, _ := body["trip"].(map[string]any)
+	if trip == nil || trip["status"] != "matching" {
+		t.Errorf("trip not created/transitioned: %v", body["trip"])
 	}
 }
 

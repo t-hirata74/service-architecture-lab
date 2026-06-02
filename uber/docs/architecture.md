@@ -33,13 +33,15 @@
 ```
 1. POST /trips        rider_id, pickup_lat/lng, dropoff_lat/lng
 2. backend            H3 cell 計算 → trip(status=requested) を INSERT
-3. backend            cell の matcher channel に trip_id を送信
-4. matcher goroutine  cell + 1-ring から idle driver を pick → offer channel に送信
-5. driver WS          { "op": "offer", "trip_id": ... } 受信
-6. driver WS          { "op": "accept", "trip_id": ... }
-7. backend            UPDATE drivers SET status='matched' WHERE user_id=? AND status='idle' → 1 行更新
+3. backend            requested → matching に遷移 → cell の matcher channel に trip_id を送信 (enqueue)
+4. backend            ai-worker POST /eta を同期 call (degrade 可、enqueue 後なので matching を遅延させない)
+                      → 201 { trip, eta_seconds } を rider に返す (ADR 0004)
+5. matcher goroutine  cell + 1-ring から idle driver を pick → offer channel に送信
+6. driver WS          { "op": "offer", "trip_id": ... } 受信
+7. driver WS          { "op": "accept", "trip_id": ... }
+8. backend            UPDATE drivers SET status='matched' WHERE user_id=? AND status='idle' → 1 行更新
                       UPDATE trips SET driver_id=?, status='driver_accepted'
-8. rider WS push      { "op": "matched", "driver_id": ... }
+9. rider WS push      { "op": "matched", "driver_id": ... }
 ```
 
 ### 2. 走行中 / 完了
@@ -61,6 +63,22 @@
 ```
 
 詳細な遷移網羅は [ADR 0002](adr/0002-trip-dispatch-state-machine.md)。
+
+## ai-worker 境界 (ADR 0004)
+
+backend (Go) → ai-worker (FastAPI) は **同期 REST + 共有トークン (`X-Internal-Token`)** の trusted ingress。ai-worker は DB を持たず、backend が body で座標 / cell を渡す。外部 ML / 地図 API は使わず deterministic な mock を返す (ローカル完結方針)。
+
+| backend 経路 | ai-worker | 内容 | degrade 時 |
+| --- | --- | --- | --- |
+| `POST /trips` (hot path) | `POST /eta` | haversine 距離 + 固定平均速度で `eta_seconds` / `distance_meters` | `eta_seconds=null` で trip は作成継続 |
+| `GET /demand?lat=&lng=` | `POST /demand-forecast` | H3 cell をハッシュした `demand_index` 0..1 と `surge_multiplier` 1.0..2.0 | 中立値 (`surge=1.0`, `degraded=true`) |
+
+設計の要点 (詳細は [ADR 0004](adr/0004-ai-worker-boundary-sync-eta.md)):
+
+- **core invariant と付加価値の分離**: 配車 (matching / state machine) は ai-worker が落ちても止めない。ETA / surge は degrade で吸収する付加価値
+- **matcher enqueue が先、ETA call が後**: ai-worker の RTT は matching を遅延させず、rider への 201 応答だけが遅れる (timeout 2s)
+- **境界の隔離**: HTTP の詳細は `internal/ai` パッケージに集約、handler は `Enabled()` と error だけ見る。`*ai.Client` は nil 安全で、未注入の test 経路でも degrade する
+- backend の `AI_INTERNAL_TOKEN` と ai-worker の `INTERNAL_TOKEN` を一致させる
 
 ## 失敗時の挙動
 
