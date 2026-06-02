@@ -1,6 +1,6 @@
 # uber アーキテクチャ
 
-> 🔴 Phase 1 ではスケルトンのみ。実装と並行して肉付けする。
+> 🟢 Phase 4-1 完了 / backend MVP 動作。本ドキュメントのドメイン境界・データモデル・主要フローは backend 実装 (`internal/{api,ws,dispatch,store,geo,auth}`) と対応する。frontend / ai-worker は Phase 4-2 / Phase 5 で追記する。
 
 ## ドメイン境界
 
@@ -15,7 +15,7 @@
 
 ## データモデル
 
-> Phase 2 で migration を書き起こすときに最終形にする。Phase 1 では「テーブル名 + 主要列」だけ。
+> 最終形は [`backend/migrations/001_init.up.sql`](../backend/migrations/001_init.up.sql) が正 (canceled_reason / current_trip_id / pickup_h3_cell / trip_events.event_type 11 種 などはそちらを参照)。以下は概要。
 
 - `users(id, role enum(rider,driver), email, password_hash, ...)`
 - `drivers(user_id PK, status enum(offline,idle,matched,en_route_pickup,on_trip), current_h3_cell varchar(16), current_lat, current_lng, updated_at)`
@@ -73,8 +73,9 @@
 ## ローカル運用
 
 - `make uber-deps-up` で MySQL 起動
-- `make uber-backend` で `go run ./cmd/dispatch` (Phase 2 で実装)
-- `make uber-frontend` で `npm run dev`
-- `make uber-ai` で `uvicorn app.main:app --port 8100`
+- `make uber-migrate` で migrations 適用
+- `make uber-backend` で `go run ./cmd/dispatch` (REST + /ws + matcher / 実装済み)
+- `make uber-frontend` で `npm run dev` (Phase 5 で実装)
+- `make uber-ai` で `uvicorn app.main:app --port 8100` (Phase 4-2 で実装)
 
 ports は [README](../README.md#ポート割り当て) 参照。

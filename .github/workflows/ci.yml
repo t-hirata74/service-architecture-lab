@@ -1501,3 +1501,65 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false -input=false
       - run: terraform validate
+
+  uber-backend:
+    name: uber / backend (Go + migrate + race test + smoke)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: uber_test
+          MYSQL_USER: uber
+          MYSQL_PASSWORD: uber
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: uber/backend
+
+    env:
+      # migrate runner + dispatch server が読む DSN
+      DATABASE_URL: uber:uber@tcp(127.0.0.1:3306)/uber_test?parseTime=true&multiStatements=true
+      # 統合/E2E テスト (handler / dispatch / ws) を実際に走らせるため同じ DB を指す。
+      # 未設定だと t.Skip され headline の rider→offer→accept E2E が走らない。
+      UBER_TEST_DB: uber:uber@tcp(127.0.0.1:3306)/uber_test?parseTime=true
+      JWT_SECRET: ci-test-secret-for-uber-phase4
+      HTTP_ADDR: 127.0.0.1:3110
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+          cache: true
+          cache-dependency-path: uber/backend/go.sum
+
+      - name: Migrate
+        run: go run ./cmd/migrate
+
+      - name: vet + build
+        # h3-go は CGO 必須 (ubuntu-latest は gcc 同梱なので CGO_ENABLED=1 が default)
+        run: |
+          go vet ./...
+          go build -o bin/dispatch ./cmd/dispatch
+
+      - name: Test (race + integration)
+        run: go test -race ./...
+
+      - name: Smoke /healthz
+        run: |
+          ./bin/dispatch &
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+            if curl -fsS "http://${HTTP_ADDR}/healthz" >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://${HTTP_ADDR}/healthz"

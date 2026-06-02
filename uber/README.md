@@ -95,8 +95,8 @@ Redis は **不使用**。matcher は in-memory channel で十分 (ADR 0003)。
 
 ## ローカル起動
 
-> 🟡 Phase 2 完了: backend (Go) の `go mod init` / migrations / `/healthz` まで実装。
-> frontend / ai-worker / matcher 実装 / WS は Phase 3 以降。
+> 🟢 Phase 4-1 完了 / backend MVP 動作: trip REST (POST/GET/cancel) + register/login/me + driver WS gateway + per-cell matcher 配線まで実装。
+> frontend / ai-worker は未着手 (Phase 4-2 / Phase 5)。
 
 ```sh
 # 1. MySQL 起動 (host port 3327)
@@ -105,7 +105,7 @@ make uber-deps-up
 # 2. migrations 適用 (schema_migrations 経由で冪等)
 make uber-migrate
 
-# 3. backend 起動 (:3110 / /healthz のみ)
+# 3. backend 起動 (:3110 / REST + /ws + matcher)
 make uber-backend
 
 # 4. テスト (go test -race ./...)
@@ -114,40 +114,51 @@ make uber-backend-test
 
 backend は CGO ありの `uber/h3-go/v4` を利用する。docker 経由で `golang:1.24` image を使う場合は同 image に gcc が同梱されているのでそのまま `go build ./...` が通る。
 
-## 構成 (Phase 2 時点)
+統合 / E2E テスト (`internal/api` / `internal/dispatch` / `internal/ws`) は MySQL 実機を要求し、環境変数 `UBER_TEST_DB` (例: `uber:uber@tcp(127.0.0.1:3327)/uber_test?parseTime=true`) が設定されているときだけ走る (未設定なら `t.Skip`)。CI (`uber-backend` ジョブ) では MySQL service を立てて `UBER_TEST_DB` を渡し、rider POST → WS offer → accept → driver_accepted の E2E まで毎回実行する。
+
+## 構成 (Phase 4-1 時点)
 
 ```text
 uber/backend/
-├── go.mod
+├── go.mod / go.sum
 ├── migrations/
 │   └── 001_init.up.sql            # users / drivers / trips / trip_events (ADR 0001/0002 に対応)
 ├── cmd/
-│   ├── dispatch/main.go           # サーバ起動 (chi + /healthz + graceful shutdown)
+│   ├── dispatch/main.go           # サーバ起動 (chi + REST + /ws + matcher 配線 + graceful shutdown)
 │   └── migrate/main.go            # schema_migrations を使った冪等な migrate runner
 └── internal/
-    ├── config/                    # env 読み込み (DATABASE_URL / JWT_SECRET / H3_RESOLUTION)
-    ├── store/                     # Store{DB *sql.DB}, User/Driver/Trip/TripEvent 型 (CRUD は Phase 3)
+    ├── config/                    # env 読み込み (DATABASE_URL / JWT_SECRET / AI_WORKER_URL / H3_RESOLUTION)
+    ├── auth/                      # HS256 JWT 発行・検証 + bcrypt password (+ test)
+    ├── store/                     # Store{DB *sql.DB} + User/Driver/Trip/TripEvent CRUD
     ├── geo/                       # H3 wrapper (Encode / KRing) + unit test
-    └── dispatch/                  # TripStatus / DriverStatus + Transitions + IsValidTransition + test
+    ├── dispatch/                  # state machine (TripStatus/DriverStatus + Transitions) + per-cell matcher goroutine + CellRegistry + StoreAcceptor + integration test
+    ├── api/                       # REST handler (register / login / me / trips POST,GET,cancel) + integration test
+    └── ws/                        # driver WS gateway (go_online / position / accept / reject) + Service + e2e integration test
 ```
 
-frontend / ai-worker / playwright は Phase 3 以降で `.gitkeep` を置き換えていく。
+frontend / ai-worker / playwright / infra/terraform は引き続き `.gitkeep`。Phase 4-2 / Phase 5 で実装する。
 
 ---
 
-## 初期化コマンド (Phase 3 以降で実行予定)
+## 残タスク (Phase 4-1 完了時点)
 
-<!-- 初期化が終わったら削除する -->
+- **Phase 4-2**: `ai-worker/` (FastAPI `/eta` `/demand-forecast` mock) + backend ↔ ai-worker 境界 (`AI_WORKER_URL` / `AI_INTERNAL_TOKEN` は config に配線済み)
+- **Phase 5**: `frontend/` (Next.js rider + driver) / `playwright/` (E2E) / `infra/terraform/`
+- CI は `uber-backend` ジョブ (Go build + `go test -race` + MySQL service + `/healthz` smoke) を追加済み。ai-worker / frontend / playwright / terraform ジョブは各 Phase で追加する。
 
-- `cd uber/frontend && npx create-next-app@latest . --typescript --tailwind --app --eslint --no-src-dir --import-alias '@/*'`
-- `cd uber/ai-worker && python -m venv .venv && .venv/bin/pip install fastapi uvicorn pydantic`
-- `cd uber/playwright && npm init -y && npm install -D @playwright/test`
+### 初期化コマンド (各 Phase 着手時に実行)
+
+<!-- 初期化が終わったら該当行を削除する -->
+
+- `cd uber/ai-worker && python -m venv .venv && .venv/bin/pip install fastapi uvicorn pydantic`  ← Phase 4-2
+- `cd uber/frontend && npx create-next-app@latest . --typescript --tailwind --app --eslint --no-src-dir --import-alias '@/*'`  ← Phase 5
+- `cd uber/playwright && npm init -y && npm install -D @playwright/test`  ← Phase 5
 
 ---
 
 ## ドキュメント
 
-- [docs/architecture.md](docs/architecture.md) — システム図・ER・状態機械・主要フロー (Phase 1 ではスケルトン)
+- [docs/architecture.md](docs/architecture.md) — システム図・ER・状態機械・主要フロー
 - [docs/adr/0001-geospatial-index-h3.md](docs/adr/0001-geospatial-index-h3.md)
 - [docs/adr/0002-trip-dispatch-state-machine.md](docs/adr/0002-trip-dispatch-state-machine.md)
 - [docs/adr/0003-matcher-goroutine-channel.md](docs/adr/0003-matcher-goroutine-channel.md)
