@@ -1,92 +1,99 @@
 name: Dependabot Auto-merge
 
-# patch / minor の Dependabot PR を CI green 確認後に squash merge する。
-# major は手動 review のためコメントだけ残してスキップ。
+# 日次 cron で開いている Dependabot PR を走査し、CI workflow が green かつ
+# mergeable のものを squash merge する。
+#
+# 方針:
+#   - patch / minor / major を区別しない。唯一のゲートは "CI" workflow が全 pass で
+#     あること。学習リポなので、破壊的変更が混じっても CI で検知して fix-forward する
+#     (major を機械的に止めるより、CI green を信頼して取り込む方を採る)。
 #
 # 設計メモ:
-#   - branch protection を設定していないので `gh pr merge --auto` は使えない
-#     (`Protected branch rules not configured` で失敗する)。
-#   - 代わりに `gh run list --workflow CI` で CI workflow の完了を polling し、
-#     成功したら直接 squash merge する。
-#   - 自分自身を watch すると deadlock するため、CI workflow に絞った polling
-#     にしている (gh pr checks --watch は使わない)。
-#   - pull_request_target で発火することで dependabot 由来 PR にも GITHUB_TOKEN
-#     の write 権限を持たせる (公式ドキュメントの推奨パターン)。
+#   - per-PR の pull_request_target ではなく schedule + workflow_dispatch のバッチ方式。
+#     CI 完了待ちの polling やデッドロックが不要。同一ディレクトリに複数 PR が重なる
+#     (lockfile 衝突) ケースは「mergeable な 1 本だけ merge → 残りは Dependabot が
+#     自動 rebase → 翌日のバッチで拾う」で自然に収束する。
+#   - branch protection 未設定なので `gh pr merge --auto` は使えない → 直接 squash merge。
+#   - GH_REPO を渡すことで checkout 無しで gh が repo を解決できる。
+#     (旧実装は actions/checkout も GH_REPO も無く `fatal: not a git repository` で
+#      毎回失敗していた = patch/minor が一切 merge されず滞留する原因だった。)
+#   - merge 判定は "CI" workflow の check のみを見る。本 workflow は schedule 実行で
+#     PR head に check を残さないため self-reference / deadlock が起きない。
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: "17 0 * * *" # 毎日 00:17 UTC (= 09:17 JST)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "merge せず判定結果のみ出力する"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: dependabot-auto-merge
+  cancel-in-progress: false
+
 jobs:
   auto-merge:
-    name: auto-merge patch/minor
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    name: auto-merge dependabot (CI green)
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      DRY_RUN: ${{ github.event.inputs.dry_run }}
     steps:
-      - name: Fetch Dependabot metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@v2
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Skip major updates (manual review required)
-        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
+      - name: Merge all CI-green Dependabot PRs
         run: |
-          gh pr comment "$PR" --body "⏸️ Major version update detected — auto-merge skipped, requires manual review."
-          echo "Major update: skipping auto-merge"
+          set -uo pipefail
 
-      - name: Wait for CI workflow to complete
-        if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-minor'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: ${{ github.head_ref }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          # CI workflow の run を head SHA で照合して完了を待つ。最大 30 分 (60 × 30s)。
-          for i in $(seq 1 60); do
-            RUN_JSON=$(gh run list \
-              --workflow CI \
-              --branch "$BRANCH" \
-              --limit 1 \
-              --json status,conclusion,headSha)
-            HEAD_SHA=$(echo "$RUN_JSON" | jq -r '.[0].headSha // ""')
-            STATUS=$(echo "$RUN_JSON" | jq -r '.[0].status // ""')
-            CONCLUSION=$(echo "$RUN_JSON" | jq -r '.[0].conclusion // ""')
-            echo "[try $i] CI: status=$STATUS conclusion=$CONCLUSION (head=$HEAD_SHA expect=$SHA)"
+          prs=$(gh pr list --state open --limit 300 \
+            --json number,mergeable,author \
+            --jq '.[] | select(.author.login=="app/dependabot") | [.number, .mergeable] | @tsv')
 
-            if [ "$HEAD_SHA" != "$SHA" ]; then
-              # head SHA の CI run がまだ登録されていない
-              sleep 15
+          if [ -z "$prs" ]; then
+            echo "Dependabot PR なし"; exit 0
+          fi
+
+          merged=0; skipped=0
+          while IFS=$'\t' read -r num mergeable; do
+            [ -z "$num" ] && continue
+
+            if [ "$mergeable" != "MERGEABLE" ]; then
+              echo "#$num skip: mergeable=$mergeable"
+              skipped=$((skipped + 1)); continue
+            fi
+
+            # "CI" workflow の check だけを集計する (本 auto-merge や他 workflow は無視)。
+            # gh pr checks は失敗 check があると非 0 で終わるため `|| true` で握りつぶす。
+            ci=$(gh pr checks "$num" --json workflow,bucket 2>/dev/null \
+              --jq '[.[] | select(.workflow=="CI")] | {total: length, bad: ([.[] | select(.bucket!="pass")] | length)}' \
+              || true)
+            total=$(printf '%s' "$ci" | jq -r '.total // 0' 2>/dev/null || echo 0)
+            bad=$(printf '%s' "$ci" | jq -r '.bad // 1' 2>/dev/null || echo 1)
+
+            if [ "$total" -eq 0 ] || [ "$bad" -ne 0 ]; then
+              echo "#$num skip: CI not green (ci_checks=$total failing=$bad)"
+              skipped=$((skipped + 1)); continue
+            fi
+
+            if [ "${DRY_RUN:-false}" = "true" ]; then
+              echo "#$num would merge (CI green, $total checks)"
               continue
             fi
 
-            if [ "$STATUS" = "completed" ]; then
-              if [ "$CONCLUSION" = "success" ]; then
-                echo "✅ CI passed"
-                exit 0
-              fi
-              echo "❌ CI conclusion=$CONCLUSION — skipping auto-merge"
-              exit 1
+            echo "#$num merging (CI green, $total checks)"
+            if gh pr merge "$num" --squash --delete-branch; then
+              merged=$((merged + 1))
+            else
+              echo "#$num merge failed (conflict/race) — 次回バッチで再試行"
+              skipped=$((skipped + 1))
             fi
-            sleep 30
-          done
-          echo "⏰ Timed out waiting for CI (30 min)"
-          exit 1
+          done <<< "$prs"
 
-      - name: Squash merge
-        if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-minor'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR: ${{ github.event.pull_request.number }}
-        run: gh pr merge "$PR" --squash --delete-branch
+          echo "----------------------------------------"
+          echo "merged=$merged skipped=$skipped"

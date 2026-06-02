@@ -11,8 +11,9 @@
 #       Django (instagram) / FastAPI (reddit) → pip
 #       Go (discord) → gomod
 #   - frontend の Next.js 関連は `next` group で 1 PR に集約。
-#   - patch + minor は .github/workflows/dependabot-auto-merge.yml で自動 merge。
-#     major は手動 review。
+#   - 更新 PR は .github/workflows/dependabot-auto-merge.yml が日次バッチで自動 merge。
+#     patch / minor / major を区別せず、"CI" workflow が green なものだけ取り込む
+#     (破壊的変更は CI で検知して fix-forward する方針)。
 version: 2
 updates:
   # ==== GitHub Actions (共通) ====
