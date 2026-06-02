@@ -72,10 +72,16 @@ func TestNon2xxReturnsError(t *testing.T) {
 }
 
 func TestContextTimeoutPropagates(t *testing.T) {
+	// handler は release されるまでブロックし、client 側の context timeout を発火させる。
+	// r.Context().Done() に依存すると httptest では client 切断が伝播せず Close() が
+	// 無限待ちする (CI で 10 分 timeout を踏んだ)。release チャネルで明示的に解放する。
+	// defer は LIFO なので close(release) → srv.Close() の順に走り、handler を解放してから Close。
+	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		<-r.Context().Done() // hang until client gives up
+		<-release
 	}))
 	defer srv.Close()
+	defer close(release)
 
 	c := NewClient(srv.URL, "")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
