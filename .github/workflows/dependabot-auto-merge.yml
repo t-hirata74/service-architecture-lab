@@ -1,24 +1,36 @@
 name: Dependabot Auto-merge
 
 # 日次 cron で開いている Dependabot PR を走査し、CI workflow が green かつ
-# mergeable のものを squash merge する。
+# mergeable のものを merge-commit で取り込む。
 #
 # 方針:
 #   - patch / minor / major を区別しない。唯一のゲートは "CI" workflow が全 pass で
 #     あること。学習リポなので、破壊的変更が混じっても CI で検知して fix-forward する
 #     (major を機械的に止めるより、CI green を信頼して取り込む方を採る)。
+#   - merge-commit (--merge) で取り込む。squash だと commit author が dependabot[bot]
+#     のままで contribution グラフに乗らないため。merge-commit はマージ実行者が
+#     author/committer になる。
+#   - 認証はリポ所有者の PAT (secrets.AUTOMERGE_PAT) を使う。GITHUB_TOKEN だと
+#     github-actions[bot] 名義になり草に乗らないため、本人名義の PAT で実行する。
+#     PAT 未設定なら何もせず正常終了する (cron が騒がしく落ちないように)。
 #
 # 設計メモ:
 #   - per-PR の pull_request_target ではなく schedule + workflow_dispatch のバッチ方式。
 #     CI 完了待ちの polling やデッドロックが不要。同一ディレクトリに複数 PR が重なる
 #     (lockfile 衝突) ケースは「mergeable な 1 本だけ merge → 残りは Dependabot が
 #     自動 rebase → 翌日のバッチで拾う」で自然に収束する。
-#   - branch protection 未設定なので `gh pr merge --auto` は使えない → 直接 squash merge。
+#   - branch protection 未設定なので `gh pr merge --auto` は使えない → 直接 merge。
 #   - GH_REPO を渡すことで checkout 無しで gh が repo を解決できる。
 #     (旧実装は actions/checkout も GH_REPO も無く `fatal: not a git repository` で
 #      毎回失敗していた = patch/minor が一切 merge されず滞留する原因だった。)
 #   - merge 判定は "CI" workflow の check のみを見る。本 workflow は schedule 実行で
 #     PR head に check を残さないため self-reference / deadlock が起きない。
+#
+# 必要な準備 (一度きり):
+#   リポ所有者の Fine-grained PAT を secrets.AUTOMERGE_PAT に登録する。
+#     - Repository access: このリポのみ
+#     - Permissions: Contents = Read and write / Pull requests = Read and write
+#   gh secret set AUTOMERGE_PAT --body '<token>'   (または Settings > Secrets で登録)
 
 on:
   schedule:
@@ -43,13 +55,21 @@ jobs:
     name: auto-merge dependabot (CI green)
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # 本人名義でマージして contribution グラフに乗せるため PAT を使う。
+      GH_TOKEN: ${{ secrets.AUTOMERGE_PAT }}
       GH_REPO: ${{ github.repository }}
       DRY_RUN: ${{ github.event.inputs.dry_run }}
     steps:
       - name: Merge all CI-green Dependabot PRs
         run: |
           set -uo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "secrets.AUTOMERGE_PAT が未設定のためスキップします。"
+            echo "リポ所有者の Fine-grained PAT (Contents:write, Pull requests:write) を"
+            echo "AUTOMERGE_PAT として登録すると、本人名義で自動マージされ草に乗ります。"
+            exit 0
+          fi
 
           prs=$(gh pr list --state open --limit 300 \
             --json number,mergeable,author \
@@ -87,7 +107,7 @@ jobs:
             fi
 
             echo "#$num merging (CI green, $total checks)"
-            if gh pr merge "$num" --squash --delete-branch; then
+            if gh pr merge "$num" --merge --delete-branch; then
               merged=$((merged + 1))
             else
               echo "#$num merge failed (conflict/race) — 次回バッチで再試行"
