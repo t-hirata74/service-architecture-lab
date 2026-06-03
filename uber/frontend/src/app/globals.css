@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/* uber-lab: 共通 design tokens (docs/design-tokens.md) の light theme +
+   per-project accent = black (Uber ブランド: 白背景 + 黒 CTA)。 */
+:root {
+  --bg:            #fafafa;
+  --bg-elevated:   #ffffff;
+  --bg-subtle:     #f4f4f5;
+  --border:        #e4e4e7;
+  --border-strong: #d4d4d8;
+
+  --fg:            #18181b;
+  --fg-muted:      #52525b;
+  --fg-subtle:     #a1a1aa;
+
+  --radius-sm:     4px;
+  --radius:        8px;
+  --radius-lg:     12px;
+
+  --shadow-sm:     0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow:        0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg:     0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+
+  --font-sans:     -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+                   "Hiragino Kaku Gothic ProN", "Helvetica Neue", Arial, sans-serif;
+  --font-mono:     "SF Mono", Menlo, "Cascadia Code", Consolas, monospace;
+
+  --accent:        #000000;
+  --accent-hover:  #27272a;
+  --accent-fg:     #ffffff;
+
+  --background:    var(--bg);
+  --foreground:    var(--fg);
+  --panel:         var(--bg-elevated);
+  --panel-2:       var(--bg-subtle);
+
+  /* trip / driver の状態色 (信号: 進行=amber, 確定=green, 終端=zinc) */
+  --status-pending: #b45309;
+  --status-active:  #15803d;
+  --status-dead:    #71717a;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

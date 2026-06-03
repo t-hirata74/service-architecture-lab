@@ -1581,3 +1581,56 @@ jobs:
         run: pip install -r requirements.txt
       - name: Pytest
         run: pytest -q
+
+  uber-frontend:
+    name: uber / frontend (Next.js typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uber/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: uber/frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+
+  uber-playwright:
+    name: uber / playwright (typecheck only)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uber/playwright
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: uber/playwright/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+  uber-terraform:
+    name: uber / terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uber/infra/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate

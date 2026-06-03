@@ -10,7 +10,7 @@ slack / youtube / github / perplexity / instagram / discord / reddit / shopify /
 
 ## 見どころハイライト
 
-> 🟢 **Phase 4-2 完了 / backend + ai-worker MVP 動作**: trip REST (POST/GET/cancel) + driver WS gateway (go_online / position / accept / reject) + matcher 配線 + **ai-worker (ETA / 需要予測 mock) を同期境界で配線**。E2E 統合テスト (MySQL 実機) で **rider POST /trips → driver WS offer → accept → driver_accepted** の完全フローが通過、`POST /trips` は ai-worker から `eta_seconds` を取得 (落ちても degrade)。Phase 5 (frontend / Playwright / Terraform / CI 拡充) は残り。
+> 🟢 **MVP 完成 (Phase 5 完了)**: backend (trip REST + driver WS gateway + per-cell matcher + ai-worker ETA 同期境界) に加え、**frontend (Next.js / rider REST poll + driver WS の 2 経路) / Playwright E2E (2 BrowserContext で gif 録画) / Terraform 設計図 / CI 5 ジョブ** まで実装。Playwright で **rider POST /trips → driver WS offer → accept → rider が driver_accepted を poll で観測** の完全フローを実機フルスタック (MySQL + Go dispatch + ai-worker + Next.js) で通過。`POST /trips` は ai-worker から `eta_seconds` を取得 (落ちても degrade)。
 
 - **H3 cell-index で近傍ドライバを O(1) 探索** — S2 / Geohash / MySQL Spatial Index を却下、H3 採用 ([ADR 0001](docs/adr/0001-geospatial-index-h3.md))
 - **二者間 trip state machine** — `requested → matching → driver_accepted → arriving → arrived → in_trip → completed | canceled` の trip と `offline / idle / matched / en_route_pickup / on_trip` の driver を併走、`UPDATE ... WHERE status = ?` の compare-and-set でドライバ二重取得を防ぐ ([ADR 0002](docs/adr/0002-trip-dispatch-state-machine.md))
@@ -97,33 +97,49 @@ Redis は **不使用**。matcher は in-memory channel で十分 (ADR 0003)。
 
 ## ローカル起動
 
-> 🟢 Phase 4-2 完了 / backend + ai-worker MVP 動作: trip REST (POST/GET/cancel) + register/login/me + driver WS gateway + per-cell matcher 配線 + ai-worker (ETA / 需要予測 mock) 同期境界まで実装。
-> frontend は未着手 (Phase 5)。
+> 🟢 MVP 完成: backend (REST + /ws + matcher) / ai-worker (ETA・需要予測 mock) / frontend (rider + driver) が一通り起動する。
 
 ```sh
-# 1. MySQL 起動 (host port 3327)
+# 1. 依存 (MySQL :3327 + ai-worker :8100) を起動
 make uber-deps-up
 
 # 2. migrations 適用 (schema_migrations 経由で冪等)
 make uber-migrate
 
-# 3. ai-worker 初期化 (初回のみ) + 起動 (:8100 / ETA・需要予測 mock)
-cd uber/ai-worker && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && cd -
-make uber-ai
-
-# 4. backend 起動 (:3110 / REST + /ws + matcher)。ai-worker と繋ぐ場合は env を渡す:
+# 3. backend 起動 (:3110 / REST + /ws + matcher)。ai-worker と繋ぐ場合は env を渡す:
 #   AI_WORKER_URL=http://127.0.0.1:8100 AI_INTERNAL_TOKEN=dev-internal-token make uber-backend
 make uber-backend
 
+# 4. frontend 起動 (:3115 / rider=REST poll, driver=WS)。初回は npm install
+cd uber/frontend && npm install && cd -
+make uber-frontend
+
 # 5. テスト (backend: go test -race / ai-worker: pytest)
 make uber-test
+
+# 6. E2E (別タブで全サービス起動後) / gif 録画
+make uber-e2e
+make uber-capture        # captures/*.gif (ffmpeg 必須)
 ```
+
+> ブラウザで http://localhost:3115 を開き、driver で register → Go online、別ウィンドウ (or シークレット) で rider register → 配車要求すると offer → accept → driver_accepted が観測できる。
 
 backend は CGO ありの `uber/h3-go/v4` を利用する。docker 経由で `golang:1.24` image を使う場合は同 image に gcc が同梱されているのでそのまま `go build ./...` が通る。`AI_WORKER_URL` を渡さなければ ai-worker 非依存で動き、ETA は `null` に degrade する (ADR 0004)。`make uber-deps-up` は MySQL に加え ai-worker コンテナ (:8100) も起動する。
 
 統合 / E2E テスト (`internal/api` / `internal/dispatch` / `internal/ws`) は MySQL 実機を要求し、環境変数 `UBER_TEST_DB` (例: `uber:uber@tcp(127.0.0.1:3327)/uber_test?parseTime=true`) が設定されているときだけ走る (未設定なら `t.Skip`)。CI (`uber-backend` ジョブ) では MySQL service を立てて `UBER_TEST_DB` を渡し、rider POST → WS offer → accept → driver_accepted の E2E + ETA 配線 (mock ai-worker 注入) まで毎回実行する。ai-worker 単体は `uber-ai-worker` ジョブで pytest。
 
-## 構成 (Phase 4-2 時点)
+## E2E デモ (Playwright で録画)
+
+rider=REST poll / driver=WS の非対称な 2 経路を **2 BrowserContext** で hstack し、1 つの trip で出会う様子を gif 化 (slack / discord と同じ仕組み)。仕組みは [`../docs/testing-strategy.md` キャプチャ節](../docs/testing-strategy.md#キャプチャ-gif-を-readme-に埋め込む仕組み)。
+
+| シナリオ | gif |
+| --- | --- |
+| driver(WS) が渋谷で go online → rider(REST) が配車要求 → 同一 H3 cell の matcher が offer → accept → rider が `driver_accepted` + driver id を poll で観測 | ![dispatch](playwright/captures/01-dispatch-offer-accept.gif) |
+| driver 不在の cell (東京駅) で配車要求 → `matching` のまま → rider が cancel → `canceled` | ![cancel](playwright/captures/02-rider-cancel-matching.gif) |
+
+再録画は `make uber-capture` (全サービス起動 + ffmpeg 必須)。詳細は [playwright/README.md](playwright/README.md)。
+
+## 構成
 
 ```text
 uber/
@@ -146,23 +162,26 @@ uber/
     ├── main.py                    # /health / POST /eta (haversine) / POST /demand-forecast (cell ハッシュ) + X-Internal-Token
     ├── requirements.txt / pytest.ini
     └── tests/                     # health / internal-token / eta / demand-forecast (pytest 12 件)
+├── frontend/                      # Next.js 16 / React 19 / Tailwind v4 (accent=black)
+│   └── src/
+│       ├── app/                   # /(home) /login /rider(REST poll) /driver(WS)
+│       ├── components/            # NavBar / AuthGuard (requiredRole で役割ガード)
+│       └── lib/                   # api.ts(REST) / ws.ts(driver gateway) / locations.ts(プリセット地点)
+├── playwright/                    # E2E (rider+driver 2 context) + record-captures.sh + captures/*.gif
+└── infra/terraform/               # 本番想定設計図 (VPC / ECS 3 service / RDS / ALB path routing / Secrets)
 ```
-
-frontend / playwright / infra/terraform は引き続き `.gitkeep`。Phase 5 で実装する。
 
 ---
 
-## 残タスク (Phase 4-2 完了時点)
+## CI (5 ジョブ)
 
-- **Phase 5**: `frontend/` (Next.js rider + driver) / `playwright/` (E2E) / `infra/terraform/`
-- CI は `uber-backend` (Go build + `go test -race` + MySQL service + `/healthz` smoke) と `uber-ai-worker` (pytest) を追加済み。frontend / playwright / terraform ジョブは Phase 5 で追加する。
-
-### 初期化コマンド (Phase 5 着手時に実行)
-
-<!-- 初期化が終わったら該当行を削除する -->
-
-- `cd uber/frontend && npx create-next-app@latest . --typescript --tailwind --app --eslint --no-src-dir --import-alias '@/*'`
-- `cd uber/playwright && npm init -y && npm install -D @playwright/test`
+| ジョブ | 内容 |
+| --- | --- |
+| `uber-backend` | Go build + `go test -race` + MySQL service + E2E 統合 (rider→offer→accept) + `/healthz` smoke |
+| `uber-ai-worker` | pytest (ETA / demand-forecast / internal-token) |
+| `uber-frontend` | Next.js typecheck + build |
+| `uber-playwright` | spec の typecheck (webServer は CI では起動しない) |
+| `uber-terraform` | `fmt -check` + `init -backend=false` + `validate` |
 
 ---
 
@@ -173,3 +192,5 @@ frontend / playwright / infra/terraform は引き続き `.gitkeep`。Phase 5 で
 - [docs/adr/0002-trip-dispatch-state-machine.md](docs/adr/0002-trip-dispatch-state-machine.md)
 - [docs/adr/0003-matcher-goroutine-channel.md](docs/adr/0003-matcher-goroutine-channel.md)
 - [docs/adr/0004-ai-worker-boundary-sync-eta.md](docs/adr/0004-ai-worker-boundary-sync-eta.md)
+- [playwright/README.md](playwright/README.md) — E2E シナリオ + gif 録画手順
+- [infra/terraform/README.md](infra/terraform/README.md) — 本番想定設計図 (matcher 単一プロセス制約の注記)

@@ -1,6 +1,6 @@
 # uber アーキテクチャ
 
-> 🟢 Phase 4-1 完了 / backend MVP 動作。本ドキュメントのドメイン境界・データモデル・主要フローは backend 実装 (`internal/{api,ws,dispatch,store,geo,auth}`) と対応する。frontend / ai-worker は Phase 4-2 / Phase 5 で追記する。
+> 🟢 MVP 完成。本ドキュメントのドメイン境界・データモデル・主要フローは backend 実装 (`internal/{api,ws,dispatch,store,geo,ai,auth}`) と対応する。frontend (`uber/frontend`) は **rider=REST poll / driver=WS** の非対称な 2 経路をそのまま画面化し、Playwright (`uber/playwright`) で 2 BrowserContext からこのフローを E2E 検証している。
 
 ## ドメイン境界
 
@@ -93,7 +93,7 @@ backend (Go) → ai-worker (FastAPI) は **同期 REST + 共有トークン (`X-
 - `make uber-deps-up` で MySQL 起動
 - `make uber-migrate` で migrations 適用
 - `make uber-backend` で `go run ./cmd/dispatch` (REST + /ws + matcher / 実装済み)
-- `make uber-frontend` で `npm run dev` (Phase 5 で実装)
+- `make uber-frontend` で `npm run dev` (:3115 / rider + driver)
 - `make uber-ai` で `uvicorn app.main:app --port 8100` (Phase 4-2 で実装)
 
 ports は [README](../README.md#ポート割り当て) 参照。

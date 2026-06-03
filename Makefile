@@ -304,8 +304,8 @@ discord-e2e: ## discord E2E (Playwright)
 discord-test: discord-backend-test discord-ai-test discord-frontend-lint ## discord の backend + ai-worker + frontend をまとめて実行
 
 .PHONY: uber-deps-up
-uber-deps-up: ## uber 依存コンテナ (mysql:3327) を起動
-	cd uber && docker compose up -d mysql
+uber-deps-up: ## uber 依存コンテナ (mysql:3327 + ai-worker:8100) を起動
+	cd uber && docker compose up -d mysql ai-worker
 
 .PHONY: uber-deps-down
 uber-deps-down: ## uber 依存コンテナを停止
@@ -330,6 +330,22 @@ uber-ai: ## uber ai-worker (FastAPI) を :8100 で起動 (ETA / demand-forecast 
 .PHONY: uber-ai-test
 uber-ai-test: ## uber ai-worker テスト (pytest)
 	cd uber/ai-worker && .venv/bin/python -m pytest
+
+.PHONY: uber-frontend
+uber-frontend: ## uber frontend (Next.js / rider REST + driver WS) を :3115 で起動
+	cd uber/frontend && npm run dev
+
+.PHONY: uber-frontend-build
+uber-frontend-build: ## uber frontend typecheck + build (CI 相当)
+	cd uber/frontend && npm run typecheck && npm run build
+
+.PHONY: uber-e2e
+uber-e2e: ## uber E2E (Playwright / rider+driver 2 context)
+	cd uber/playwright && npm test
+
+.PHONY: uber-capture
+uber-capture: ## uber E2E gif 録画 (captures/*.gif / ffmpeg 必須)
+	cd uber/playwright && npm run capture
 
 .PHONY: uber-test
 uber-test: uber-backend-test uber-ai-test ## uber の backend + ai-worker テストを実行

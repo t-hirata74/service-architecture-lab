@@ -66,7 +66,7 @@ service-architecture-lab/
 
 | 候補 | Backend 想定 | 主な技術課題（一言） |
 | --- | --- | --- |
-| ~~`uber`~~ → 🟢 Phase 4-1 完了 / MVP 動作 | Go | 地理空間索引 (H3) / per-cell matcher goroutine / 配車 state machine + compare-and-set / trip REST + driver WS gateway |
+| ~~`uber`~~ → 🟢 MVP 完成 | Go | 地理空間索引 (H3) / per-cell matcher goroutine / 配車 state machine + compare-and-set / trip REST + driver WS gateway + rider REST/driver WS frontend |
 | `figma` | 未定 | リアルタイム共同編集 (CRDT) / multiplayer cursor |
 | `stripe` | 未定 | idempotency / at-least-once webhook / 決済 state machine |
 | ~~`zoom`~~ → MVP 完成 | Rails | 長寿命 state machine / 動的ホスト譲渡 + append-only 監査 / 録画→要約 at-least-once |
