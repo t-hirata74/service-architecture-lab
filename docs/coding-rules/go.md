@@ -30,10 +30,10 @@ Go は「Rails/Django で書ける CRUD」の代わりにはしない。**Go で
 
 ### 本リポでの Go 採用例
 
-- **discord (Phase 5 完了)** — WebSocket fan-out + per-guild Hub + presence。Slack (Rails ActionCable) との **対比学習**を意図的に置いている
-- **uber (予定)** — 並行 + 空間索引 + 状態機械。地理データ更新の write が高頻度
+- **discord (MVP 完成)** — WebSocket fan-out + per-guild Hub + presence。Slack (Rails ActionCable) との **対比学習**を意図的に置いている
+- **uber (MVP 完成)** — H3 空間索引 + **per-cell matcher goroutine による二者間マッチング** + trip/driver の二重状態機械 (compare-and-set)。discord の「1→N fan-out」に対し「2 者が 1 matcher で出会う」型 (§5.6)
 
-両者とも **「Rails で書くと不自然になる中核」** を Go の流儀に置き換えることが学習対象。
+両者とも **「Rails で書くと不自然になる中核」** を Go の流儀に置き換えることが学習対象。discord = **fan-out**、uber = **matching** と、同じ goroutine + channel でも解く問題の形が違うのが対比の妙。
 
 ---
 
@@ -217,6 +217,32 @@ func (c *Client) Close() {
 
 実例: `discord/backend/internal/gateway/client.go`
 
+### 5.6 Sharded matcher + 二者間マッチング (uber)
+
+§5.1〜5.5 (discord) は **1 つの Hub が N subscriber に fan-out** する型。uber の matcher は同じ goroutine + channel でも **「2 者 (rider request / driver) が 1 つの coordinator で出会い、競合リソースを奪い合う」** 型で、機構が少し違う。
+
+- **shard キーは固定 ID ではなく地理空間セル** — discord は `map[guildID]*Hub`、uber は `map[H3cell]*Matcher` (`CellRegistry.GetOrCreate(cell)`)。マッチングは cell + 1-ring を探索するので、shard が「隣と少し重なる」のが fan-out との違い。
+- **入力が 2 系統** — Hub は subscriber だけだが、matcher は ① rider request (`EnqueueRequest`、REST handler から non-blocking send) と ② driver の位置 / offer 応答 (`NotifyPosition` / `HandleOfferResponse`、WS goroutine から)。matcher goroutine の `select` がこの 2 つ + timeout を 1 箇所に集約する (§5.1 single-owner)。
+- **offer は「相手の write chan」へ送る** — matcher は候補 driver の `offerCh` (driver WS の write goroutine が所有) に offer を送る。fan-out の `c.Send` と同じく **non-blocking send + drop** で、応答なし driver は timeout で次候補へ回す。
+- **確定は DB の compare-and-set** — in-memory のマッチ確定だけでは二重取得を防げない。`UPDATE drivers SET status='matched' WHERE user_id=? AND status='idle'` の `affected==1` を真とする。**goroutine の中で完結させず、競合の最終裁定は DB 行レベルの原子性に委ねる**のが要 (運用面は [operating-patterns.md § 25](../operating-patterns.md))。
+
+```go
+// matcher goroutine: 2 系統 + timeout を 1 つの select に集約
+for {
+    select {
+    case req := <-m.requests:      m.tryOffer(req)          // rider (REST 起点)
+    case pu := <-m.positions:      m.updateCandidate(pu)    // driver (WS 起点)
+    case resp := <-m.responses:    m.settle(resp)           // accept/reject → DB compare-and-set
+    case <-m.offerTimeout.C:       m.advanceToNextCandidate()
+    case <-ctx.Done():             return
+    }
+}
+```
+
+**いつ使う**: 「需要側と供給側を低レイテンシでマッチングし、供給を二重に割り当てたくない」(配車 / シフト割当 / オークション約定)。fan-out (§5.1) との選択軸は「1→N 配信」か「2 者の取り合い」か。
+
+実例: `uber/backend/internal/dispatch/matcher.go` (Matcher + CellRegistry) + `internal/dispatch/transition.go` (compare-and-set) + `internal/ws/conn.go` (driver の offerCh 所有)。
+
 ---
 
 ## 6. HTTP / API レイヤ (chi)
@@ -360,7 +386,9 @@ type Config struct {
 ## 関連ドキュメント
 
 - [discord/docs/adr/](../../discord/docs/adr/) — Go 実装の設計判断 (per-guild Hub / CSP pattern / heartbeat / JWT)
-- [operating-patterns.md § 13](../operating-patterns.md) — single-process Hub goroutine + CSP fan-out の運用知
+- [uber/docs/adr/](../../uber/docs/adr/) — H3 空間索引 / 二者間 trip+driver state machine + compare-and-set / per-cell matcher goroutine / ai-worker 同期境界
+- [operating-patterns.md § 13](../operating-patterns.md) — single-process Hub goroutine + CSP fan-out の運用知 (discord)
+- [operating-patterns.md § 25](../operating-patterns.md) — per-cell matcher + 二者間マッチング + 非対称リアルタイム (uber)
 - [testing-strategy.md § Go backend](../testing-strategy.md#go-backend-discord)
 - [coding-rules/rails.md](rails.md) / [coding-rules/python.md](python.md) — 他言語の対応版
 - [service-architecture-lab-policy.md](../service-architecture-lab-policy.md) — プロジェクト方針

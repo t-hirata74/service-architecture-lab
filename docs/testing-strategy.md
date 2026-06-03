@@ -768,6 +768,51 @@ go test -v -count=1 ./...     # cache 無効化 + verbose
 
 の 2 段階。`-race` を必須にすることで「Hub goroutine が状態の唯一の owner」という ADR 0002 の前提が **将来の改修で崩れたら CI で気づく**ようにする。
 
+### uber: 二者間 dispatch の統合テスト + host go 無しの docker フルスタック E2E
+
+uber は discord の Hub 単体テストに加えて、**rider(REST) → driver(WS) → accept の二者間フローを 1 本の Go 統合テスト**で縛る (`internal/ws/e2e_integration_test.go`、`internal/api/handler_integration_test.go`)。Hub の fan-out と違い「2 経路が 1 trip で合流する」ので、fake client だけでは足りず実 DB を要する。
+
+#### 規律 1: 実 DB 必須の統合/E2E は env var ゲート + `t.Skip`
+
+```go
+func requireTestDB(t *testing.T) *sql.DB {
+    dsn := os.Getenv("UBER_TEST_DB")
+    if dsn == "" {
+        t.Skip("UBER_TEST_DB not set; skipping integration test")
+    }
+    ...
+}
+```
+
+MySQL が要る統合テストは `UBER_TEST_DB` 未設定なら `t.Skip` する。CI (`uber-backend` ジョブ) は MySQL service を立てて env を渡し、headline の rider→offer→accept を**毎回**走らせる。ローカルで MySQL 無しでも `go test ./...` が緑になり、CI では必ず通る、の両立。
+
+#### 規律 2: host に Go が無くても docker golang コンテナでフルスタック E2E を回せる
+
+開発機に Go ツールチェーンが無い環境でも、**Playwright の `reuseExistingServer: true` を使えば実機 E2E と gif 録画まで到達できる**。要点:
+
+- `docker compose up -d mysql ai-worker` で依存を起動
+- backend は `golang:1.25` イメージに**ソースを mount + compose ネットワークに接続**して起動 (CGO の h3-go は golang イメージの gcc で通る)。`-p 3110:3110` + `HTTP_ADDR=0.0.0.0:3110` で host から到達可能にする
+
+```bash
+docker run -d --name uber-backend-dev --network uber_default -p 3110:3110 \
+  -v "$PWD/backend":/app -w /app \
+  -v uber_gomod:/go/pkg/mod -v uber_gocache:/root/.cache/go-build \
+  -e DATABASE_URL='uber:uber@tcp(mysql:3306)/uber_development?parseTime=true&multiStatements=true' \
+  -e HTTP_ADDR='0.0.0.0:3110' -e AI_WORKER_URL='http://ai-worker:8000' \
+  golang:1.25 sh -c 'go run ./cmd/migrate && go run ./cmd/dispatch'
+```
+
+- frontend は host の `next start`、Playwright の `webServer` は `reuseExistingServer: true` なので**先に立てた :3110 / :3115 / :8100 を再利用**し、`go run` の webServer 起動をスキップする
+- `go pkg/mod` / `go-build` を named volume にすると再ビルドが速い
+
+これで「新規 frontend を blind で出さず、rider→offer→accept→driver_accepted を実ブラウザで通してから gif 化」ができる。E2E spec の作りは規律 3 へ。
+
+#### 規律 3: 非対称 2 経路は 2 BrowserContext で観測する
+
+rider=REST poll / driver=WS の非対称を、driver context (WS で go online → offer → accept) と rider context (REST で配車要求 → poll) の **2 BrowserContext** で観測し、`record-captures.sh` の hstack で 1 gif にする (slack/discord と同じ仕組み、§キャプチャ節)。`data-status` 属性 (`trip-status` / `driver-status`) を `toHaveAttribute` で待つと、poll の中間状態 (`matching`) と確定 (`driver_accepted`) を flaky なく縛れる。手動 `browser.newContext()` は `use.video` が効かないので、`PLAYWRIGHT_VIDEO=on` のとき `recordVideo: { dir: testInfo.outputDir }` を inject する。
+
+実例: `uber/backend/internal/ws/e2e_integration_test.go` + `uber/playwright/tests/dispatch.spec.ts` + `uber/playwright/playwright.config.ts`。
+
 ---
 
 ## Frontend (Next.js)

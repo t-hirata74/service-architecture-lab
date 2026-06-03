@@ -1398,6 +1398,53 @@ end
 
 ---
 
+## 25. per-cell matcher goroutine + 二者間マッチング + 非対称リアルタイム (uber)
+
+uber ADR 0002 / 0003 / 0004 で確立。§13 (discord per-guild Hub で 1→N fan-out) と同じ「single-process + goroutine が状態を専有」の系譜だが、**二者 (rider / driver) が別経路で 1 つの matcher に出会い、競合リソース (driver) を奪い合う**点が新しい。slack/discord の対称な fan-out、reddit/shopify の単一 truth への加減算とも違う「マッチング」の型。
+
+### 規律 1: shard キー = 地理空間セル (H3)、matcher は per-cell goroutine
+
+discord は guild_id で Hub を分けたが、uber は **H3 cell** で matcher を分ける。`CellRegistry` (`map[cell]*Matcher` + lazy 起動、§13 規律 1 と同形) で、cell ごとに 1 goroutine が「その cell の idle driver 候補プール」を専有する (mutex なし、§13 規律 2 と同じ CSP)。マッチングは pickup cell + 1-ring (隣接 6 セル) を探索する。
+
+global matcher にすると配車要求のたびに全 driver を走査して O(全 online driver) で重い。**per-cell なら候補が地理的に局所化**するのが H3 を選ぶ理由 (Geohash の角度歪み / S2 の実装複雑さ / MySQL Spatial の高頻度 update 弱を却下、ADR 0001)。
+
+### 規律 2: 二者間マッチング — request (REST) と offer/response (WS) が matcher で出会う
+
+discord の Hub は subscriber (WS) だけを相手にする 1 方向 fan-out。uber の matcher は **2 つの入力**を持つ:
+
+- rider の trip request: REST `POST /trips` が `matcher.EnqueueRequest(...)` で **non-blocking send** (§13 規律 3 と同じく満杯なら drop)
+- driver の位置 / offer 応答: driver WS が `matcher.NotifyPosition(...)` / `matcher.HandleOfferResponse(...)`
+
+matcher goroutine は request を取り出し → 候補 driver の `offerCh` (= driver WS の write goroutine) に offer を送り → driver の accept/reject を待つ。**「rider=REST / driver=WS」という非対称な 2 経路が in-memory coordinator (matcher) で 1 つの trip に合流する**のがこのドメインの肝。
+
+### 規律 3: 競合リソースへの compare-and-set で二重取得を防ぐ
+
+1 人の driver に複数の offer が同時に飛びうる。確定は **DB の条件付き UPDATE** 1 本で原子化する (§19 shopify の compare-and-decrement の対称形 — あちらは在庫数 `on_hand - q WHERE on_hand >= q`、こちらは状態 enum):
+
+```sql
+UPDATE drivers SET status='matched' WHERE user_id=? AND status='idle'  -- 1 行更新 = 勝ち
+```
+
+`affected == 1` の driver だけが trip を取り、残りは「他で確定済み」を返す。悲観ロック (SELECT FOR UPDATE) / 楽観ロック (version) / Redis SETNX を却下し、**MySQL 行レベルの原子性**だけで二重取得を防ぐ (ADR 0002)。trip 側も同じく `WHERE status=?` の compare-and-set で state machine を進める (§21 zoom の状態機械が `with_lock` で並行を吸収するのに対し、Go では DB の条件付き UPDATE に寄せる対比)。
+
+### 規律 4: rider への通知は WS push せず REST poll — 非対称を割り切る
+
+driver は長寿命 WS が前提 (位置を流し続ける) なので offer を push できるが、rider は「要求して待つ」だけなので **WS を張らず `GET /trips/:id` を poll** する (`requested → matching → driver_accepted` を観測)。両者に WS を張る対称設計より、**「push が要る側だけ WS」**の非対称が実装も運用も軽い。frontend もこの非対称をそのまま 2 画面に出す (rider=poll / driver=WS)。
+
+「rider にもリアルタイム性が要る」(地図上で driver が近づくアニメ等) なら派生 ADR で rider WS / SSE を足す。MVP は poll で割り切る。
+
+### 規律 5: 付加価値 (ai-worker) の同期 call は hot path の「後」に置く
+
+`POST /trips` は ① trip 作成 → ② matcher へ enqueue → ③ ai-worker `/eta` を同期 call → 201、の順。**enqueue (②) を ai-worker call (③) より先に済ませる**ので、ai-worker の RTT は matching を遅らせず、rider への 201 応答だけが遅れる。ai-worker 不在/遅延/エラーは `eta=null` に degrade し配車は止めない (§2 graceful degradation + ADR 0004)。「core invariant (配車) と付加価値 (ETA/surge) を分離し、付加価値だけ degrade する」順序設計。
+
+### 単一プロセス制約は discord より強い (Terraform 注記)
+
+§13 の discord Hub は「同 guild の subscriber が同一プロセス」で済むが、uber は **driver の WS 接続と rider の trip request enqueue が同じ matcher (= 同じプロセス) に届く**必要がある。ECS で desired_count>1 に分散すると「driver が繋いだタスク」と「request が入ったタスク」がズレた瞬間 offer が出ない。よって backend は `desired_count = 1` を Terraform で明示し (§16 reddit APScheduler single-instance と同じ「並列度を上げるなら ADR」の規律)、水平スケールは cell→task の consistent hashing or 共有バスを派生 ADR で扱う。
+
+詳細: uber ADR 0002 / 0003 / 0004 + `uber/backend/internal/dispatch/{matcher.go,transition.go}` + `uber/backend/internal/ws/conn.go` + `uber/infra/terraform/{ecs.tf,alb.tf}`。Go 並行の機構面は [coding-rules/go.md § 5.6](coding-rules/go.md)。
+
+---
+
 ## 関連ドキュメント
 
 - [CLAUDE.md](../CLAUDE.md) — エージェント向け要約
