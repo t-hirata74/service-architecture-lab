@@ -145,6 +145,6 @@ erDiagram
 | --- | --- | --- |
 | 1 | scaffold + ADR 0001-0004 + architecture.md + docker-compose | 🟢 完了 |
 | 2 | `go mod init` + migration（series/rollups/alert_rules/alert_events/users/api_keys）+ store + config + 認証（JWT + bcrypt + API key）+ 最小サーバ + `go test -race`（auth + store 統合） | 🟢 完了 |
-| 3 | ingestion パイプライン（handler → bounded chan → worker pool → aggregator goroutine + 固定窓 ring buffer + flush）+ backpressure/cardinality + query + `go test -race` | ⬜ 次 |
+| 3 | ingestion パイプライン（/ingest → bounded chan → worker pool → single-owner aggregator → 固定窓 ring buffer → flush）+ backpressure/cardinality + /query /metrics /stats + `go test -race`（load-shed / cardinality / 並行 no-race / live async） | 🟢 完了 |
 | 4 | alert rule engine（eval loop + state machine + alert_events）+ ai-worker（anomaly/forecast mock）+ 内部 ingress | ⬜ |
 | 5 | CI 5 ジョブ + frontend（dashboard）+ Playwright E2E + Terraform 設計図 | ⬜ |

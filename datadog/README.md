@@ -10,7 +10,7 @@ slack / youtube / github / perplexity / instagram / discord / reddit / shopify /
 
 ## 見どころハイライト
 
-> 🟡 **Phase 2 完了**: 設計フェーズ (ADR 0001-0004) に加え、**Go backend を初期化** (go.mod / chi / database/sql 生 SQL / 自前 migrate runner / 6 テーブル migration / config / 認証 = HS256 JWT + bcrypt + ingest API key / store 層)。docker `golang:1.25` で `go vet` + `go test -race` (auth + store 統合) 通過、migrate で 7 テーブル作成、サーバ起動 + DB ping + `/healthz` 200 を実機 MySQL で確認。次は Phase 3 (ingestion パイプライン + aggregator + rollup)。
+> 🟡 **Phase 3 完了**: backend 初期化 (Phase 2) に加え、**fan-in ingestion パイプラインを実装**。`POST /ingest → bounded ingest chan → worker pool (series key 計算) → single-owner aggregator goroutine (固定窓 ring buffer 専有) → flush rollup`。**backpressure = bounded chan の non-blocking drop (load shedding)** + **series 上限で cardinality drop**、いずれも自己メトリクスで計測 (`GET /stats`)。`GET /query` (rollup 時系列) / `GET /metrics` (series 一覧) も追加。**`go test -race` 全パッケージ green** — aggregation 正当性 / bucketing / cardinality cap / flush-error retry / load-shedding / 並行 no-race / **live async (Enqueue→aggregator→flush→実 DB→query)**。次は Phase 4 (alert engine + ai-worker)。
 
 - **fan-in ingestion パイプライン** — `HTTP /ingest → buffered chan → worker pool (parse/route) → single-owner aggregator goroutine`。discord (Hub が `clients` を専有) / uber (matcher が `cell` を専有) と同じ *single-goroutine ownership (CSP)* の流儀で、aggregator が `series → 時間窓 ring buffer` を専有する ([ADR 0001](docs/adr/0001-ingestion-pipeline-windowed-rollup.md))
 - **backpressure + cardinality 制御** — bounded channel 満杯時は **non-blocking drop (load shedding)**、series 数が上限到達で新規 series を drop。drop はすべて自己メトリクスで計測（dogfooding） ([ADR 0002](docs/adr/0002-backpressure-cardinality-control.md))
@@ -119,9 +119,15 @@ docker run --rm -v "$PWD/backend":/app -w /app -e DATABASE_URL="$DSN" \
 docker run --rm -v "$PWD/backend":/app -w /app -p 3130:3130 \
   -e DATABASE_URL="$DSN" -e HTTP_ADDR=":3130" golang:1.25 go run ./cmd/server
 
-# 4. テスト (auth unit + store 統合 / go test -race)
+# 3b. メトリクス投入 (ingest = API key) と参照 (query は要 JWT)
+#   curl -XPOST localhost:3130/ingest -H 'X-API-Key: dev-ingest-key' \
+#     -d '{"samples":[{"name":"cpu.load","tags":{"host":"a"},"type":"gauge","value":0.7}]}'
+#   curl 'localhost:3130/query?metric=cpu.load' -H "Authorization: Bearer <JWT>"
+
+# 4. テスト (auth + ingest pipeline + store/api 統合 / go test -race)
+#   DB を共有する統合テストはパッケージ並列を避けるため -p 1 で直列化する
 docker run --rm -v "$PWD/backend":/app -w /app -e DATADOG_TEST_DB="$DSN" \
-  golang:1.25 go test -race ./...
+  golang:1.25 go test -race -p 1 ./...
 
 # 5. frontend (別タブ) — Phase 5 で追加
 #   cd frontend && npm install && npm run dev   # http://localhost:3135
@@ -135,8 +141,8 @@ docker run --rm -v "$PWD/backend":/app -w /app -e DATADOG_TEST_DB="$DSN" \
 | --- | --- | --- |
 | 1 | scaffold + ADR 0001-0004 + architecture.md + docker-compose | 🟢 完了 |
 | 2 | `go mod init` + migration（series / rollups / alert_rules / alert_events / users / api_keys）+ store 層 + config + 認証（JWT + bcrypt + API key）+ 最小サーバ（/healthz + auth）+ `go test -race`（auth + store 統合） | 🟢 完了 |
-| 3 | **ingestion パイプライン**（ingest handler → bounded chan → worker pool → aggregator goroutine + 固定窓 ring buffer + flush）+ backpressure/cardinality + query endpoint + `go test -race`（load-shed / cardinality cap / rollup 正当性の不変条件） | ⬜ 次 |
-| 4 | alert rule engine（eval loop + state machine + alert_events）+ ai-worker（anomaly/forecast mock）+ 内部 ingress | ⬜ |
+| 3 | **ingestion パイプライン**（/ingest → bounded chan → worker pool → single-owner aggregator → 固定窓 ring buffer → flush）+ backpressure/cardinality（load shedding + 自己計測）+ /query /metrics /stats + `go test -race`（load-shed / cardinality cap / rollup 正当性 / 並行 no-race / live async） | 🟢 完了 |
+| 4 | alert rule engine（eval loop + state machine + alert_events）+ ai-worker（anomaly/forecast mock）+ 内部 ingress | ⬜ 次 |
 | 5 | CI（backend / ai-worker / frontend / terraform）→ frontend（dashboard: 時系列チャート + アラート状態）→ Playwright E2E → Terraform 設計図 | ⬜ |
 
 ---

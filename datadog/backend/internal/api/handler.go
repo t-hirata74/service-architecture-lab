@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,15 +13,17 @@ import (
 
 	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/auth"
 	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/config"
+	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/ingest"
 	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/store"
 )
 
 const tokenTTL = 24 * time.Hour
 
 type Handler struct {
-	Store *store.Store
-	Cfg   *config.Config
-	Log   *slog.Logger
+	Store    *store.Store
+	Cfg      *config.Config
+	Pipeline *ingest.Pipeline
+	Log      *slog.Logger
 }
 
 // Routes は dashboard(user=JWT) 経路を返す。ingest(machine=API key) / query / alert は
@@ -31,11 +34,98 @@ func (h *Handler) Routes() http.Handler {
 	r.Post("/auth/register", h.register)
 	r.Post("/auth/login", h.login)
 
+	// ingest (machine 経路 = API key, ADR 0004)
+	r.Group(func(ir chi.Router) {
+		ir.Use(h.RequireAPIKey)
+		ir.Post("/ingest", h.ingest)
+	})
+
+	// dashboard (user 経路 = JWT)
 	r.Group(func(pr chi.Router) {
 		pr.Use(h.RequireJWT)
 		pr.Get("/me", h.me)
+		pr.Get("/query", h.query)
+		pr.Get("/metrics", h.metrics)
+		pr.Get("/stats", h.stats)
 	})
 	return r
+}
+
+// ─── ingest (ADR 0001/0002) ──────────────────────────────────────────────────
+
+type ingestReq struct {
+	Samples []ingest.Sample `json:"samples"`
+}
+
+func (h *Handler) ingest(w http.ResponseWriter, r *http.Request) {
+	var req ingestReq
+	if !decode(w, r, &req) {
+		return
+	}
+	accepted := 0
+	for _, s := range req.Samples {
+		if s.Type == "" {
+			s.Type = "gauge"
+		}
+		if h.Pipeline.Enqueue(s) {
+			accepted++
+		}
+	}
+	// fire-and-forget: drop しても 202 (ADR 0002)。dropped は /stats で可視化。
+	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": accepted, "received": len(req.Samples)})
+}
+
+// ─── query / metrics / stats (ADR 0003) ──────────────────────────────────────
+
+func (h *Handler) query(w http.ResponseWriter, r *http.Request) {
+	metric := r.URL.Query().Get("metric")
+	if metric == "" {
+		http.Error(w, "metric required", http.StatusUnprocessableEntity)
+		return
+	}
+	to := parseTimeOr(r.URL.Query().Get("to"), time.Now())
+	from := parseTimeOr(r.URL.Query().Get("from"), to.Add(-time.Hour))
+	res := h.Cfg.WindowSeconds
+
+	all, err := h.Store.ListSeries(r.Context(), metric)
+	if err != nil {
+		h.serverError(w, "list series", err)
+		return
+	}
+	out := make([]map[string]any, 0, len(all))
+	for _, se := range all {
+		rollups, err := h.Store.QueryRollups(r.Context(), se.SeriesKey, from, to, res)
+		if err != nil {
+			h.serverError(w, "query rollups", err)
+			return
+		}
+		points := make([]map[string]any, 0, len(rollups))
+		for _, rl := range rollups {
+			avg := 0.0
+			if rl.Count > 0 {
+				avg = rl.Sum / float64(rl.Count)
+			}
+			points = append(points, map[string]any{
+				"ts": rl.BucketTS.UTC().Format(time.RFC3339), "count": rl.Count,
+				"sum": rl.Sum, "min": rl.Min, "max": rl.Max, "last": rl.Last, "avg": avg,
+			})
+		}
+		out = append(out, map[string]any{"series_key": se.SeriesKey, "tags": rawJSON(se.Tags), "points": points})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"metric": metric, "resolution_s": res, "series": out})
+}
+
+func (h *Handler) metrics(w http.ResponseWriter, r *http.Request) {
+	all, err := h.Store.ListSeries(r.Context(), r.URL.Query().Get("metric"))
+	if err != nil {
+		h.serverError(w, "list series", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"count": len(all), "series": all})
+}
+
+func (h *Handler) stats(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.Pipeline.Counters.Snapshot())
 }
 
 // ─── handlers ───────────────────────────────────────────────────────────────
@@ -186,4 +276,26 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func isDup(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "Error 1062")
+}
+
+// parseTimeOr は RFC3339 か unix 秒を解釈し、失敗時は def を返す。
+func parseTimeOr(s string, def time.Time) time.Time {
+	if s == "" {
+		return def
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t
+	}
+	if sec, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return time.Unix(sec, 0)
+	}
+	return def
+}
+
+// rawJSON は DB の JSON 列文字列を二重エンコードせず埋め込む。
+func rawJSON(s string) json.RawMessage {
+	if s == "" {
+		return json.RawMessage("null")
+	}
+	return json.RawMessage(s)
 }

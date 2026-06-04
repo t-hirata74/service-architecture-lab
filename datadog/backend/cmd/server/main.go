@@ -16,6 +16,7 @@ import (
 
 	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/api"
 	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/config"
+	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/ingest"
 	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/store"
 )
 
@@ -41,7 +42,22 @@ func main() {
 	}
 	defer st.DB.Close()
 
-	h := &api.Handler{Store: st, Cfg: cfg, Log: log}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// ingestion パイプライン起動 (ADR 0001): worker pool + single-owner aggregator goroutine。
+	pipe := ingest.NewPipeline(st, ingest.Options{
+		IngestBuffer: cfg.IngestBufferSize,
+		SampleBuffer: cfg.SampleBufferSize,
+		Workers:      cfg.WorkerCount,
+		WindowSec:    cfg.WindowSeconds,
+		MaxSeries:    cfg.MaxSeries,
+		Log:          log,
+	})
+	pipeDone := make(chan struct{})
+	go func() { pipe.Run(ctx); close(pipeDone) }()
+
+	h := &api.Handler{Store: st, Cfg: cfg, Pipeline: pipe, Log: log}
 
 	root := chi.NewRouter()
 	root.Use(middleware.RealIP, middleware.RequestID, middleware.Recoverer)
@@ -58,9 +74,6 @@ func main() {
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: root, ReadHeaderTimeout: 5 * time.Second}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
 	go func() {
 		log.Info("listening", slog.String("addr", cfg.Addr))
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -74,4 +87,5 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
+	<-pipeDone // aggregator の最終 flush を待つ
 }
