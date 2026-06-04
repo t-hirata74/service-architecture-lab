@@ -10,7 +10,7 @@ slack / youtube / github / perplexity / instagram / discord / reddit / shopify /
 
 ## 見どころハイライト
 
-> 🟡 **Phase 3 完了**: backend 初期化 (Phase 2) に加え、**LWW 収束エンジン `OperationApplier` を実装** (1 txn で `next_seq!` 原子採番 → `operations` append → per-prop `(lamport, actor_id)` LWW で `canvas_objects` を materialize)。**収束不変条件 spec が green** — 同一 op 集合を逆順 + 12 シャッフル順で適用しても全 permutation が同一状態に収束 (RSpec 9 例 / shopify 100-thread・discord race の figma 版)。次は Phase 4 (認証フロー + controllers + `DocumentChannel` + ai-worker)。
+> 🟡 **Phase 4 完了**: LWW 収束エンジン (Phase 3) に加え、**認証フロー + REST controllers + `DocumentChannel` + ai-worker** を実装。rodauth JWT (create-account/login/me + bearer) を REST + ActionCable 両方で / documents CRUD + snapshot + `?since=seq` catch-up + member 認可 / `DocumentChannel` で op fan-out (viewer 拒否) + ephemeral cursor / ai-worker (FastAPI: `/auto-layout` 実ジオメトリ + `/lint`) + `AiWorkerClient` graceful degradation。**backend RSpec 26 例 + ai-worker pytest 13 例 green**。次は Phase 5 (CI + frontend + Playwright E2E + Terraform)。
 
 - **Server 権威 LWW-CRDT** — 権威は Go 的な in-memory ではなく **MySQL を「server が総順序 `seq` を付与する append-only op log = source of truth」** に置く。各プロパティは Lamport clock `(lamport, actor_id)` 付きの **LWW-Register**、`deleted` も 1 プロパティとして同一機構で解決 ([ADR 0001](docs/adr/0001-consistency-server-authoritative-lww-crdt.md))
 - **op log + materialized state の二層** — `operations`（append-only / `(document_id, seq)` で総順序 / late-joiner catch-up）と `canvas_objects`（LWW 解決済みの現在状態 / snapshot 用）を 1 トランザクションで原子更新。`documents.version` を `with_lock` で原子採番 ([ADR 0002](docs/adr/0002-data-model-op-log-materialized-lww.md))
@@ -109,11 +109,14 @@ cd .. && docker compose up -d mysql
 # 2. backend (Rails 8.1 / Ruby 4.0.5)。multi-DB (primary / cache / queue / cable) を作成 + schema 適用
 cd backend
 bin/rails db:prepare
+# ai-worker と繋ぐ場合は env を渡す (落ちても auto-layout/lint は degrade、canvas は動く):
+#   AI_WORKER_URL=http://127.0.0.1:8110 AI_INTERNAL_TOKEN=dev-internal-token bin/rails s -p 3120
 bin/rails s -p 3120                 # http://localhost:3120 (ActionCable 同梱 / dev も Solid Cable)
 
-# 3. ai-worker (別タブ) — Phase 4 で追加
-#   cd ai-worker && python -m venv .venv && source .venv/bin/activate
-#   pip install -r requirements.txt && uvicorn main:app --port 8110
+# 3. ai-worker (別タブ)。/auto-layout (整列・分配) と /lint (重なり検出) を提供
+cd ../ai-worker && python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+INTERNAL_TOKEN=dev-internal-token uvicorn main:app --port 8110
 
 # 4. frontend (別タブ) — Phase 5 で追加
 #   cd frontend && npm install && npm run dev   # http://localhost:3125
@@ -130,8 +133,8 @@ bin/rails s -p 3120                 # http://localhost:3120 (ActionCable 同梱 
 | 1 | scaffold + ADR 0001-0004 + architecture.md + docker-compose | 🟢 完了 |
 | 2 | `rails new`（API / Ruby 4.0.5）+ rodauth JWT scaffold + migration（users / documents / document_members / canvas_objects / operations）+ multi-DB（dev も Solid Cable）+ thin models + boot smoke | 🟢 完了 |
 | 3 | `OperationApplier`（seq 原子採番 + per-prop Lamport LWW）+ **収束不変条件 spec**（op を任意順で適用しても全 actor が同一状態に収束 — shopify 100-thread / discord race の figma 版）+ RSpec/FactoryBot scaffold | 🟢 完了 (RSpec 9 例) |
-| 4 | 認証（rodauth JWT）→ controllers + `DocumentChannel`（ActionCable）+ request/channel spec → ai-worker（auto-layout / lint mock）+ 内部 ingress | ⬜ 次 |
-| 5 | CI（backend / ai-worker / frontend / terraform）→ frontend（SVG canvas + cursor + 楽観/reconcile）→ Playwright（2 BrowserContext で同時編集の収束を hstack）→ Terraform 設計図 | ⬜ |
+| 4 | 認証（rodauth JWT / REST + ActionCable）→ controllers（documents CRUD + snapshot + catch-up + members）+ `DocumentChannel`（op fan-out + viewer 拒否 + ephemeral cursor）+ ai-worker（auto-layout 実ジオメトリ / lint mock）+ `AiWorkerClient` graceful degradation | 🟢 完了 (RSpec 26 + pytest 13) |
+| 5 | CI（backend / ai-worker / frontend / terraform）→ frontend（SVG canvas + cursor + 楽観/reconcile）→ Playwright（2 BrowserContext で同時編集の収束を hstack）→ Terraform 設計図 | ⬜ 次 |
 
 ---
 

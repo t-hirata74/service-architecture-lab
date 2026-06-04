@@ -1,10 +1,20 @@
 Rails.application.routes.draw do
-  # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
-
-  # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
-  # Can be used by load balancers and uptime monitors to verify that the app is live.
   get "up" => "rails/health#show", as: :rails_health_check
 
-  # Defines the root path route ("/")
-  # root "posts#index"
+  # ActionCable (ADR 0003: dev も Solid Cable / DocumentChannel)。?token=<jwt> で認証。
+  mount ActionCable.server => "/cable"
+
+  # rodauth (/create-account /login /logout /change-password ...) は middleware 経由 (ADR 0004)。
+
+  # REST: ロード・作成・catch-up。op の投入/受信は DocumentChannel (ActionCable)。
+  resources :documents, only: %i[index create show] do
+    member do
+      get :operations        # catch-up: ?since=<seq>
+      post :auto_layout      # ai-worker proxy (Phase 4-2)
+      post :lint             # ai-worker proxy (Phase 4-2)
+    end
+    resources :members, only: %i[create], controller: "document_members"
+  end
+
+  get "me", to: "users#me"
 end

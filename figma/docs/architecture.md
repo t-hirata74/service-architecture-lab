@@ -182,5 +182,5 @@ ActionCable: `DocumentChannel`（`stream_for document`）。client→server acti
 | 1 | scaffold + ADR 0001-0004 + architecture.md + docker-compose | 🟢 完了 |
 | 2 | `rails new`（API / Ruby 4.0.5）+ rodauth JWT scaffold + migration（users / documents / document_members / canvas_objects / operations）+ multi-DB（dev も Solid Cable）+ thin models + boot smoke | 🟢 完了 |
 | 3 | `OperationApplier`（seq 原子採番 + per-prop Lamport LWW）+ **収束不変条件 spec**（RSpec 9 例 / 逆順 + 12 シャッフルで収束を固定）+ RSpec/FactoryBot scaffold | 🟢 完了 |
-| 4 | 認証（rodauth JWT）→ controllers + `DocumentChannel` + spec → ai-worker（auto-layout / lint）+ 内部 ingress | ⬜ |
-| 5 | CI → frontend（SVG canvas + cursor + 楽観/reconcile）→ Playwright（同時編集収束 hstack）→ Terraform | ⬜ |
+| 4 | 認証（rodauth JWT / REST + ActionCable）→ controllers（documents CRUD + snapshot + catch-up + members）+ `DocumentChannel`（op fan-out + viewer 拒否 + ephemeral cursor）+ ai-worker（auto-layout / lint）+ `AiWorkerClient` graceful degradation | 🟢 完了 (RSpec 26 + pytest 13) |
+| 5 | CI → frontend（SVG canvas + cursor + 楽観/reconcile）→ Playwright（同時編集収束 hstack）→ Terraform | ⬜ 次 |

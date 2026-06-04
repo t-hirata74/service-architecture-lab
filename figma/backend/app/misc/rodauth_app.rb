@@ -6,8 +6,7 @@ class RodauthApp < Rodauth::Rails::App
   # configure RodauthAdmin, :admin
 
   route do |r|
-    rodauth.load_memory # autologin remembered users
-
+    # :remember feature は無効 (JWT bearer のみ) なので load_memory は呼ばない (ADR 0004)。
     r.rodauth # route rodauth requests
 
     # ==> Authenticating requests
