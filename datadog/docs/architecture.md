@@ -134,7 +134,7 @@ erDiagram
 ## ローカル運用
 
 - 起動順: MySQL（:3329）→ ai-worker（:8120）→ backend（:3130, docker golang）→ frontend（:3135）。
-- Go は host 不在のため **docker `golang:1.24` コンテナ**で `go run`（uber と同方針 / [memory]）。`go test -race` は CI + docker で実行。
+- Go は host 不在のため **docker `golang:1.25` コンテナ**で `go run`（uber と同方針 / [memory]）。`go test -race` は CI + docker で実行。
 - テスト: `go test -race`（pipeline の concurrency 不変条件 = burst で load-shed / cardinality cap / rollup 集約の正当性）+ pytest（ai-worker）+ Playwright（dashboard E2E）。
 
 ---
@@ -143,8 +143,8 @@ erDiagram
 
 | Phase | 範囲 | 状態 |
 | --- | --- | --- |
-| 1 | scaffold + ADR 0001-0004 + architecture.md + docker-compose | 🔴 設計フェーズ完了 |
-| 2 | `go mod init` + migration（series/rollups/alert_rules/alert_events/users/api_keys）+ store + config + 認証（JWT + bcrypt + API key） | ⬜ |
-| 3 | ingestion パイプライン（handler → bounded chan → worker pool → aggregator goroutine + 固定窓 ring buffer + flush）+ backpressure/cardinality + query + `go test -race` | ⬜ |
+| 1 | scaffold + ADR 0001-0004 + architecture.md + docker-compose | 🟢 完了 |
+| 2 | `go mod init` + migration（series/rollups/alert_rules/alert_events/users/api_keys）+ store + config + 認証（JWT + bcrypt + API key）+ 最小サーバ + `go test -race`（auth + store 統合） | 🟢 完了 |
+| 3 | ingestion パイプライン（handler → bounded chan → worker pool → aggregator goroutine + 固定窓 ring buffer + flush）+ backpressure/cardinality + query + `go test -race` | ⬜ 次 |
 | 4 | alert rule engine（eval loop + state machine + alert_events）+ ai-worker（anomaly/forecast mock）+ 内部 ingress | ⬜ |
 | 5 | CI 5 ジョブ + frontend（dashboard）+ Playwright E2E + Terraform 設計図 | ⬜ |

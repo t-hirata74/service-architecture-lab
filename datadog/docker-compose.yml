@@ -35,7 +35,7 @@ services:
   # backend (Go) は host に Go が無いため docker golang コンテナで回す (uber と同方針)。
   # Phase 2 以降、go.mod 整備後に有効化する:
   # backend:
-  #   image: golang:1.24
+  #   image: golang:1.25
   #   working_dir: /app
   #   volumes:
   #     - ./backend:/app
