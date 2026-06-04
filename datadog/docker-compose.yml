@@ -1,0 +1,58 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: datadog_development
+      MYSQL_USER: datadog
+      MYSQL_PASSWORD: datadog
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3329:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "datadog", "-pdatadog"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ai-worker:
+    image: python:3.13
+    working_dir: /work
+    volumes:
+      - ./ai-worker:/work
+    command: sh -c "pip install -q -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8120:8000"
+    environment:
+      INTERNAL_TOKEN: dev-internal-token
+
+  # backend (Go) は host に Go が無いため docker golang コンテナで回す (uber と同方針)。
+  # Phase 2 以降、go.mod 整備後に有効化する:
+  # backend:
+  #   image: golang:1.24
+  #   working_dir: /app
+  #   volumes:
+  #     - ./backend:/app
+  #   command: sh -c "go run ./cmd/server/migrate && go run ./cmd/server"
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
+  #   ports:
+  #     - "3130:8080"
+  #   environment:
+  #     DATABASE_URL: datadog:datadog@tcp(mysql:3306)/datadog_development?parseTime=true
+  #     JWT_SECRET: dev-secret-do-not-use-in-prod
+  #     INGEST_API_KEY: dev-ingest-key
+  #     AI_WORKER_URL: http://ai-worker:8000
+  #     AI_INTERNAL_TOKEN: dev-internal-token
+
+  # frontend は Phase 5 で実装 (dashboard)。ローカルは npm run dev を想定。
+
+volumes:
+  mysql_data:
