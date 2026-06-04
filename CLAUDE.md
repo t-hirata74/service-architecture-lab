@@ -83,7 +83,7 @@ service-architecture-lab/
 | `mercari` | 未定 | C2C 取引 state machine / escrow (代金保留 → 受取確認後リリース) / 検索ランキング |
 | `timee` | 未定 | 時刻オフセット付きマッチング / 当日キャンセル再アサイン / 勤怠打刻 + 給与計算 |
 | `airflow` | **Python** | DAG 表現 + 依存解決 / scheduler + worker 分離 / XCom (タスク間データ受け渡し) / sensor / 冪等性 + リトライ |
-| ~~`datadog`~~ → 🟡 Phase 4 | **Go** (3本目) | fan-in ingestion パイプライン (chan→worker pool→single-owner aggregator) / backpressure (load shedding) + cardinality 制御 / 固定窓 rollup 冪等 upsert / 周期評価 alert state machine + ai-worker detect-anomaly/forecast (Python 候補→Go で着手) |
+| ~~`datadog`~~ → 🟢 MVP 完成 | **Go** (3本目) | fan-in ingestion パイプライン (chan→worker pool→single-owner aggregator) / backpressure (load shedding) + cardinality 制御 / 固定窓 rollup 冪等 upsert / 周期評価 alert state machine + ai-worker detect-anomaly/forecast + dashboard + Playwright (Python 候補→Go で着手) |
 | `deepl` | **Python** | 文書構造を壊さない翻訳パイプライン / 翻訳メモリ (TM) キャッシュ / glossary 強制 / 段落並列処理 |
 
 機能詳細・ai-worker 役割・棲み分けは [README 候補プロジェクト節](README.md#候補プロジェクト検討中) と policy。LLM 本体は方針どおり **ローカル完結・モック可**（実 SDK 不使用）。

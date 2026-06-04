@@ -1812,3 +1812,163 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false -input=false
       - run: terraform validate
+
+  datadog-backend:
+    name: datadog / backend (Go + migrate + race test + smoke)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: datadog_test
+          MYSQL_USER: datadog
+          MYSQL_PASSWORD: datadog
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: datadog/backend
+
+    env:
+      DATABASE_URL: datadog:datadog@tcp(127.0.0.1:3306)/datadog_test?parseTime=true&multiStatements=true
+      # 統合テスト (store / api / alert / ingest live) を実走させる DSN
+      DATADOG_TEST_DB: datadog:datadog@tcp(127.0.0.1:3306)/datadog_test?parseTime=true&multiStatements=true
+      JWT_SECRET: ci-test-secret-for-datadog
+      HTTP_ADDR: 127.0.0.1:3130
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: datadog/backend/go.sum
+      - name: Migrate
+        run: go run ./cmd/server/migrate
+      - name: vet + build
+        run: |
+          go vet ./...
+          go build -o bin/server ./cmd/server
+      - name: Test (race + integration, -p 1 で DB 共有パッケージを直列化)
+        run: go test -race -p 1 ./...
+      - name: Smoke /healthz
+        run: |
+          ./bin/server &
+          for i in $(seq 1 20); do
+            if curl -fsS "http://${HTTP_ADDR}/healthz" >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS "http://${HTTP_ADDR}/healthz"
+
+  datadog-ai-worker:
+    name: datadog / ai-worker (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: datadog/ai-worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: datadog/ai-worker/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Pytest (detect-anomaly / forecast / token)
+        run: pytest -q
+
+  datadog-frontend:
+    name: datadog / frontend (Next.js typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: datadog/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: datadog/frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+
+  datadog-playwright:
+    name: datadog / playwright (ingest→dashboard + alert E2E)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: datadog_development
+          MYSQL_USER: datadog
+          MYSQL_PASSWORD: datadog
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: true
+          cache-dependency-path: datadog/backend/go.sum
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            datadog/frontend/package-lock.json
+            datadog/playwright/package-lock.json
+      - name: Frontend install + build
+        working-directory: datadog/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Playwright install (chromium)
+        working-directory: datadog/playwright
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Run Playwright (Go backend + Next start を webServer で起動)
+        working-directory: datadog/playwright
+        run: npx playwright test
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: datadog-playwright-report
+          path: datadog/playwright/playwright-report/
+          retention-days: 7
+
+  datadog-terraform:
+    name: datadog / terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: datadog/infra/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate

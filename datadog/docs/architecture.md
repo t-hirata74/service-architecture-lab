@@ -147,4 +147,4 @@ erDiagram
 | 2 | `go mod init` + migration（series/rollups/alert_rules/alert_events/users/api_keys）+ store + config + 認証（JWT + bcrypt + API key）+ 最小サーバ + `go test -race`（auth + store 統合） | 🟢 完了 |
 | 3 | ingestion パイプライン（/ingest → bounded chan → worker pool → single-owner aggregator → 固定窓 ring buffer → flush）+ backpressure/cardinality + /query /metrics /stats + `go test -race`（load-shed / cardinality / 並行 no-race / live async） | 🟢 完了 |
 | 4 | alert rule engine（eval loop + ok→pending→firing state machine + for_duration + append-only events）+ ai-worker（detect-anomaly / forecast mock）+ internal/ai graceful degradation + /alerts/rules /alerts/events | 🟢 完了 (go test -race + pytest 9) |
-| 5 | CI 5 ジョブ + frontend（dashboard）+ Playwright E2E + Terraform 設計図 | ⬜ 次 |
+| 5 | CI 5 ジョブ + frontend（dashboard: 時系列チャート + stats + アラート一覧）+ Playwright E2E（観測ループ + alert firing + gif）+ Terraform 設計図 | 🟢 完了 |

@@ -10,7 +10,7 @@ slack / youtube / github / perplexity / instagram / discord / reddit / shopify /
 
 ## 見どころハイライト
 
-> 🟡 **Phase 4 完了**: ingestion パイプライン (Phase 3) に加え、**alert rule engine + ai-worker** を実装。eval loop goroutine が rollup を窓ごと評価し `ok→pending→firing→ok(resolved)` の **state machine**（`for_duration` 込み）を駆動 + append-only `alert_events`。**ai-worker**（FastAPI: `/detect-anomaly` z-score 動的閾値 + `/forecast` 線形回帰、deterministic mock）+ **`internal/ai` クライアント（graceful degradation）** で dynamic rule を評価（不通なら静的閾値で継続）。`/alerts/rules` (CRUD) / `/alerts/events` も追加。**backend `go test -race` 全 green**（state machine 純粋テスト + fire/resolve DB 統合）+ **ai-worker pytest 9 件**。次は Phase 5 (CI + dashboard + Playwright + Terraform)。
+> 🟢 **MVP 完成 (Phase 5 完了)**: backend（ingestion パイプライン + alert engine）に加え、**frontend ダッシュボード（時系列チャート + stats + アラート一覧、polling）/ Playwright E2E（実機フルスタックで観測ループ検証 + gif）/ Terraform 設計図 / CI 5 ジョブ** まで実装。**backend `go test -race` 全 green + ai-worker pytest 9 + Playwright 2 件**（実機 MySQL + Go backend + Next で pass）。`ingest(API key) → 固定窓 rollup flush → /query → dashboard チャート` の観測ループと `alert rule(gt) → breach → firing` を E2E で確認。
 
 - **fan-in ingestion パイプライン** — `HTTP /ingest → buffered chan → worker pool (parse/route) → single-owner aggregator goroutine`。discord (Hub が `clients` を専有) / uber (matcher が `cell` を専有) と同じ *single-goroutine ownership (CSP)* の流儀で、aggregator が `series → 時間窓 ring buffer` を専有する ([ADR 0001](docs/adr/0001-ingestion-pipeline-windowed-rollup.md))
 - **backpressure + cardinality 制御** — bounded channel 満杯時は **non-blocking drop (load shedding)**、series 数が上限到達で新規 series を drop。drop はすべて自己メトリクスで計測（dogfooding） ([ADR 0002](docs/adr/0002-backpressure-cardinality-control.md))
@@ -130,8 +130,12 @@ docker run --rm -v "$PWD/backend":/app -w /app -p 3130:3130 \
 docker run --rm -v "$PWD/backend":/app -w /app -e DATADOG_TEST_DB="$DSN" \
   golang:1.25 go test -race -p 1 ./...
 
-# 5. frontend (別タブ) — Phase 5 で追加
-#   cd frontend && npm install && npm run dev   # http://localhost:3135
+# 5. frontend (別タブ)。dashboard: 時系列チャート + stats + アラート一覧 (polling)
+cd ../frontend && npm install && npm run dev   # http://localhost:3135
+
+# 6. E2E (別タブ / webServer が backend(docker go) + Next を起動)
+cd ../playwright && npm ci && npx playwright install chromium && npm test
+npm run capture                                # captures/01-dashboard.gif (ffmpeg 必須)
 ```
 
 ---
@@ -144,7 +148,31 @@ docker run --rm -v "$PWD/backend":/app -w /app -e DATADOG_TEST_DB="$DSN" \
 | 2 | `go mod init` + migration（series / rollups / alert_rules / alert_events / users / api_keys）+ store 層 + config + 認証（JWT + bcrypt + API key）+ 最小サーバ（/healthz + auth）+ `go test -race`（auth + store 統合） | 🟢 完了 |
 | 3 | **ingestion パイプライン**（/ingest → bounded chan → worker pool → single-owner aggregator → 固定窓 ring buffer → flush）+ backpressure/cardinality（load shedding + 自己計測）+ /query /metrics /stats + `go test -race`（load-shed / cardinality cap / rollup 正当性 / 並行 no-race / live async） | 🟢 完了 |
 | 4 | alert rule engine（eval loop + ok→pending→firing state machine + for_duration + append-only events）+ ai-worker（detect-anomaly / forecast mock）+ `internal/ai` graceful degradation + /alerts/rules /alerts/events | 🟢 完了 (go test -race + pytest 9) |
-| 5 | CI（backend / ai-worker / frontend / terraform）→ frontend（dashboard: 時系列チャート + アラート状態）→ Playwright E2E → Terraform 設計図 | ⬜ 次 |
+| 5 | CI 5 ジョブ（backend race / ai-worker pytest / frontend / playwright / terraform）+ frontend（dashboard: 時系列チャート + stats + アラート一覧）+ Playwright E2E（観測ループ + alert firing + gif）+ Terraform 設計図 | 🟢 完了 |
+
+---
+
+## E2E デモ (Playwright で録画)
+
+実機フルスタック（MySQL + Go backend + Next.js）で観測ループを録画。`ingest → 固定窓 rollup flush → dashboard` が時系列チャートに反映され、alert が firing する様子を gif 化。
+
+| シナリオ | gif |
+| --- | --- |
+| メトリクス投入 → rollup → dashboard の時系列チャート表示 + active series / dropped 計測 + firing アラート一覧 | ![dashboard](playwright/captures/01-dashboard.gif) |
+
+再録画は `cd playwright && npm run capture`（全サービス起動 + ffmpeg 必須）。詳細は [playwright/README.md](playwright/README.md)。
+
+---
+
+## CI (5 ジョブ)
+
+| ジョブ | 内容 |
+| --- | --- |
+| `datadog-backend` | Go 1.25 + MySQL service + migrate + `go vet` + `go test -race -p 1`（pipeline / alert / store / api 統合）+ `/healthz` smoke |
+| `datadog-ai-worker` | pytest（detect-anomaly / forecast / X-Internal-Token） |
+| `datadog-frontend` | Next.js typecheck + build |
+| `datadog-playwright` | 実機フルスタック（Go backend + Next start）で ingest→dashboard + alert firing E2E |
+| `datadog-terraform` | `fmt -check` + `init -backend=false` + `validate` |
 
 ---
 
