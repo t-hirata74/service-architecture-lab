@@ -14,6 +14,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	chicors "github.com/go-chi/cors"
 
+	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/ai"
+	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/alert"
 	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/api"
 	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/config"
 	"github.com/hiratatomoaki/service-architecture-lab/datadog/backend/internal/ingest"
@@ -57,6 +59,16 @@ func main() {
 	pipeDone := make(chan struct{})
 	go func() { pipe.Run(ctx); close(pipeDone) }()
 
+	// alert engine 起動 (ADR 0004): 周期評価 state machine。dynamic rule 用に ai-worker を配線
+	// (URL 未設定なら nil interface = 静的閾値のみ)。
+	var anomaly alert.AnomalyClient
+	if cfg.AIWorkerURL != "" {
+		anomaly = ai.NewClient(cfg.AIWorkerURL, cfg.AIInternalToken)
+	}
+	engine := alert.NewEngine(st, anomaly, cfg.WindowSeconds, cfg.EvalIntervalSec, log)
+	engineDone := make(chan struct{})
+	go func() { engine.Run(ctx); close(engineDone) }()
+
 	h := &api.Handler{Store: st, Cfg: cfg, Pipeline: pipe, Log: log}
 
 	root := chi.NewRouter()
@@ -87,5 +99,6 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
-	<-pipeDone // aggregator の最終 flush を待つ
+	<-pipeDone   // aggregator の最終 flush を待つ
+	<-engineDone // alert engine の停止を待つ
 }

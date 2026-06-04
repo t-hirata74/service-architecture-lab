@@ -47,8 +47,77 @@ func (h *Handler) Routes() http.Handler {
 		pr.Get("/query", h.query)
 		pr.Get("/metrics", h.metrics)
 		pr.Get("/stats", h.stats)
+		pr.Get("/alerts/rules", h.listAlertRules)
+		pr.Post("/alerts/rules", h.createAlertRule)
+		pr.Get("/alerts/events", h.listAlertEvents)
 	})
 	return r
+}
+
+// ─── alert rules / events (ADR 0004) ─────────────────────────────────────────
+
+type alertRuleReq struct {
+	Name        string            `json:"name"`
+	MetricName  string            `json:"metric_name"`
+	TagMatchers map[string]string `json:"tag_matchers"`
+	Comparator  string            `json:"comparator"` // gt / lt
+	Threshold   float64           `json:"threshold"`
+	WindowS     int               `json:"window_s"`
+	ForS        int               `json:"for_s"`
+	Agg         string            `json:"agg"`
+	Dynamic     bool              `json:"dynamic"`
+}
+
+func (h *Handler) createAlertRule(w http.ResponseWriter, r *http.Request) {
+	uid, _ := UserIDFrom(r.Context())
+	var req alertRuleReq
+	if !decode(w, r, &req) {
+		return
+	}
+	if req.Name == "" || req.MetricName == "" {
+		http.Error(w, "name and metric_name required", http.StatusUnprocessableEntity)
+		return
+	}
+	if req.Comparator != "gt" && req.Comparator != "lt" {
+		http.Error(w, "comparator must be gt or lt", http.StatusUnprocessableEntity)
+		return
+	}
+	if req.Agg == "" {
+		req.Agg = "avg"
+	}
+	matchers, _ := json.Marshal(req.TagMatchers)
+	if req.TagMatchers == nil {
+		matchers = []byte("{}")
+	}
+	id, err := h.Store.CreateAlertRule(r.Context(), store.AlertRule{
+		OwnerID: uid, Name: req.Name, MetricName: req.MetricName, TagMatchers: string(matchers),
+		Comparator: req.Comparator, Threshold: req.Threshold, WindowS: req.WindowS,
+		ForS: req.ForS, Agg: req.Agg, Dynamic: req.Dynamic, Enabled: true,
+	})
+	if err != nil {
+		h.serverError(w, "create alert rule", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id})
+}
+
+func (h *Handler) listAlertRules(w http.ResponseWriter, r *http.Request) {
+	rules, err := h.Store.ListAlertRules(r.Context())
+	if err != nil {
+		h.serverError(w, "list alert rules", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"rules": rules})
+}
+
+func (h *Handler) listAlertEvents(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	events, err := h.Store.RecentAlertEvents(r.Context(), limit)
+	if err != nil {
+		h.serverError(w, "list alert events", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": events})
 }
 
 // ─── ingest (ADR 0001/0002) ──────────────────────────────────────────────────

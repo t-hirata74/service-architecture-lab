@@ -247,9 +247,17 @@ func (s *Store) CreateAlertRule(ctx context.Context, r AlertRule) (int64, error)
 }
 
 func (s *Store) EnabledAlertRules(ctx context.Context) ([]AlertRule, error) {
+	return s.queryRules(ctx, `WHERE enabled = 1`)
+}
+
+func (s *Store) ListAlertRules(ctx context.Context) ([]AlertRule, error) {
+	return s.queryRules(ctx, ``)
+}
+
+func (s *Store) queryRules(ctx context.Context, where string) ([]AlertRule, error) {
 	rows, err := s.DB.QueryContext(ctx,
 		`SELECT id, owner_id, name, metric_name, tag_matchers, comparator, threshold, window_s, for_s, agg, dynamic, enabled
-		   FROM alert_rules WHERE enabled = 1 ORDER BY id`)
+		   FROM alert_rules `+where+` ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -278,6 +286,28 @@ func (s *Store) InsertAlertEvent(ctx context.Context, ruleID int64, state string
 	_, err := s.DB.ExecContext(ctx,
 		`INSERT INTO alert_events (rule_id, state, value) VALUES (?, ?, ?)`, ruleID, state, value)
 	return err
+}
+
+// RecentAlertEvents は最新 limit 件の alert イベントを返す (新しい順)。
+func (s *Store) RecentAlertEvents(ctx context.Context, limit int) ([]AlertEvent, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.DB.QueryContext(ctx,
+		`SELECT id, rule_id, state, value, created_at FROM alert_events ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AlertEvent
+	for rows.Next() {
+		var e AlertEvent
+		if err := rows.Scan(&e.ID, &e.RuleID, &e.State, &e.Value, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 // LatestAlertState は rule の最新 state を返す。未発火なら ("ok", nil)。
