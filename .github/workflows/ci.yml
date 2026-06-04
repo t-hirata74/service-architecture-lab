@@ -1634,3 +1634,181 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false -input=false
       - run: terraform validate
+
+  figma-backend:
+    name: figma / backend (Rails 8.1 + Ruby 4 + RSpec)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: figma_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: figma/backend
+
+    env:
+      RAILS_ENV: test
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.5"
+          bundler-cache: true
+          working-directory: figma/backend
+      # multi-db (primary / cache / queue / cable) を一括で作成 + schema 適用
+      - name: DB prepare (multi-db, loads queue/cache/cable schemas)
+        run: bundle exec rails db:prepare
+      - name: RSpec (収束不変条件 + auth + documents + DocumentChannel + ai client)
+        run: bundle exec rspec
+      - name: Rubocop (omakase)
+        run: bundle exec rubocop
+
+  figma-ai-worker:
+    name: figma / ai-worker (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma/ai-worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: figma/ai-worker/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Pytest (auto-layout 実ジオメトリ + lint + X-Internal-Token)
+        run: pytest -q
+
+  figma-frontend:
+    name: figma / frontend (Next.js 16 typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma/frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: figma/frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+
+  figma-playwright:
+    name: figma / playwright (2 context op fan-out E2E)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: figma_development
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: root
+      RAILS_ENV: development
+      INTERNAL_TOKEN: dev-internal-token
+      AI_INTERNAL_TOKEN: dev-internal-token
+      AI_WORKER_URL: http://127.0.0.1:8110
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.5"
+          bundler-cache: true
+          working-directory: figma/backend
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: figma/ai-worker/requirements.txt
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            figma/frontend/package-lock.json
+            figma/playwright/package-lock.json
+
+      - name: Backend DB prepare (multi-db, dev も Solid Cable)
+        working-directory: figma/backend
+        run: bundle exec rails db:prepare
+
+      - name: ai-worker install
+        working-directory: figma/ai-worker
+        run: pip install -r requirements.txt
+
+      - name: Frontend install + build (production for hydration race 回避)
+        working-directory: figma/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Playwright install (chromium)
+        working-directory: figma/playwright
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright (Rails + ai-worker + Next start を webServer で起動)
+        working-directory: figma/playwright
+        run: npx playwright test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: figma-playwright-report
+          path: figma/playwright/playwright-report/
+          retention-days: 7
+
+  figma-terraform:
+    name: figma / terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma/infra/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate

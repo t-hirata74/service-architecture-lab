@@ -10,7 +10,7 @@ slack / youtube / github / perplexity / instagram / discord / reddit / shopify /
 
 ## 見どころハイライト
 
-> 🟡 **Phase 4 完了**: LWW 収束エンジン (Phase 3) に加え、**認証フロー + REST controllers + `DocumentChannel` + ai-worker** を実装。rodauth JWT (create-account/login/me + bearer) を REST + ActionCable 両方で / documents CRUD + snapshot + `?since=seq` catch-up + member 認可 / `DocumentChannel` で op fan-out (viewer 拒否) + ephemeral cursor / ai-worker (FastAPI: `/auto-layout` 実ジオメトリ + `/lint`) + `AiWorkerClient` graceful degradation。**backend RSpec 26 例 + ai-worker pytest 13 例 green**。次は Phase 5 (CI + frontend + Playwright E2E + Terraform)。
+> 🟢 **MVP 完成 (Phase 5 完了)**: backend (LWW 収束エンジン + 認証 + `DocumentChannel` + ai-worker) に加え、**frontend (Next.js SVG canvas + 楽観適用/reconcile + multiplayer cursor) / Playwright E2E (2 BrowserContext で op fan-out 収束を実機フルスタックで検証 + gif) / Terraform 設計図 / CI 5 ジョブ** まで実装。**backend RSpec 26 + ai-worker pytest 13 + Playwright 2 件 (実機 MySQL + Rails + ai-worker + Next で pass)**。client は backend `OperationApplier` と同じ LWW (`src/lib/crdt.ts`) で楽観適用し、ActionCable echo で reconcile する。
 
 - **Server 権威 LWW-CRDT** — 権威は Go 的な in-memory ではなく **MySQL を「server が総順序 `seq` を付与する append-only op log = source of truth」** に置く。各プロパティは Lamport clock `(lamport, actor_id)` 付きの **LWW-Register**、`deleted` も 1 プロパティとして同一機構で解決 ([ADR 0001](docs/adr/0001-consistency-server-authoritative-lww-crdt.md))
 - **op log + materialized state の二層** — `operations`（append-only / `(document_id, seq)` で総順序 / late-joiner catch-up）と `canvas_objects`（LWW 解決済みの現在状態 / snapshot 用）を 1 トランザクションで原子更新。`documents.version` を `with_lock` で原子採番 ([ADR 0002](docs/adr/0002-data-model-op-log-materialized-lww.md))
@@ -118,11 +118,40 @@ cd ../ai-worker && python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 INTERNAL_TOKEN=dev-internal-token uvicorn main:app --port 8110
 
-# 4. frontend (別タブ) — Phase 5 で追加
-#   cd frontend && npm install && npm run dev   # http://localhost:3125
+# 4. frontend (別タブ)。SVG canvas + multiplayer cursor + 楽観適用/reconcile
+cd ../frontend && npm install && npm run dev   # http://localhost:3125
+
+# 5. E2E (別タブで全サービス起動後 / webServer が自動起動もする)
+cd ../playwright && npm ci && npx playwright install chromium && npm test
+npm run capture                                # captures/*.gif (ffmpeg 必須)
 ```
 
-> 注: dev の ActionCable は `solid_cable`（MySQL backed）。`figma_development_cable` DB が必要なので `db:prepare` で一括作成される。
+> 注: dev の ActionCable は `solid_cable`（MySQL backed）。`figma_development_cable` DB が必要なので `db:prepare` で一括作成される。ブラウザで http://localhost:3125 を開き 2 ウィンドウ (別ユーザー) で同じ document を開くと、図形の追加/移動/削除がリアルタイムに収束する。
+
+---
+
+## E2E デモ (Playwright で録画)
+
+2 BrowserContext (alice / bob) を hstack し、op が ActionCable (Solid Cable) で fan-out されて
+双方の canvas が収束する様子を gif 化 (slack / discord / uber と同じ仕組み)。
+
+| シナリオ | gif |
+| --- | --- |
+| alice 矩形追加 → bob に出現 / bob 楕円追加 → alice に出現 (双方向 fan-out) / bob 削除 → alice も 1 個に収束 | ![op fan-out](playwright/captures/01-op-fanout-converge.gif) |
+
+再録画は `cd playwright && npm run capture` (全サービス自動起動 + ffmpeg 必須)。詳細は [playwright/README.md](playwright/README.md)。
+
+---
+
+## CI (5 ジョブ)
+
+| ジョブ | 内容 |
+| --- | --- |
+| `figma-backend` | Rails 8.1 / Ruby 4.0.5 + MySQL service + `db:prepare` (multi-db) + RSpec 26 + rubocop |
+| `figma-ai-worker` | pytest (auto-layout 実ジオメトリ / lint / X-Internal-Token) |
+| `figma-frontend` | Next.js typecheck + build |
+| `figma-playwright` | 実機フルスタック (Rails + ai-worker + Next start) で 2 context op fan-out E2E |
+| `figma-terraform` | `fmt -check` + `init -backend=false` + `validate` |
 
 ---
 
@@ -134,7 +163,7 @@ INTERNAL_TOKEN=dev-internal-token uvicorn main:app --port 8110
 | 2 | `rails new`（API / Ruby 4.0.5）+ rodauth JWT scaffold + migration（users / documents / document_members / canvas_objects / operations）+ multi-DB（dev も Solid Cable）+ thin models + boot smoke | 🟢 完了 |
 | 3 | `OperationApplier`（seq 原子採番 + per-prop Lamport LWW）+ **収束不変条件 spec**（op を任意順で適用しても全 actor が同一状態に収束 — shopify 100-thread / discord race の figma 版）+ RSpec/FactoryBot scaffold | 🟢 完了 (RSpec 9 例) |
 | 4 | 認証（rodauth JWT / REST + ActionCable）→ controllers（documents CRUD + snapshot + catch-up + members）+ `DocumentChannel`（op fan-out + viewer 拒否 + ephemeral cursor）+ ai-worker（auto-layout 実ジオメトリ / lint mock）+ `AiWorkerClient` graceful degradation | 🟢 完了 (RSpec 26 + pytest 13) |
-| 5 | CI（backend / ai-worker / frontend / terraform）→ frontend（SVG canvas + cursor + 楽観/reconcile）→ Playwright（2 BrowserContext で同時編集の収束を hstack）→ Terraform 設計図 | ⬜ 次 |
+| 5 | CI（backend / ai-worker / frontend / playwright / terraform の 5 ジョブ）+ frontend（SVG canvas + cursor + 楽観/reconcile）+ Playwright（2 BrowserContext で op fan-out 収束を hstack + gif）+ Terraform 設計図 | 🟢 完了 |
 
 ---
 
