@@ -1,0 +1,27 @@
+# figma は ADR 0003 のため development でも Solid Cable (DB backed) を採用する。
+# 目的: 2 BrowserContext の Playwright E2E で「収束 op の fan-out」を実際に
+# Solid Cable 経路で実証する (async adapter は単一プロセス内 pub/sub なので
+# DB backed の検証にならない)。slack は Redis adapter、calendly は prod のみ
+# solid_cable だった点が figma との違い。
+#
+# 注意: test 環境は ActionCable 標準の :test adapter のまま (spec を速く・決定的に保つ)。
+# Solid Cable は polling 由来のレイテンシがあるため、収束ロジックの unit/channel spec では
+# 使わず、E2E (development server) でのみ DB backed 経路を通す。
+development:
+  adapter: solid_cable
+  connects_to:
+    database:
+      writing: cable
+  polling_interval: 0.1.seconds
+  message_retention: 1.day
+
+test:
+  adapter: test
+
+production:
+  adapter: solid_cable
+  connects_to:
+    database:
+      writing: cable
+  polling_interval: 0.1.seconds
+  message_retention: 1.day

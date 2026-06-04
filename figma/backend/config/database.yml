@@ -1,0 +1,66 @@
+# MySQL 8 (本リポ統一)。docker-compose で host port 3328 にマップしている。
+# Solid Cache / Queue / Cable を別 DB に分離 (calendly / zoom / shopify と同形)。
+# figma は ADR 0003 のため development でも cable adapter を solid_cable にするので、
+# development にも cable DB を持たせる (calendly は prod のみ solid_cable だった点が違う)。
+# 本番想定: infra/terraform で RDS MySQL 8.0 を分離 DB として複数定義 (cache / queue / cable)。
+default: &default
+  adapter: mysql2
+  encoding: utf8mb4
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  username: <%= ENV.fetch("DB_USER") { "root" } %>
+  password: <%= ENV.fetch("DB_PASSWORD") { "root" } %>
+  host: <%= ENV.fetch("DB_HOST") { "127.0.0.1" } %>
+  port: <%= ENV.fetch("DB_PORT") { 3328 } %>
+
+development:
+  primary:
+    <<: *default
+    database: figma_development
+  cache:
+    <<: *default
+    database: figma_development_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+    database: figma_development_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+    database: figma_development_cable
+    migrations_paths: db/cable_migrate
+
+test:
+  primary:
+    <<: *default
+    database: figma_test
+  cache:
+    <<: *default
+    database: figma_test_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *default
+    database: figma_test_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *default
+    database: figma_test_cable
+    migrations_paths: db/cable_migrate
+
+production:
+  primary: &primary_production
+    <<: *default
+    database: figma_production
+    username: figma
+    password: <%= ENV["FIGMA_DATABASE_PASSWORD"] %>
+  cache:
+    <<: *primary_production
+    database: figma_production_cache
+    migrations_paths: db/cache_migrate
+  queue:
+    <<: *primary_production
+    database: figma_production_queue
+    migrations_paths: db/queue_migrate
+  cable:
+    <<: *primary_production
+    database: figma_production_cable
+    migrations_paths: db/cable_migrate

@@ -35,6 +35,7 @@
 | [`zoom`](zoom/) | Zoom 風オンライン会議 (Rails 8) | 会議ライフサイクル state machine / ホスト・共同ホスト動的譲渡 (append-only 監査) / 録画→要約 at-least-once パイプライン (結果テーブル UNIQUE 冪等) — WebRTC SFU は scope 外 | 🟢 MVP 完成 (RSpec 67 + pytest 7 + Playwright 2 件通過 / Terraform validate / CI 4 ジョブ) | [README](zoom/README.md) ・ [ADR (3)](zoom/docs/adr/) |
 | [`calendly`](calendly/) | Calendly / Cal.com 風日程調整 (Rails 8 + **Ruby 4**) | availability merge / **同時予約レース防止 (MySQL における `EXCLUDE` 代替)** / RRULE 展開 + timezone 永続化 — 本リポ初の Ruby 4 系プロジェクト | 🟢 MVP 完成 (RSpec 88 + pytest 7 + Playwright 2 件通過 / Terraform validate / CI 5 ジョブ) | [README](calendly/README.md) ・ [Architecture](calendly/docs/architecture.md) ・ [ADR (3)](calendly/docs/adr/) |
 | [`uber`](uber/) | Uber 風配車プラットフォーム (Go) | **地理空間索引 (H3 hexagonal grid)** / 二者間 trip + driver state machine + compare-and-set / **per-H3-cell matcher goroutine + channel offer** (discord per-guild Hub との Go 並行 pattern 対比) / **ai-worker 同期境界 (ETA) + graceful degradation** / **rider=REST poll / driver=WS の非対称 2 経路** | 🟢 MVP 完成 (backend trip REST + driver WS gateway + matcher + ai-worker ETA / frontend rider+driver / go test -race + pytest 12 + Playwright 2 件 (実機フルスタックで pass) / Terraform validate / CI 5 ジョブ) | [README](uber/README.md) ・ [Architecture](uber/docs/architecture.md) ・ [ADR (4)](uber/docs/adr/) |
+| [`figma`](figma/) | Figma 風リアルタイム共同編集キャンバス (Rails 8 / Ruby 4) | **Server 権威 LWW-CRDT** (図形キャンバス / per-prop Lamport clock) / **append-only op log (server 採番 seq) + materialized state** / **ActionCable + Solid Cable で収束 op fan-out** (slack の Redis adapter との対比) / multiplayer cursor は ephemeral / 認証 rodauth JWT 1 経路 | 🟡 Phase 3 完了 (ADR 0001-0004 + Rails 8.1/Ruby 4.0.5 + rodauth JWT + 4 ドメイン migration + multi-DB/dev Solid Cable + **LWW 収束エンジン OperationApplier + 収束不変条件 spec (RSpec 9 例)**) | [README](figma/README.md) ・ [Architecture](figma/docs/architecture.md) ・ [ADR (4)](figma/docs/adr/) |
 
 各プロジェクトは **backend (Rails 8) + frontend (Next.js 16) + ai-worker (Python / FastAPI) + MySQL** という同形構成。違いは **API スタイル / キュー / 認可モデル / 検索エンジン / streaming プロトコル** といった技術課題ごとの選択にある。
 
@@ -206,7 +207,7 @@ LLM・AI エージェントを横断的に学ぶための案。
 
 | 候補 | モチーフ | 主な技術課題 |
 | --- | --- | --- |
-| `figma` | Figma | リアルタイム共同編集 (CRDT) / multiplayer cursor / undo/redo の協調 |
+| ~~`figma`~~ → 着手 | Figma | **Server 権威 LWW-CRDT** (図形キャンバス) / append-only op log + materialized state / **ActionCable + Solid Cable で収束 op fan-out** / multiplayer cursor は ephemeral (本リポに着手済み、Phase 1 完了) |
 | `stripe` | Stripe | idempotency key 設計 / webhook 配信保証（at-least-once + 順序）/ 決済 state machine / 通貨計算 |
 | ~~`shopify`~~ → 着手 | Shopify | **モジュラーモノリス (Rails Engine 分割)** / マルチテナント / 在庫整合性（同時減算）/ App プラットフォーム (Phase 1 完了) |
 | ~~`zoom`~~ → MVP 完成 | Zoom | 会議ライフサイクル状態機械 / 動的ホスト譲渡 + append-only 監査 / 録画→要約 at-least-once パイプライン (結果テーブル UNIQUE 冪等 / WebRTC SFU は scope 外) |
@@ -259,6 +260,7 @@ service-architecture-lab/
   zoom/                   # Zoom 風 (Rails 8 / 長寿命 state machine + 動的権限譲渡 + 録画→要約 at-least-once)
   calendly/               # Calendly 風 (Rails 8 / Ruby 4 / 期間 overlap + RRULE + tz 永続化 / MVP 完成)
   uber/                   # Uber 風 (Go / H3 + per-cell matcher goroutine + 二者間 trip state machine + ai-worker ETA 同期境界 + rider REST/driver WS frontend / MVP 完成)
+  figma/                  # Figma 風 (Rails 8 / Ruby 4 / Server 権威 LWW-CRDT + op log + materialized state + ActionCable Solid Cable / Phase 1 設計フェーズ完了)
   docs/                   # 共通ルール (走りながら整備)
     api-style.md          # REST/GraphQL 選定 + GraphQL 運用
     coding-rules/         # rails / frontend / python / go の規約

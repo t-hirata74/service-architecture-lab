@@ -1,0 +1,28 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: figma_development
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    ports:
+      - "3328:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - figma_mysql:/var/lib/mysql
+
+# backend / frontend / ai-worker は実装フェーズで Dockerfile を整備して追加する。
+# ローカル開発はホスト側 (rbenv / nvm / pyenv) で動かし、compose は MySQL のみ起動するのが
+# zoom / shopify / calendly と同じ運用 (本番想定の Dockerfile は infra/terraform 側で参照される)。
+#
+# Redis は使わない: ActionCable は Rails 8 標準の Solid Cable (MySQL backed) を採用 (ADR 0003)。
+# Solid Cable / Solid Queue / Solid Cache のテーブルはこの MySQL に同居する (single-DB 方針)。
+
+volumes:
+  figma_mysql:
