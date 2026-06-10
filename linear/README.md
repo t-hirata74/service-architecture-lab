@@ -8,7 +8,7 @@ Linear を参考に、**「server 権威 sync log による delta sync + optimis
 
 ## 見どころハイライト
 
-> 🔴 **設計フェーズ**: ADR 0001-0005 起こし済み。実装は Phase 2 から。
+> 🟡 **Phase 2 完了**: backend 基盤 (npm workspaces monorepo + NestJS + Prisma + JWT 認証 + `POST /mutations` 9 コマンド + sync log 採番/冪等台帳) を実装済み。jest e2e 16 + vitest 14 が green。Phase 3 で bootstrap / delta / WS push を作る。
 
 - **server 権威 sync log** — 全 mutation を per-workspace `seq`(= `lastSyncId`) で全順序化した append-only log に記録。採番は workspace 行の `FOR UPDATE` ロックで commit 順 = seq 順を保証し、delta 読み飛ばし (gap) を構造的に排除する（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md)）
 - **bootstrap + delta sync** — 初回は materialized snapshot を全量、以降は `?since=seq` の差分 catch-up。WS 切断からの再接続も同じ経路で吸収（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md) / [ADR 0005](docs/adr/0005-realtime-raw-websocket.md)）
@@ -81,30 +81,33 @@ flowchart LR
 ## ローカル起動
 
 ```sh
-# TODO: Phase 2 以降で更新する。現時点では MySQL のみ起動できる:
-docker compose up -d        # mysql :3330
+# 1. MySQL :3330 (初回は linear_test / linear_shadow も自動作成)
+docker compose up -d
+
+# 2. 依存インストール (monorepo root で。shared/backend に一括で入る)
+npm install
+
+# 3. backend 環境変数と migration
+cp backend/.env.example backend/.env
+cd backend && npx prisma migrate dev && cd ..
+
+# 4. shared を build して backend (NestJS :3140) を起動
+npm run build -w @linear/shared
+npm run start:dev -w backend
+
+# 動作確認
+curl http://localhost:3140/health
 ```
-
----
-
-## 初期化コマンド（プロジェクト初期化時に実行）
-
-<!-- このセクションは初期化が終わったら削除する -->
 
 ```sh
-# monorepo root (linear/) — npm workspaces
-npm init -y                       # 後で "workspaces": ["shared", "backend", "frontend"] を追記
-# backend (NestJS)
-npx @nestjs/cli new backend --package-manager npm
-# frontend (Next.js)
-npx create-next-app@latest frontend --ts --app --tailwind
-# shared (型共有 package)
-cd shared && npm init -y          # zod を依存に追加
-# backend ORM
-cd backend && npx prisma init --datasource-provider mysql
-# ai-worker (Python)
-cd ai-worker && python3 -m venv .venv && .venv/bin/pip install fastapi uvicorn pytest
+# テスト / lint (root の Makefile からは make linear-test / make linear-lint)
+npm run test -w @linear/shared     # vitest (fractional fuzz + schema)
+npm run test -w backend            # jest unit
+npm run test:e2e -w backend        # jest e2e (linear_test DB / --runInBand)
+npm run lint                       # eslint + tsc --noEmit
 ```
+
+> frontend (Next.js :3145) は Phase 5、ai-worker (:8130) は Phase 4 で追加する。
 
 ---
 

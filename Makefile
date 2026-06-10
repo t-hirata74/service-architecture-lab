@@ -349,3 +349,38 @@ uber-capture: ## uber E2E gif 録画 (captures/*.gif / ffmpeg 必須)
 
 .PHONY: uber-test
 uber-test: uber-backend-test uber-ai-test ## uber の backend + ai-worker テストを実行
+
+.PHONY: linear-deps-up
+linear-deps-up: ## linear deps (MySQL :3330) を起動
+	cd linear && docker compose up -d
+
+.PHONY: linear-deps-down
+linear-deps-down: ## linear deps を停止
+	cd linear && docker compose down
+
+.PHONY: linear-install
+linear-install: ## linear monorepo の依存を一括インストール (npm workspaces)
+	cd linear && npm install
+
+.PHONY: linear-migrate
+linear-migrate: ## linear backend: prisma migrate dev (要 .env / shadow DB)
+	cd linear/backend && npx prisma migrate dev
+
+.PHONY: linear-backend
+linear-backend: ## linear backend (NestJS) を :3140 で起動 (shared を先に build)
+	cd linear && npm run build -w @linear/shared && npm run start:dev -w backend
+
+.PHONY: linear-shared-test
+linear-shared-test: ## linear shared テスト (vitest / fractional + schema)
+	cd linear && npm run test -w @linear/shared
+
+.PHONY: linear-backend-test
+linear-backend-test: ## linear backend テスト (jest unit + e2e / linear_test DB)
+	cd linear && npm run test -w backend && npm run test:e2e -w backend
+
+.PHONY: linear-lint
+linear-lint: ## linear lint (eslint + tsc --noEmit)
+	cd linear && npm run lint
+
+.PHONY: linear-test
+linear-test: linear-shared-test linear-backend-test ## linear の shared + backend テストを実行

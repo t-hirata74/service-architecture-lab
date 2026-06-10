@@ -1,0 +1,20 @@
+{
+  "name": "@linear/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FE/BE 共有の zod スキーマ・sync protocol 型・fractional indexing (ADR 0004)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

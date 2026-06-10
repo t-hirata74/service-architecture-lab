@@ -1,0 +1,13 @@
+{
+  "name": "@linear/monorepo",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "backend"
+  ],
+  "scripts": {
+    "build": "npm run build -w @linear/shared && npm run build -w backend",
+    "test": "npm run test -w @linear/shared && npm run test:e2e -w backend",
+    "lint": "npm run lint -w @linear/shared && npm run lint -w backend"
+  }
+}

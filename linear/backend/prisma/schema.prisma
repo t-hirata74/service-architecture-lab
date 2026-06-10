@@ -1,0 +1,218 @@
+// linear のデータモデル (architecture.md / ADR 0002)。
+// materialized 現在状態 (issues 等) + append-only sync_ops の二層。
+// 採番カウンタ: workspaces.sync_seq (lastSyncId) / teams.issue_counter (ENG-42)。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum MemberRole {
+  admin
+  member
+}
+
+enum StateCategory {
+  backlog
+  unstarted
+  started
+  completed
+  canceled
+}
+
+enum EntityType {
+  team
+  workflow_state
+  issue
+  label
+  issue_label
+  comment
+}
+
+enum OpAction {
+  insert
+  update
+  delete
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  name         String   @db.VarChar(100)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  memberships    WorkspaceMember[]
+  issuesCreated  Issue[]           @relation("IssueCreatedBy")
+  issuesAssigned Issue[]           @relation("IssueAssignee")
+  comments       Comment[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(100)
+  urlKey    String   @unique @map("url_key") @db.VarChar(50)
+  // sync log 採番カウンタ。FOR UPDATE でロックして採番する (ADR 0002)
+  syncSeq   BigInt   @default(0) @map("sync_seq")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  members   WorkspaceMember[]
+  teams     Team[]
+  syncOps   SyncOp[]
+  mutations MutationLedger[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  workspaceId Int        @map("workspace_id")
+  userId      Int        @map("user_id")
+  role        MemberRole @default(member)
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Team {
+  id          Int    @id @default(autoincrement())
+  workspaceId Int    @map("workspace_id")
+  key         String @db.VarChar(10)
+  name        String @db.VarChar(100)
+  // per-team issue number (ENG-42) の採番カウンタ。FOR UPDATE で原子採番
+  issueCounter BigInt   @default(0) @map("issue_counter")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  states    WorkflowState[]
+  issues    Issue[]
+  labels    Label[]
+
+  @@unique([workspaceId, key])
+  @@map("teams")
+}
+
+model WorkflowState {
+  id       Int           @id @default(autoincrement())
+  teamId   Int           @map("team_id")
+  name     String        @db.VarChar(50)
+  category StateCategory
+  position Int
+
+  team   Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  issues Issue[]
+
+  @@unique([teamId, name])
+  @@map("workflow_states")
+}
+
+model Issue {
+  id          Int     @id @default(autoincrement())
+  teamId      Int     @map("team_id")
+  number      Int
+  title       String  @db.VarChar(255)
+  description String? @db.Text
+  stateId     Int     @map("state_id")
+  // 0=none / 1=urgent / 2=high / 3=medium / 4=low
+  priority    Int     @default(0) @db.TinyInt
+  assigneeId  Int?    @map("assignee_id")
+  // fractional index (shared/fractional.ts)。列内の並び順
+  sortOrder   String  @map("sort_order") @db.VarChar(64)
+  createdById Int     @map("created_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  team      Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  state     WorkflowState @relation(fields: [stateId], references: [id], onDelete: Restrict)
+  assignee  User?         @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy User          @relation("IssueCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  labels    IssueLabel[]
+  comments  Comment[]
+
+  @@unique([teamId, number])
+  @@index([teamId, stateId, sortOrder])
+  @@map("issues")
+}
+
+model Label {
+  id     Int    @id @default(autoincrement())
+  teamId Int    @map("team_id")
+  name   String @db.VarChar(50)
+  color  String @db.VarChar(7)
+
+  team   Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  issues IssueLabel[]
+
+  @@unique([teamId, name])
+  @@map("labels")
+}
+
+model IssueLabel {
+  issueId Int @map("issue_id")
+  labelId Int @map("label_id")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, labelId])
+  @@map("issue_labels")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  issueId   Int      @map("issue_id")
+  authorId  Int      @map("author_id")
+  body      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue  Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([issueId])
+  @@map("comments")
+}
+
+// append-only sync log (ADR 0002)。UPDATE / DELETE しない
+model SyncOp {
+  id               BigInt     @id @default(autoincrement())
+  workspaceId      Int        @map("workspace_id")
+  seq              BigInt
+  entityType       EntityType @map("entity_type")
+  entityId         Int        @map("entity_id")
+  action           OpAction
+  payload          Json
+  actorId          Int        @map("actor_id")
+  clientMutationId String?    @map("client_mutation_id") @db.VarChar(36)
+  createdAt        DateTime   @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, seq])
+  @@map("sync_ops")
+}
+
+// clientMutationId の冪等台帳 (ADR 0002/0003)。at-least-once 再送を no-op 化する
+model MutationLedger {
+  id               BigInt   @id @default(autoincrement())
+  clientMutationId String   @unique @map("client_mutation_id") @db.VarChar(36)
+  workspaceId      Int      @map("workspace_id")
+  actorId          Int      @map("actor_id")
+  firstSeq         BigInt   @map("first_seq")
+  lastSeq          BigInt   @map("last_seq")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("mutations")
+}
