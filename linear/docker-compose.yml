@@ -1,0 +1,40 @@
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: linear_development
+      MYSQL_USER: linear
+      MYSQL_PASSWORD: linear
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
+    ports:
+      - "3330:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "linear", "-plinear"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ai-worker は Phase 4 で有効化する (datadog / uber と同方針):
+  # ai-worker:
+  #   image: python:3.13
+  #   working_dir: /work
+  #   volumes:
+  #     - ./ai-worker:/work
+  #   command: sh -c "pip install -q -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000"
+  #   ports:
+  #     - "8130:8000"
+  #   environment:
+  #     INTERNAL_TOKEN: dev-internal-token
+
+  # backend (NestJS :3140) / frontend (Next.js :3145) は host の Node で
+  # `npm run start:dev` / `npm run dev` を想定 (他プロジェクトの frontend と同方針)。
+  # CI / E2E でコンテナ化が必要になったら Dockerfile を足す。
+
+volumes:
+  mysql_data:
