@@ -8,7 +8,7 @@ Linear を参考に、**「server 権威 sync log による delta sync + optimis
 
 ## 見どころハイライト
 
-> 🟡 **Phase 2 完了**: backend 基盤 (npm workspaces monorepo + NestJS + Prisma + JWT 認証 + `POST /mutations` 9 コマンド + sync log 採番/冪等台帳) を実装済み。jest e2e 16 + vitest 14 が green。Phase 3 で bootstrap / delta / WS push を作る。
+> 🟡 **Phase 3 完了**: sync engine の server 側が一周 — `POST /mutations` (採番/冪等台帳) + `GET /sync/bootstrap`・`/sync/delta` ($transaction 一括読みで torn snapshot 防止) + **素 WS gateway** (`/sync/ws` / hello + op push / heartbeat)。**並行 30 mutation 下で delta 読者が gap を観測しない不変条件テスト** (ADR 0002 の実証) を含む jest e2e 26 + vitest 14 が green。Phase 4 で client 側 (IndexedDB + optimistic/offline) を作る。
 
 - **server 権威 sync log** — 全 mutation を per-workspace `seq`(= `lastSyncId`) で全順序化した append-only log に記録。採番は workspace 行の `FOR UPDATE` ロックで commit 順 = seq 順を保証し、delta 読み飛ばし (gap) を構造的に排除する（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md)）
 - **bootstrap + delta sync** — 初回は materialized snapshot を全量、以降は `?since=seq` の差分 catch-up。WS 切断からの再接続も同じ経路で吸収（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md) / [ADR 0005](docs/adr/0005-realtime-raw-websocket.md)）
@@ -97,6 +97,7 @@ npm run start:dev -w backend
 
 # 動作確認
 curl http://localhost:3140/health
+# WS は ws://localhost:3140/sync/ws?workspaceId=<id>&token=<JWT> (hello → op push)
 ```
 
 ```sh

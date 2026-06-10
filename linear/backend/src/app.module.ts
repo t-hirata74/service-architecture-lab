@@ -7,6 +7,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { IssuesModule } from './issues/issues.module';
 import { MutationsModule } from './mutations/mutations.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { SyncModule } from './sync/sync.module';
 import { TeamsModule } from './teams/teams.module';
 import { WorkspacesModule } from './workspaces/workspaces.module';
@@ -20,6 +21,7 @@ import { WorkspacesModule } from './workspaces/workspaces.module';
     SyncModule,
     TeamsModule,
     IssuesModule,
+    RealtimeModule,
     MutationsModule,
   ],
   controllers: [AppController],

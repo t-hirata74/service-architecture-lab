@@ -1,8 +1,11 @@
 import { INestApplication } from '@nestjs/common';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
 import { AppModule } from '../src/app.module';
 
 export async function createTestApp(): Promise<INestApplication<App>> {
@@ -10,8 +13,21 @@ export async function createTestApp(): Promise<INestApplication<App>> {
     imports: [AppModule],
   }).compile();
   const app = moduleRef.createNestApplication();
+  app.useWebSocketAdapter(new WsAdapter(app));
   await app.init();
   return app;
+}
+
+/** WS テスト用: 実ポートで listen して base URL を返す */
+export async function listenTestApp(): Promise<{
+  app: INestApplication<App>;
+  port: number;
+}> {
+  const app = await createTestApp();
+  await app.listen(0);
+  const server = app.getHttpServer() as unknown as Server;
+  const address = server.address() as AddressInfo;
+  return { app, port: address.port };
 }
 
 /** FK 依存の子 → 親の順で全削除 (e2e は --runInBand 前提で DB を共有する) */

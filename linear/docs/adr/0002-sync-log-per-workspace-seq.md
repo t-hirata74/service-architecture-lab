@@ -69,9 +69,9 @@ sync engine の真実は「全 mutation の順序付き log」である。client
 
 ## このADRを守るテスト / 実装ポインタ
 
-- `linear/backend/test/sync-gapless.e2e-spec.ts`（予定）— 並行 mutation N 本を流しつつ delta を読み続け、「観測した seq 列に欠番がない / lastSyncId 以下が後から現れない」ことを検証する不変条件テスト
-- `linear/backend/src/sync/`（予定）— 採番 + append が単一サービスに閉じていること
-- `prisma/schema.prisma`（予定）— `UNIQUE(workspace_id, seq)` / `client_mutation_id UNIQUE`
+- `linear/backend/test/sync-gapless.e2e-spec.ts` — 並行 30 mutation を流しつつ delta を読み続け、「観測した seq 列に欠番がない / 重複しない」ことを検証する不変条件テスト (Phase 3 で実装・pass)
+- `linear/backend/src/sync/sync.service.ts` — `lockSyncSeq` (FOR UPDATE) + `appendOps` + `bootstrap`/`delta` ($transaction 一括読みで torn snapshot 防止)。採番が単一サービスに閉じている
+- `linear/backend/prisma/schema.prisma` — `UNIQUE(workspace_id, seq)` / `client_mutation_id UNIQUE`
 
 ## 関連 ADR
 

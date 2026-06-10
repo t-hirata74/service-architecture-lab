@@ -66,7 +66,8 @@ Accepted（2026-06-10）
 
 ## このADRを守るテスト / 実装ポインタ
 
-- `linear/backend/test/realtime.e2e-spec.ts`（予定）— 2 接続で片方の mutation が他方に seq 順で届く / 切断中の op が再接続後の delta で取得できる
+- `linear/backend/test/realtime.e2e-spec.ts` — 2 接続 fan-out / 冪等 replay は再 broadcast しない / 再接続 hello → delta catch-up / 4400・4401・4403 close (Phase 3 で実装・pass)
+- `linear/backend/src/realtime/` — gateway (接続時 JWT + membership 検証 → hello) と RealtimeService (room Map + heartbeat + broadcastOps)。順序・冪等の正しさは持たない
 - `linear/frontend/`（予定）— WSClient: 連続性が崩れた時に delta を先に当ててから適用再開すること
 - Playwright（Phase 5 予定）— 2 BrowserContext hstack で issue 移動の即時反映 (リポ慣行の実機 E2E)
 
