@@ -21,17 +21,16 @@ services:
       timeout: 5s
       retries: 10
 
-  # ai-worker は Phase 4 で有効化する (datadog / uber と同方針):
-  # ai-worker:
-  #   image: python:3.13
-  #   working_dir: /work
-  #   volumes:
-  #     - ./ai-worker:/work
-  #   command: sh -c "pip install -q -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000"
-  #   ports:
-  #     - "8130:8000"
-  #   environment:
-  #     INTERNAL_TOKEN: dev-internal-token
+  ai-worker:
+    image: python:3.13
+    working_dir: /work
+    volumes:
+      - ./ai-worker:/work
+    command: sh -c "pip install -q -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8130:8000"
+    environment:
+      INTERNAL_TOKEN: dev-internal-token
 
   # backend (NestJS :3140) / frontend (Next.js :3145) は host の Node で
   # `npm run start:dev` / `npm run dev` を想定 (他プロジェクトの frontend と同方針)。

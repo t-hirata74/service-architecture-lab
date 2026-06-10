@@ -383,4 +383,16 @@ linear-lint: ## linear lint (eslint + tsc --noEmit)
 	cd linear && npm run lint
 
 .PHONY: linear-test
-linear-test: linear-shared-test linear-backend-test ## linear の shared + backend テストを実行
+linear-test: linear-shared-test linear-client-test linear-backend-test linear-ai-test ## linear の shared + client + backend + ai-worker テストを実行
+
+.PHONY: linear-ai
+linear-ai: ## linear ai-worker (FastAPI) を :8130 で起動 (docker compose)
+	cd linear && docker compose up -d ai-worker
+
+.PHONY: linear-ai-test
+linear-ai-test: ## linear ai-worker テスト (pytest / triage + duplicates)
+	cd linear/ai-worker && .venv/bin/python -m pytest
+
+.PHONY: linear-client-test
+linear-client-test: ## linear client sync engine テスト (vitest / optimistic + offline replay)
+	cd linear && npm run test -w @linear/client-sync

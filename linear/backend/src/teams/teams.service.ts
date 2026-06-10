@@ -15,7 +15,7 @@ import {
   toStatePayload,
   toTeamPayload,
 } from '../sync/payloads';
-import { DEFAULT_WORKFLOW_STATES } from './default-states';
+import { DEFAULT_WORKFLOW_STATES } from '@linear/shared';
 
 type Tx = Prisma.TransactionClient;
 type CreateTeamCommand = z.infer<typeof CreateTeamCommandSchema>;

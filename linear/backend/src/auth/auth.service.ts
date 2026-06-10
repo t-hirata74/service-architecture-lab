@@ -8,7 +8,7 @@ import { LoginRequest, SignupRequest } from '@linear/shared';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
-import { DEFAULT_WORKFLOW_STATES } from '../teams/default-states';
+import { DEFAULT_WORKFLOW_STATES } from '@linear/shared';
 
 export interface AuthResult {
   token: string;

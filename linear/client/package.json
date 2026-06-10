@@ -1,0 +1,20 @@
+{
+  "name": "@linear/client-sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "framework 非依存の client sync engine (ADR 0003)。storage/transport は注入、React バインドは frontend 側",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@linear/shared": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  }
+}

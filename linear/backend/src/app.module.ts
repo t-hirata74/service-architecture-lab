@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { AiModule } from './ai/ai.module';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
@@ -23,6 +24,7 @@ import { WorkspacesModule } from './workspaces/workspaces.module';
     IssuesModule,
     RealtimeModule,
     MutationsModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [

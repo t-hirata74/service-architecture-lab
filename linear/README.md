@@ -8,7 +8,7 @@ Linear を参考に、**「server 権威 sync log による delta sync + optimis
 
 ## 見どころハイライト
 
-> 🟡 **Phase 3 完了**: sync engine の server 側が一周 — `POST /mutations` (採番/冪等台帳) + `GET /sync/bootstrap`・`/sync/delta` ($transaction 一括読みで torn snapshot 防止) + **素 WS gateway** (`/sync/ws` / hello + op push / heartbeat)。**並行 30 mutation 下で delta 読者が gap を観測しない不変条件テスト** (ADR 0002 の実証) を含む jest e2e 26 + vitest 14 が green。Phase 4 で client 側 (IndexedDB + optimistic/offline) を作る。
+> 🟡 **Phase 4 完了**: sync engine が両側そろった — server 側 (`POST /mutations` 採番/冪等台帳 + bootstrap/delta + 素 WS gateway) に加えて、**client 側 SyncEngine** (`client/` workspace / framework 非依存): confirmed + pending 分離の rebase / optimistic + 4xx rollback / **offline queue replay + 一時 id 再割当 (temp→real remap)** / gap の delta 自己修復。**reducer parity テスト** (bootstrap(0) + 全 ops 畳み込み ≡ 最終 bootstrap) で FE/BE の意味一致を固定。ai-worker (triage/duplicates mock) + `/ai/triage` 内部 ingress も稼働。jest e2e 30 + vitest 37 + pytest 9 green。Phase 5 で Next.js UI + Playwright + Terraform + CI。
 
 - **server 権威 sync log** — 全 mutation を per-workspace `seq`(= `lastSyncId`) で全順序化した append-only log に記録。採番は workspace 行の `FOR UPDATE` ロックで commit 順 = seq 順を保証し、delta 読み飛ばし (gap) を構造的に排除する（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md)）
 - **bootstrap + delta sync** — 初回は materialized snapshot を全量、以降は `?since=seq` の差分 catch-up。WS 切断からの再接続も同じ経路で吸収（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md) / [ADR 0005](docs/adr/0005-realtime-raw-websocket.md)）
@@ -102,13 +102,15 @@ curl http://localhost:3140/health
 
 ```sh
 # テスト / lint (root の Makefile からは make linear-test / make linear-lint)
-npm run test -w @linear/shared     # vitest (fractional fuzz + schema)
-npm run test -w backend            # jest unit
-npm run test:e2e -w backend        # jest e2e (linear_test DB / --runInBand)
-npm run lint                       # eslint + tsc --noEmit
+npm run test -w @linear/shared      # vitest (fractional fuzz + schema + reducer)
+npm run test -w @linear/client-sync # vitest (SyncEngine: optimistic/offline/remap)
+npm run test -w backend             # jest unit
+npm run test:e2e -w backend         # jest e2e (linear_test DB / --runInBand)
+npm run lint                        # eslint + tsc --noEmit
+cd ai-worker && .venv/bin/python -m pytest   # ai-worker (要 venv セットアップ)
 ```
 
-> frontend (Next.js :3145) は Phase 5、ai-worker (:8130) は Phase 4 で追加する。
+> frontend (Next.js :3145) は Phase 5 で追加する。ai-worker (:8130) は `docker compose up -d` で起動済み。
 
 ---
 

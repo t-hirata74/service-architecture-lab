@@ -70,8 +70,9 @@ figma の frontend は「client LWW + reconcile」だったが、あちらは収
 
 ## このADRを守るテスト / 実装ポインタ
 
-- `linear/shared/src/reducer.test.ts`（予定・vitest）— op 適用の純関数性 / rebase の収束 (同じ op 列なら同じ状態)
-- `linear/frontend/`（予定）— SyncStore: confirm で pending が除去される / 4xx で楽観適用が消える / 復帰シーケンス①→②→③の順序
+- `linear/client/src/sync-engine.ts` — confirmed + pending 分離の SyncEngine 本体 (framework 非依存 / storage・transport 注入)。一時 id (負数) の実 id 再割当てと連鎖 rollback も実装 (Phase 4)
+- `linear/client/src/sync-engine.test.ts` — 楽観反映 / 4xx rollback / offline replay + remap / 依存連鎖破棄 / gap 自己修復 / 永続化復元 の 14 ケース
+- `linear/shared/src/reducer.test.ts` — applyOp / applyCommand の純関数性・決定性
 - Playwright（Phase 5 予定）— offline 編集 → 再接続 → 他 context に反映、の実機 E2E
 
 ## 関連 ADR
