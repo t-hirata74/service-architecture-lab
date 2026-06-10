@@ -13,8 +13,8 @@ class CreateCanvasObjects < ActiveRecord::Migration[8.1]
       t.integer :z_index, null: false, default: 0
       t.bigint :last_seq, null: false, default: 0
       t.timestamps
-      t.index [:document_id, :shape_id], unique: true
-      t.index [:document_id, :deleted]
+      t.index [ :document_id, :shape_id ], unique: true
+      t.index [ :document_id, :deleted ]
     end
     add_foreign_key :canvas_objects, :documents
   end

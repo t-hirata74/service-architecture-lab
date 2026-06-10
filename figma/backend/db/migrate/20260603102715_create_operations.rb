@@ -11,7 +11,7 @@ class CreateOperations < ActiveRecord::Migration[8.1]
       t.json :payload, null: false                      # 変更プロパティ {prop: value}
       t.bigint :lamport, null: false
       t.datetime :created_at, null: false
-      t.index [:document_id, :seq], unique: true        # 総順序 + catch-up (?since=seq)
+      t.index [ :document_id, :seq ], unique: true        # 総順序 + catch-up (?since=seq)
     end
     add_foreign_key :operations, :documents
     add_foreign_key :operations, :users, column: :actor_id

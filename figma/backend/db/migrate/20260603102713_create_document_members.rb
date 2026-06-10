@@ -6,7 +6,7 @@ class CreateDocumentMembers < ActiveRecord::Migration[8.1]
       t.bigint :user_id, null: false
       t.string :role, null: false, default: "editor"
       t.timestamps
-      t.index [:document_id, :user_id], unique: true
+      t.index [ :document_id, :user_id ], unique: true
       t.index :user_id
     end
     add_foreign_key :document_members, :documents
