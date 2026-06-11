@@ -1112,3 +1112,41 @@ end
 UNIQUE 制約**なしで** `find_or_create_by!` を使うと race 時にサイレントに重複行を作るので、必ず DB UNIQUE 制約とセットにする。spec では「同 customer 2 つ目の open cart は RecordNotUnique」を fixate。
 
 実例: `shopify/backend/spec/models/orders/cart_unique_active_spec.rb` + `shopify/backend/spec/requests/storefront/cart_and_checkout_spec.rb`。
+
+---
+
+## TypeScript フルスタック (linear) <a id="typescript-フルスタック-linear"></a>
+
+monorepo (shared / client / backend / frontend) で確立したテストパターン。ランナーは **backend = jest (Nest 標準) / packages = vitest** の併用で割り切る。
+
+### 並行 gapless 不変条件テスト (sync log の核心)
+
+「並行 mutation 中に delta を読み続けても seq に欠番・遅延出現がない」(operating-patterns §26) を、**writer 30 並行 + reader ポーリングを同時に走らせて**実 MySQL で検証する。観測した op の seq が常に `last+1` であることをループ内で即時 assert するのが要点 — 終了後の合計だけ見ると「途中の読み飛ばし → 後で埋まった」を見逃す。採番を AUTO_INCREMENT に変えるとこのテストが落ちる、という形で ADR の決定がテストに固定される。
+
+実例: `linear/backend/test/sync-gapless.e2e-spec.ts`
+
+### reducer parity テスト (FE/BE の意味一致)
+
+型共有 (スキーマが合う) だけでは「適用結果が同じ」は保証されない。**「bootstrap(0) に全 ops を shared reducer で畳み込んだ結果 ≡ 最終 bootstrap (server の materialized state)」** を全コマンド種で突き合わせ、client の confirmed state が server とドリフトしないことを実 DB で固定する。比較前に並び順だけ正規化 (ops 挿入順 vs ORDER BY) する。
+
+実例: `linear/backend/test/reducer-parity.e2e-spec.ts`
+
+### FakeServer による client engine の決定的テスト
+
+framework 非依存 engine (transport / storage / clock / uuid 注入) に対し、**backend の意味論 (seq 採番・冪等台帳・id 採番) を写した ~200 行の FakeServer** を transport として注入する。offline replay・一時 id remap・4xx 連鎖 rollback・gap 自己修復まで、ネットワークもブラウザも無しで vitest で回る。`now`/`uuid` を固定すると snapshot 比較が完全に決定的になる。
+
+実例: `linear/client/src/sync-engine.test.ts`
+
+### jest e2e の規律
+
+- **実 MySQL (`*_test` DB) + `--runInBand`** — DB を共有するため並列実行しない (datadog `go test -p 1` と同じ理由)。`pretest:e2e` で `prisma migrate deploy`
+- supertest は **default import**。WS テストは `app.listen(0)` + `ws` client で実ポートに繋ぐ (`listenTestApp` helper)
+- WsAdapter をテスト用 app factory にも適用する (coding-rules/typescript.md §8 の罠一覧)
+
+### Playwright (実機フルスタック)
+
+- webServer は **production build** (`next start` / `node dist/main.js`) — zoom で確立した hydration race 回避を踏襲
+- **手動 `browser.newContext()` は config の `use.video` を継承しない** — 録画時は helpers で `recordVideo` を明示付与。2 context の動画を ffmpeg hstack で 1 gif に合成 (slack / figma と同形)
+- offline 系は `context.setOffline(true)` — navigator の offline イベントが client の online 状態管理 (engine.setOnline) に素直に届くので、「保存中バッジ → 復帰 → 他 context へ反映」が UI 越しに検証できる
+
+実例: `linear/playwright/tests/*.spec.ts` + `linear/playwright/scripts/record-captures.sh`

@@ -1445,6 +1445,63 @@ driver は長寿命 WS が前提 (位置を流し続ける) なので offer を 
 
 ---
 
+## 26. server 権威 sync log + counter 行 FOR UPDATE による gapless 採番 (linear)
+
+**「全変更を全順序 log に記録し、client は `since=lastSyncId` の差分で必ず追いつける」** を成立させる採番パターン。sync engine だけでなく outbox / CDC / イベント配信の全てに通じる。
+
+### 罠: AUTO_INCREMENT は commit 順を保証しない
+
+id は INSERT 時に採番されるが commit はその後。txn A が id=5、txn B が id=6 を取り **B が先に commit** すると、読者は 6 を見て `lastSyncId=6` とし、後から commit された 5 を**永遠に読み飛ばす**。「log を読む側が単調 id を信じる」設計では致命傷になる。
+
+### 対策: counter 行を FOR UPDATE でロックして採番し、COMMIT まで保持する
+
+```text
+1 txn = [ SELECT sync_seq FROM workspaces WHERE id=? FOR UPDATE   ← 行ロック
+        → ドメイン更新 + sync_ops INSERT (seq = sync_seq+1..+n)
+        → UPDATE workspaces SET sync_seq = sync_seq + n
+        → COMMIT ]                                                 ← ロック解放
+```
+
+ロックが commit まで持続するため **commit 順 = seq 順** が構造的に成立し、`WHERE seq > :since ORDER BY seq` だけで gap のない読みになる。figma の `documents.version` `with_lock` / shopify の `Order#number` カウンタと同族で、これを「配信 log の順序保証」に使ったのが linear。
+
+### 設計上の対 (セットで効く)
+
+- **二層構造**: materialized 現在状態 (issues 等) + append-only `sync_ops`。bootstrap は snapshot、catch-up は log (figma §同様)
+- **冪等台帳**: `client_mutation_id` UNIQUE の mutations 台帳を同一 txn に乗せ、at-least-once 再送を「記録済み結果を返す no-op」に吸収
+- **読み側の整合**: bootstrap / delta は `$transaction` 一括読み (REPEATABLE READ snapshot) で lastSyncId と本体の torn を防ぐ
+- **ロック順序の規律**: workspace → team (issue counter) の一方向のみで deadlock を構造排除
+- **トレードオフ**: workspace 内の書き込み直列化。順序保証の対価として意図的に払う (ADR に明記)
+
+不変条件は「並行 mutation 中に delta をポーリングし続けても観測 seq が常に `last+1`」のテストで fixate する (testing-strategy.md 参照)。
+
+実例: `linear/backend/src/sync/sync.service.ts` (lockSyncSeq / appendOps) + `linear/backend/test/sync-gapless.e2e-spec.ts` + linear ADR 0002。
+
+---
+
+## 27. confirmed + pending 分離による optimistic / offline client (linear)
+
+楽観更新・オフライン編集・他者変更の合流を **1 つのデータ構造**で扱う client パターン。「単一 state を直接書き換えて失敗時に逆操作で巻き戻す」方式は他者変更が挟まると壊れる — 正攻法はこちら。
+
+### 構造
+
+```text
+confirmed  : server 確定 state (op を seq 順に適用したものだけ)
+pending    : 未確定 mutation の FIFO 列 (clientMutationId / 固定 tempIds / 固定 timestamp)
+表示       = confirmed に pending を順に再適用した導出値 (rebase)
+```
+
+- **rollback = pending から外して再導出**。逆操作の生成が不要になり、4xx 拒否・依存連鎖の破棄・他者 op との合流が全部同じ仕組みに畳まれる
+- **一時 id (負数) は mutate 時に固定割当て**し、確定 op の insert と**位置対応**で実 id に解決 → 残 pending のコマンド内参照を書き換える (offline で「親作成 → 子作成」の連鎖が成立する要)。親が拒否されたら、その一時 id を参照する後続も**不動点まで連鎖破棄**
+- **送信は FIFO 直列 + at-least-once**。再送重複は §26 の冪等台帳が server 側で吸収
+- **op の取り込みは seq 連続性だけを信じる**: 重複 (`seq <= last`) は捨て、gap は delta で自己修復。**push (WS) は at-most-once のヒントに格下げ**し、真実は log に置く — 再接続・取りこぼし・複数デバイスが全部「delta で埋める」の 1 パターンに集約される
+- engine は framework 非依存にして transport / storage / clock を注入 (coding-rules/typescript.md §5) — backend の意味論を写した FakeServer で決定的にテストできる
+
+figma (client にも LWW clock を持つ収束) との対比: linear は**収束の正しさを server 全順序に一任**し、client は「適用と再適用」だけを持つ。リアルタイム協調の 2 流派として並べて読むと差が立つ。
+
+実例: `linear/client/src/sync-engine.ts` + `linear/client/src/sync-engine.test.ts` (offline replay / remap / 連鎖 rollback の 14 ケース) + linear ADR 0003 / 0005。
+
+---
+
 ## 関連ドキュメント
 
 - [CLAUDE.md](../CLAUDE.md) — エージェント向け要約
@@ -1455,5 +1512,6 @@ driver は長寿命 WS が前提 (位置を流し続ける) なので offer を 
 - [coding-rules/rails.md](coding-rules/rails.md) — Service オブジェクト / ai-worker 境界 / job 原子性
 - [coding-rules/python.md](coding-rules/python.md) — Django/DRF + FastAPI async + ai-worker のコーディング規約
 - [coding-rules/go.md](coding-rules/go.md) — discord で確立した Go 規約
+- [coding-rules/typescript.md](coding-rules/typescript.md) — linear で確立した TS フルスタック規約 (monorepo / NestJS / Prisma / client engine)
 - [testing-strategy.md](testing-strategy.md) — RSpec / pytest-django / pytest-asyncio + httpx ASGITransport / Go race / OpenAPI 契約検証
 - [git-workflow.md](git-workflow.md) — ブランチ戦略 / コミット規約
