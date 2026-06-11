@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PrioritySchema, SortOrderSchema } from './entities';
+import { MemberRoleSchema, PrioritySchema, SortOrderSchema } from './entities';
 
 /**
  * 書き込みの唯一の入口 POST /mutations のコマンド定義 (ADR 0001/0004)。
@@ -79,7 +79,26 @@ export const RemoveIssueLabelCommandSchema = z.object({
   labelId: z.number().int(),
 });
 
+/**
+ * 登録済みユーザの email を指定して直接 member に加える (ADR 0006)。
+ * 対象 userId は server が解決するため、このコマンドは楽観適用されない
+ * (reducer.applyCommand は no-op、確定 op で反映)。admin 限定。
+ */
+export const InviteMemberCommandSchema = z.object({
+  type: z.literal('inviteMember'),
+  email: z.string().email().max(255),
+  role: MemberRoleSchema,
+});
+
+/** admin 限定。自分自身は remove できない */
+export const RemoveMemberCommandSchema = z.object({
+  type: z.literal('removeMember'),
+  userId: z.number().int().positive(),
+});
+
 export const MutationCommandSchema = z.discriminatedUnion('type', [
+  InviteMemberCommandSchema,
+  RemoveMemberCommandSchema,
   CreateTeamCommandSchema,
   CreateIssueCommandSchema,
   UpdateIssueCommandSchema,

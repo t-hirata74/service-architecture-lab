@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { WS_CLOSE_FORBIDDEN } from '@linear/shared';
 import type { ServerWsMessage, SyncOp } from '@linear/shared';
 import type { WebSocket } from 'ws';
 
@@ -6,6 +7,7 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 
 interface TrackedSocket {
   workspaceId: number;
+  userId: number;
   isAlive: boolean;
 }
 
@@ -38,14 +40,14 @@ export class RealtimeService implements OnModuleDestroy {
     this.sockets.clear();
   }
 
-  register(workspaceId: number, socket: WebSocket): void {
+  register(workspaceId: number, socket: WebSocket, userId: number): void {
     let room = this.rooms.get(workspaceId);
     if (!room) {
       room = new Set();
       this.rooms.set(workspaceId, room);
     }
     room.add(socket);
-    this.sockets.set(socket, { workspaceId, isAlive: true });
+    this.sockets.set(socket, { workspaceId, userId, isAlive: true });
     socket.on('pong', () => {
       const tracked = this.sockets.get(socket);
       if (tracked) tracked.isAlive = true;
@@ -78,6 +80,15 @@ export class RealtimeService implements OnModuleDestroy {
 
   send(socket: WebSocket, message: ServerWsMessage): void {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
+  }
+
+  /** removeMember された本人の接続を明示的に切る (ADR 0006)。close → unregister の経路 */
+  kick(workspaceId: number, userId: number): void {
+    for (const [socket, tracked] of this.sockets) {
+      if (tracked.workspaceId === workspaceId && tracked.userId === userId) {
+        socket.close(WS_CLOSE_FORBIDDEN, 'removed from workspace');
+      }
+    }
   }
 
   roomSize(workspaceId: number): number {

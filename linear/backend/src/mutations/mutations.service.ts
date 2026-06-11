@@ -85,7 +85,14 @@ export class MutationsService {
 
       // COMMIT 後にのみ push する (figma ADR 0003 と同形)。replay は初回実行時に
       // broadcast 済みのため再送しない。push の取りこぼしは delta が吸収する (ADR 0005)
-      if (fresh) this.realtime.broadcastOps(req.workspaceId, response.ops);
+      if (fresh) {
+        this.realtime.broadcastOps(req.workspaceId, response.ops);
+        // remove された本人は今後 assertMember で弾かれるが、接続済み WS は
+        // 生きているため明示的に切る (ADR 0006)
+        if (req.command.type === 'removeMember') {
+          this.realtime.kick(req.workspaceId, req.command.userId);
+        }
+      }
       return response;
     } catch (e) {
       // 同一 clientMutationId の並行実行: UNIQUE で負けた側は勝者の記録を返す
@@ -139,6 +146,10 @@ export class MutationsService {
     command: MutationCommand,
   ): Promise<OpDraft[]> {
     switch (command.type) {
+      case 'inviteMember':
+        return this.workspaces.inviteMember(tx, workspaceId, actorId, command);
+      case 'removeMember':
+        return this.workspaces.removeMember(tx, workspaceId, actorId, command);
       case 'createTeam':
         return this.teams.createTeam(tx, workspaceId, command);
       case 'createLabel':

@@ -30,5 +30,6 @@ record() { # $1=grep pattern, $2=output name
   ls -lh "$out"
 }
 
-record "リアルタイム反映" "01-realtime-fanout.gif"
+record "作成と移動が別デバイス" "01-realtime-fanout.gif"
 record "オフライン編集" "02-offline-replay.gif"
+record "招待した別ユーザ" "03-collaboration.gif"

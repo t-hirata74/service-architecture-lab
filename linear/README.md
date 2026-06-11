@@ -8,7 +8,7 @@ Linear を参考に、**「server 権威 sync log による delta sync + optimis
 
 ## 見どころハイライト
 
-> 🟢 **MVP 完成** (Phase 1-5): server 権威 sync log (gapless 採番 + 冪等台帳) ⇄ client SyncEngine (optimistic / offline replay / temp id remap) を、Next.js UI (kanban + command palette + AI triage) と **実機フルスタック Playwright** (realtime fan-out / offline replay の 2 context hstack) で動作確認済み。jest e2e 31 + vitest 37 + pytest 9 + Playwright 2 + Terraform validate + CI 5 ジョブ。
+> 🟢 **MVP 完成** (Phase 1-5) **+ E1 メンバー招待/権限** (ADR 0006): server 権威 sync log (gapless 採番 + 冪等台帳) ⇄ client SyncEngine (optimistic / offline replay / temp id remap) を、Next.js UI (kanban + command palette + AI triage + メンバー管理/workspace 切替) と **実機フルスタック Playwright 3 件** (realtime fan-out / offline replay / 招待コラボ) で動作確認済み。jest e2e 35 + vitest 41 + pytest 9 + Terraform validate + CI 5 ジョブ。
 
 - **server 権威 sync log** — 全 mutation を per-workspace `seq`(= `lastSyncId`) で全順序化した append-only log に記録。採番は workspace 行の `FOR UPDATE` ロックで commit 順 = seq 順を保証し、delta 読み飛ばし (gap) を構造的に排除する（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md)）
 - **bootstrap + delta sync** — 初回は materialized snapshot を全量、以降は `?since=seq` の差分 catch-up。WS 切断からの再接続も同じ経路で吸収（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md) / [ADR 0005](docs/adr/0005-realtime-raw-websocket.md)）
@@ -82,6 +82,12 @@ A をオフライン化して issue を作成 — 「保存中…」バッジ付
 
 ![offline replay](playwright/captures/02-offline-replay.gif)
 
+### 3. 招待コラボ (E1) — 別ユーザを招待して同じ board を共同編集
+
+左 (Alice) が members パネルから Bob を email 招待 → 右 (Bob) は workspace switcher で Alice Workspace へ切替 → Alice の issue 作成が Bob へ realtime 反映。招待は **server-resolved コマンド (楽観適用しない)** の例 (ADR 0006)。
+
+![collaboration](playwright/captures/03-collaboration.gif)
+
 ---
 
 ## ADR
@@ -93,6 +99,7 @@ A をオフライン化して issue を作成 — 「保存中…」バッジ付
 | [0003](docs/adr/0003-client-sync-optimistic-offline.md) | client 同期 — optimistic queue + rebase + offline replay (`clientMutationId` 冪等) |
 | [0004](docs/adr/0004-monorepo-shared-zod-types.md) | npm workspaces monorepo + `shared/` zod スキーマで FE/BE 型共有 |
 | [0005](docs/adr/0005-realtime-raw-websocket.md) | realtime 配信は素の WebSocket — COMMIT 後 broadcast + 取りこぼしは catch-up で吸収 |
+| [0006](docs/adr/0006-membership-and-protocol-evolution.md) | メンバーシップ (E1) — protocol の lockstep 進化 / server-resolved コマンドは楽観しない / users は membership 従属 / 除外は WS kick |
 
 ---
 

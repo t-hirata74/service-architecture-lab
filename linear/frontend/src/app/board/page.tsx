@@ -17,7 +17,8 @@ export default function BoardPage() {
 
   if (!session) return null;
   return (
-    <SyncProvider session={session}>
+    // workspace 切替 (E1) で engine を作り直すため key で remount する
+    <SyncProvider key={session.workspace.id} session={session}>
       <Workspace />
     </SyncProvider>
   );

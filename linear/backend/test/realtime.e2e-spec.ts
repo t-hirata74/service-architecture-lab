@@ -174,6 +174,48 @@ describe('realtime WS gateway (e2e)', () => {
     expect(delta.ops.map((o) => o.seq)).toEqual([2]);
   });
 
+  it('removeMember で本人の socket が 4403 で切られ、他メンバーには delete op が届く', async () => {
+    const bob = await signupActor(app, 'bob@example.com', 'Bob');
+    await mutate(alice, 'seed (invite 前)'); // seq 1
+    await request(app.getHttpServer())
+      .post('/mutations')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({
+        clientMutationId: randomUUID(),
+        workspaceId: alice.workspaceId,
+        command: { type: 'inviteMember', email: 'bob@example.com', role: 'member' },
+      })
+      .expect(200); // seq 2
+
+    const aliceProbe = connect(alice.workspaceId, alice.token);
+    const bobProbe = connect(alice.workspaceId, bob.token);
+    await aliceProbe.waitFor((m) => m.some((x) => x.type === 'hello'));
+    await bobProbe.waitFor((m) => m.some((x) => x.type === 'hello'));
+
+    await request(app.getHttpServer())
+      .post('/mutations')
+      .set('Authorization', `Bearer ${alice.token}`)
+      .send({
+        clientMutationId: randomUUID(),
+        workspaceId: alice.workspaceId,
+        command: { type: 'removeMember', userId: bob.userId },
+      })
+      .expect(200); // seq 3
+
+    expect(await bobProbe.closed).toBe(WS_CLOSE_FORBIDDEN); // kick (ADR 0006)
+    await aliceProbe.waitFor((m) =>
+      m.some(
+        (x) =>
+          x.type === 'op' &&
+          x.op.entityType === 'workspace_member' &&
+          x.op.action === 'delete',
+      ),
+    );
+    // 再接続も拒否される
+    const again = connect(alice.workspaceId, bob.token);
+    expect(await again.closed).toBe(WS_CLOSE_FORBIDDEN);
+  });
+
   it('拒否: 不正 token=4401 / 非メンバー=4403 / 不正 workspaceId=4400', async () => {
     const bad = connect(alice.workspaceId, 'broken-token');
     expect(await bad.closed).toBe(WS_CLOSE_UNAUTHORIZED);

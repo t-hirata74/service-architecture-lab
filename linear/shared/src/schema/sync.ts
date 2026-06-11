@@ -23,6 +23,8 @@ export const EntityTypeSchema = z.enum([
   'label',
   'issue_label',
   'comment',
+  // E1 で追加 (ADR 0006)。monorepo lockstep デプロイ前提で enum を直接拡張する
+  'workspace_member',
 ]);
 export type EntityType = z.infer<typeof EntityTypeSchema>;
 

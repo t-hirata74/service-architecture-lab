@@ -45,6 +45,7 @@ export class SyncGateway implements OnGatewayConnection, OnGatewayDisconnect {
     request: IncomingMessage,
   ): Promise<void> {
     let workspaceId: number;
+    let userId: number;
     try {
       const url = new URL(request.url ?? '/', 'http://localhost');
       workspaceId = Number(url.searchParams.get('workspaceId'));
@@ -54,7 +55,8 @@ export class SyncGateway implements OnGatewayConnection, OnGatewayDisconnect {
         return;
       }
       const payload = await this.jwt.verifyAsync<JwtPayload>(token);
-      await this.workspaces.assertMember(workspaceId, payload.sub);
+      userId = payload.sub;
+      await this.workspaces.assertMember(workspaceId, userId);
     } catch (e) {
       client.close(
         e instanceof ForbiddenException
@@ -65,7 +67,7 @@ export class SyncGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    this.realtime.register(workspaceId, client);
+    this.realtime.register(workspaceId, client, userId);
     const lastSyncId = await this.sync.currentSyncId(workspaceId);
     this.realtime.send(client, { type: 'hello', workspaceId, lastSyncId });
     this.logger.log(

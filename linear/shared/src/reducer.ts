@@ -85,6 +85,26 @@ export function applyOp(snap: WorkspaceSnapshot, op: SyncOp): WorkspaceSnapshot 
       return applyEntityOp(snap, op, 'labels', deleteLabelCascade);
     case 'comment':
       return applyEntityOp(snap, op, 'comments', null);
+    case 'workspace_member': {
+      if (op.action === 'insert') {
+        const p = op.payload as unknown as WorkspaceMember & {
+          user: UserPublic;
+        };
+        return {
+          ...snap,
+          members: [
+            ...snap.members.filter((m) => m.userId !== p.userId),
+            { workspaceId: p.workspaceId, userId: p.userId, role: p.role },
+          ],
+          users: { ...snap.users, [p.user.id]: p.user },
+        };
+      }
+      if (op.action === 'delete') {
+        const p = op.payload as unknown as { userId: number };
+        return removeMemberFromSnapshot(snap, p.userId);
+      }
+      return snap;
+    }
     case 'issue_label': {
       const pair = op.payload as unknown as IssueLabel;
       if (op.action === 'insert') {
@@ -193,6 +213,24 @@ function hasPair(list: IssueLabel[], pair: IssueLabel): boolean {
   return list.some(
     (il) => il.issueId === pair.issueId && il.labelId === pair.labelId,
   );
+}
+
+/**
+ * users の表示情報は membership に従属させる (ADR 0006)。
+ * remove されたユーザの名前は落ち、参照 (assigneeId 等) は fallback 表示になる —
+ * bootstrap (members 由来の users) と reducer 畳み込みの parity を保つための割り切り。
+ */
+function removeMemberFromSnapshot(
+  snap: WorkspaceSnapshot,
+  userId: number,
+): WorkspaceSnapshot {
+  const users = { ...snap.users };
+  delete users[userId];
+  return {
+    ...snap,
+    members: snap.members.filter((m) => m.userId !== userId),
+    users,
+  };
 }
 
 // ─── 未確定 mutation の楽観適用 ─────────────────────────────────────────────
@@ -337,6 +375,12 @@ export function applyCommand(
             !(il.issueId === command.issueId && il.labelId === command.labelId),
         ),
       };
+    // 対象 userId を server が email から解決するため楽観適用できない (ADR 0006)。
+    // 確定 op (workspace_member insert) の到着で反映される
+    case 'inviteMember':
+      return snap;
+    case 'removeMember':
+      return removeMemberFromSnapshot(snap, command.userId);
   }
 }
 

@@ -113,6 +113,54 @@ describe('applyOp', () => {
   });
 });
 
+describe('applyOp: workspace_member (E1 / ADR 0006)', () => {
+  it('insert は members と users の両方へ反映される', () => {
+    const snap = applyOp(
+      baseSnapshot(),
+      op({
+        entityType: 'workspace_member',
+        entityId: 2,
+        payload: {
+          workspaceId: 1,
+          userId: 2,
+          role: 'member',
+          user: { id: 2, name: 'Bob' },
+        },
+      }),
+    );
+    expect(snap.members).toHaveLength(2);
+    expect(snap.users[2]).toEqual({ id: 2, name: 'Bob' });
+  });
+
+  it('delete は member と users (membership 従属) を落とす', () => {
+    let snap = applyOp(
+      baseSnapshot(),
+      op({
+        entityType: 'workspace_member',
+        entityId: 2,
+        payload: {
+          workspaceId: 1,
+          userId: 2,
+          role: 'member',
+          user: { id: 2, name: 'Bob' },
+        },
+      }),
+    );
+    snap = applyOp(
+      snap,
+      op({
+        seq: 2,
+        entityType: 'workspace_member',
+        entityId: 2,
+        action: 'delete',
+        payload: { userId: 2 },
+      }),
+    );
+    expect(snap.members).toHaveLength(1);
+    expect(snap.users[2]).toBeUndefined();
+  });
+});
+
 describe('applyCommand (optimistic)', () => {
   const ctx = (tempIds: number[]) => ({
     actorId: 1,
@@ -153,6 +201,24 @@ describe('applyCommand (optimistic)', () => {
       ctx([-1]),
     );
     expect(Object.keys(snap.comments)).toHaveLength(1);
+  });
+
+  it('inviteMember は楽観適用されない (server-resolved) / removeMember は楽観で消える', () => {
+    const base = baseSnapshot();
+    const invited = applyCommand(
+      base,
+      { type: 'inviteMember', email: 'bob@example.com', role: 'member' },
+      ctx([]),
+    );
+    expect(invited.members).toHaveLength(1); // no-op
+
+    const removed = applyCommand(
+      base,
+      { type: 'removeMember', userId: 1 },
+      ctx([]),
+    );
+    expect(removed.members).toHaveLength(0);
+    expect(removed.users[1]).toBeUndefined();
   });
 
   it('再導出が決定的 (同じ ctx なら同じ結果)', () => {

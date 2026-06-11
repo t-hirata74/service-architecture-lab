@@ -1,4 +1,4 @@
-import { ServerWsMessageSchema } from '@linear/shared';
+import { ServerWsMessageSchema, WS_CLOSE_FORBIDDEN } from '@linear/shared';
 import type { SyncEngine } from '@linear/client-sync';
 import { WS_URL } from './config';
 
@@ -61,10 +61,12 @@ export class WsClient {
         ServerWsMessageSchema.parse(JSON.parse(event.data)),
       );
     };
-    ws.onclose = () => {
+    ws.onclose = (event: CloseEvent) => {
       this.ws = null;
       if (this.stopped) return;
       this.engine.setOnline(false);
+      // メンバー除外 (kick / ADR 0006): 再接続しても拒否されるだけなので止める
+      if (event.code === WS_CLOSE_FORBIDDEN) return;
       this.scheduleReconnect();
     };
     ws.onerror = () => ws.close();

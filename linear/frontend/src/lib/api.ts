@@ -101,6 +101,19 @@ export function triageIssue(
   });
 }
 
+export interface WorkspaceListItem {
+  id: number;
+  name: string;
+  urlKey: string;
+  role: 'admin' | 'member';
+}
+
+/** workspace switcher 用 (招待された workspace は /auth/me で発見する) */
+export async function fetchWorkspaces(): Promise<WorkspaceListItem[]> {
+  const me = await api<{ workspaces: WorkspaceListItem[] }>('/auth/me');
+  return me.workspaces;
+}
+
 export function issueActivity(
   workspaceId: number,
   issueId: number,

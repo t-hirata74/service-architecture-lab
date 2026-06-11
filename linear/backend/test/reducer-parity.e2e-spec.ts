@@ -52,12 +52,13 @@ describe('shared reducer ⇔ backend parity (e2e)', () => {
     return BootstrapResponseSchema.parse(res.body);
   };
 
-  /** issueLabels の並びだけ正規化して比較する (ops 挿入順 vs bootstrap ORDER BY) */
+  /** 配列の並びだけ正規化して比較する (ops 挿入順 vs bootstrap ORDER BY) */
   const canonical = (snap: WorkspaceSnapshot): WorkspaceSnapshot => ({
     ...snap,
     issueLabels: [...snap.issueLabels].sort(
       (a, b) => a.issueId - b.issueId || a.labelId - b.labelId,
     ),
+    members: [...snap.members].sort((a, b) => a.userId - b.userId),
   });
 
   beforeAll(async () => {
@@ -150,6 +151,26 @@ describe('shared reducer ⇔ backend parity (e2e)', () => {
       await mutate({ type: 'addIssueLabel', issueId: issueAId, labelId }),
     );
     collect(await mutate({ type: 'deleteIssue', issueId: issueBId }));
+
+    // E1 (ADR 0006): membership の insert / delete も reducer と一致すること。
+    // mallory は remove され、users からも落ちる (membership 従属) のが parity の要
+    await signupActor(app, 'bob@example.com', 'Bob');
+    const mallory = await signupActor(app, 'mallory@example.com', 'Mallory');
+    collect(
+      await mutate({
+        type: 'inviteMember',
+        email: 'bob@example.com',
+        role: 'member',
+      }),
+    );
+    collect(
+      await mutate({
+        type: 'inviteMember',
+        email: 'mallory@example.com',
+        role: 'admin',
+      }),
+    );
+    collect(await mutate({ type: 'removeMember', userId: mallory.userId }));
 
     // seq 連続の確認 (前提条件)
     expect(ops.map((o) => o.seq)).toEqual(ops.map((_, i) => i + 1));

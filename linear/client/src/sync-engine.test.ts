@@ -181,6 +181,25 @@ class FakeServer {
         );
         break;
       }
+      case 'inviteMember': {
+        // server-resolved: email → userId (FakeServer は固定ユーザ Bob=500 を返す)
+        const userId = 500;
+        ops.push(
+          this.push({
+            entityType: 'workspace_member',
+            entityId: userId,
+            action: 'insert',
+            clientMutationId: cmid,
+            payload: {
+              workspaceId: 1,
+              userId,
+              role: c.role,
+              user: { id: userId, name: 'Bob' },
+            },
+          }),
+        );
+        break;
+      }
       case 'updateIssue':
         ops.push(
           this.push({
@@ -460,6 +479,22 @@ describe('SyncEngine', () => {
     const revived = Object.values(engine2.getSnapshot().state.issues);
     expect(revived).toHaveLength(1);
     expect(revived[0]!.id).toBe(1000);
+  });
+
+  it('inviteMember は楽観適用されず、確定 op で members/users に反映される (ADR 0006)', async () => {
+    engine.mutate({
+      type: 'inviteMember',
+      email: 'bob@example.com',
+      role: 'member',
+    });
+    // server-resolved コマンドなので pending 中も表示は変わらない
+    expect(engine.getSnapshot().state.members).toHaveLength(1);
+    expect(engine.getSnapshot().pendingCount).toBe(1);
+
+    await settled();
+    const snap = engine.getSnapshot().state;
+    expect(snap.members).toHaveLength(2);
+    expect(snap.users[500]).toEqual({ id: 500, name: 'Bob' });
   });
 
   it('変化が無ければ getSnapshot は同一参照を返す (useSyncExternalStore 互換)', () => {

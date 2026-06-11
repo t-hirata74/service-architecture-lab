@@ -32,6 +32,7 @@ enum EntityType {
   label
   issue_label
   comment
+  workspace_member
 }
 
 enum OpAction {

@@ -9,7 +9,9 @@ import { setSession } from '@/lib/session';
 import { identifier, issuesInColumn, PRIORITIES } from '@/lib/issue-utils';
 import { CommandPalette } from './CommandPalette';
 import { IssueDetail } from './IssueDetail';
+import { MembersPanel } from './MembersPanel';
 import { NewIssueDialog } from './NewIssueDialog';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 export function Workspace() {
   const router = useRouter();
@@ -27,6 +29,7 @@ export function Workspace() {
   const [selectedIssueId, setSelectedIssueId] = useState<number | null>(null);
   const [newIssueStateId, setNewIssueStateId] = useState<number | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -38,6 +41,7 @@ export function Workspace() {
         setPaletteOpen(false);
         setSelectedIssueId(null);
         setNewIssueStateId(null);
+        setMembersOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -68,9 +72,7 @@ export function Workspace() {
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-4 border-b border-zinc-200 bg-white px-4 py-2">
-        <span className="text-sm font-semibold">
-          <span className="text-indigo-600">▲</span> {session.workspace.name}
-        </span>
+        <WorkspaceSwitcher />
         <nav className="flex gap-1">
           {teams.map((t) => (
             <button
@@ -103,6 +105,13 @@ export function Workspace() {
                 ? `同期中 ${pendingCount} 件`
                 : `同期済み #${lastSyncId}`}
           </span>
+          <button
+            data-testid="members-button"
+            onClick={() => setMembersOpen(true)}
+            className="rounded-md border border-zinc-200 px-2 py-0.5 hover:bg-zinc-50"
+          >
+            メンバー {state.members.length}
+          </button>
           <button
             onClick={() => setPaletteOpen(true)}
             className="rounded-md border border-zinc-200 px-2 py-0.5 hover:bg-zinc-50"
@@ -232,6 +241,7 @@ export function Workspace() {
         })}
       </main>
 
+      {membersOpen && <MembersPanel onClose={() => setMembersOpen(false)} />}
       {newIssueStateId !== null && (
         <NewIssueDialog
           teamId={team.id}
