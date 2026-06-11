@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { PrioritySchema } from './entities';
 
-/** backend `POST /ai/triage` (→ ai-worker 内部 ingress) の契約 */
+/** backend `POST /ai/triage` (→ ai-worker 内部 ingress) のコントラクト */
 export const TriageRequestSchema = z.object({
   workspaceId: z.number().int().positive(),
   issueId: z.number().int().positive(),

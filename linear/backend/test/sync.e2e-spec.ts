@@ -77,7 +77,7 @@ describe('sync bootstrap/delta (e2e)', () => {
       `/sync/bootstrap?workspaceId=${alice.workspaceId}`,
     ).expect(200);
 
-    // FE/BE 契約そのものを zod で検証する (ADR 0004)
+    // FE/BE コントラクトそのものを zod で検証する (ADR 0004)
     const body = BootstrapResponseSchema.parse(res.body);
     expect(body.lastSyncId).toBe(5);
     expect(body.workspace.id).toBe(alice.workspaceId);

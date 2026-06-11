@@ -381,7 +381,7 @@ export async function signup(email: string, password: string, name: string): Pro
 
 ## 現時点の宿題
 
-- `slack/backend` と `youtube/backend` の OpenAPI 契約検証は導入済み (e94df38)
+- `slack/backend` と `youtube/backend` の OpenAPI コントラクトテストは導入済み (e94df38)
 - ADR は **プロジェクト単位で 1 本** 起こす方針 (slack 0006, youtube 0007 = REST + OpenAPI、github 0001 = GraphQL)
 
 ---

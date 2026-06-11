@@ -13,7 +13,7 @@ module ActiveSupport
   end
 end
 
-# OpenAPI 契約検証: ActionDispatch::IntegrationTest で `assert_schema_conform(status)` を
+# OpenAPI コントラクトテスト: ActionDispatch::IntegrationTest で `assert_schema_conform(status)` を
 # 呼べるようにする (docs/api-style.md / docs/openapi.yml)
 class ActionDispatch::IntegrationTest
   include Committee::Rails::Test::Methods

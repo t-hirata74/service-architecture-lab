@@ -28,7 +28,7 @@ LLM 出力の典型的な失敗モードとして:
 
 ### 検証フロー
 
-1. **入力契約**: Rails が `/synthesize/stream` を呼ぶ際に **`allowed_source_ids: [42, 117, 203, ...]`** を渡す。これは retrieve 結果の `source_id` から組んだ集合
+1. **入力コントラクト**: Rails が `/synthesize/stream` を呼ぶ際に **`allowed_source_ids: [42, 117, 203, ...]`** を渡す。これは retrieve 結果の `source_id` から組んだ集合
 2. **ai-worker 側の自衛**: ai-worker は出力中に `[#src_<source_id>]` 形式の marker を吐く際、`allowed_source_ids` 集合内であることを **assert (warn)** する。違反は処理を止めず log に残す (panic ではなく warn)
 3. **Rails 側の最終検証**: SSE proxy 中、各 `event: chunk` の `data.text` を **正規表現 (`/\[#(src_\d+)\]/`)** でスキャン、抽出した marker の `source_id` 部分を `allowed_source_ids` と照合
 4. **整合性違反の扱い**:

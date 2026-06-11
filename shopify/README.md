@@ -62,7 +62,7 @@ flowchart LR
 | [0001](docs/adr/0001-modular-monolith-rails-engine.md) | **Rails Engine + packwerk によるモジュラーモノリス** | namespace のみ / マイクロサービス / sorbet 型境界 を却下。CI で依存方向 violation を 0 件に維持 |
 | [0002](docs/adr/0002-multi-tenancy-row-level-shop-scoping.md) | **`shop_id` row-level scoping + 明示 scope** | schema/DB-per-tenant / `default_scope` 暗黙 scope を却下。漏洩試験を不変条件 spec で固定 |
 | [0003](docs/adr/0003-inventory-conditional-update-decrement.md) | **条件付き UPDATE (compare-and-decrement) + append-only ledger** | 悲観ロック (`with_lock`) / 楽観ロック / Redis reservation を却下。drift は ai-worker の reconcile job で吸収 |
-| [0004](docs/adr/0004-app-platform-webhook-delivery.md) | **Solid Queue + HMAC 署名 + delivery_id idempotency で at-least-once** | 同期配信 / 外部 broker / GraphQL Subscription を却下。受信側冪等性は契約として明示 |
+| [0004](docs/adr/0004-app-platform-webhook-delivery.md) | **Solid Queue + HMAC 署名 + delivery_id idempotency で at-least-once** | 同期配信 / 外部 broker / GraphQL Subscription を却下。受信側冪等性はコントラクトとして明示 |
 
 ---
 

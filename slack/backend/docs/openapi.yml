@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: slack-backend
   description: |
-    Slack 風プロジェクトの REST API。WebSocket (ActionCable) は別契約で
+    Slack 風プロジェクトの REST API。WebSocket (ActionCable) は別コントラクトで
     `mount ActionCable.server => "/cable"` 経由。
     詳細は `docs/api-style.md` および `slack/docs/architecture.md` を参照。
 

@@ -25,7 +25,7 @@ RSpec.configure do |config|
   # travel_to / freeze_time 等
   config.include ActiveSupport::Testing::TimeHelpers
 
-  # OpenAPI 契約検証: request spec で `assert_schema_conform(status)` を呼べる
+  # OpenAPI コントラクトテスト: request spec で `assert_schema_conform(status)` を呼べる
   # ようになる (docs/api-style.md / docs/openapi.yml)
   config.add_setting :committee_options
   config.committee_options = {
@@ -33,7 +33,7 @@ RSpec.configure do |config|
     strict_reference_validation: false,
     parse_response_by_content_type: false,
     # 学習用 (form-encoded / JSON / multipart どれも許容): リクエスト検証は緩く、
-    # レスポンス契約だけ厳密に守る。
+    # レスポンスのコントラクトだけ厳密に守る。
     check_content_type: false,
     check_header: false
   }

@@ -6,7 +6,7 @@ require "webmock/rspec"
 #   - 5xx 受信 → status=pending のまま、attempts++、再 enqueue
 #   - MAX_ATTEMPTS 到達 → status=failed_permanent
 #   - 4xx 受信 → 即 failed_permanent (retry しない)
-#   - HMAC 署名と X-Webhook-Delivery-Id を必ず送る (受信側冪等性のための契約)
+#   - HMAC 署名と X-Webhook-Delivery-Id を必ず送る (受信側冪等性のためのコントラクト)
 RSpec.describe Apps::DeliveryJob do
   let(:shop) { Core::Shop.create!(subdomain: "acme", name: "ACME") }
   let(:app) { Apps::App.create!(name: "shipping-app", secret: "supersecret-1234567890") }
@@ -44,7 +44,7 @@ RSpec.describe Apps::DeliveryJob do
     expect(delivery.delivered_at).to be_present
     expect(delivery.attempts).to eq(1)
 
-    # HMAC 署名と delivery_id が送られている (受信側冪等性の契約)
+    # HMAC 署名と delivery_id が送られている (受信側冪等性のコントラクト)
     expected_sig = Apps::Signer.sign(secret: app.secret, body: payload_json)
     expect(captured.headers[Apps::Signer::HEADER_HMAC]).to eq(expected_sig)
     expect(captured.headers[Apps::Signer::HEADER_DELIVERY_ID]).to eq("abc-123")

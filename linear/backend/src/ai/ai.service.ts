@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
 
-/** ai-worker のレスポンス契約 (worker 側 pydantic と対) */
+/** ai-worker のレスポンスのコントラクト (worker 側 pydantic と対) */
 const WorkerTriageSchema = z.object({
   priority: z.number().int().min(0).max(4),
   labels: z.array(z.string()),
