@@ -4,3 +4,7 @@ dist/
 .env
 .venv/
 __pycache__/
+.terraform/
+test-results/
+playwright-report/
+.next/

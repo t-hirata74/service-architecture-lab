@@ -4,8 +4,16 @@ import { CurrentUser } from '../common/current-user.decorator';
 import type { AuthUser } from '../common/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { WorkspacesService } from '../workspaces/workspaces.service';
-import { BootstrapQuerySchema, DeltaQuerySchema } from './query-schemas';
-import type { BootstrapQuery, DeltaQuery } from './query-schemas';
+import {
+  ActivityQuerySchema,
+  BootstrapQuerySchema,
+  DeltaQuerySchema,
+} from './query-schemas';
+import type {
+  ActivityQuery,
+  BootstrapQuery,
+  DeltaQuery,
+} from './query-schemas';
 import { SyncService } from './sync.service';
 
 @Controller('sync')
@@ -31,5 +39,14 @@ export class SyncController {
   ): Promise<DeltaResponse> {
     await this.workspaces.assertMember(q.workspaceId, user.userId);
     return this.sync.delta(q.workspaceId, q.since);
+  }
+
+  @Get('activity')
+  async activity(
+    @CurrentUser() user: AuthUser,
+    @Query(new ZodValidationPipe(ActivityQuerySchema)) q: ActivityQuery,
+  ) {
+    await this.workspaces.assertMember(q.workspaceId, user.userId);
+    return this.sync.activityForIssue(q.workspaceId, q.issueId);
   }
 }

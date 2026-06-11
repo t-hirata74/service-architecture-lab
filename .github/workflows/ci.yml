@@ -1972,3 +1972,120 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false -input=false
       - run: terraform validate
+
+  linear-backend:
+    name: linear / backend (NestJS + Prisma + jest e2e)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: linear_test
+          MYSQL_USER: linear
+          MYSQL_PASSWORD: linear
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    defaults:
+      run:
+        working-directory: linear
+
+    env:
+      E2E_DATABASE_URL: mysql://linear:linear@127.0.0.1:3306/linear_test
+      DATABASE_URL: mysql://linear:linear@127.0.0.1:3306/linear_test
+      # migrate deploy は shadow を使わないが、schema.prisma の env() 解決の保険
+      SHADOW_DATABASE_URL: mysql://linear:linear@127.0.0.1:3306/linear_test
+      JWT_SECRET: ci-test-secret-for-linear
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: linear/package-lock.json
+      - run: npm ci
+      - name: Build shared + client (backend が dist を参照)
+        run: npm run build:packages
+      - run: npx prisma generate
+        working-directory: linear/backend
+      - name: Lint (eslint type-checked)
+        run: npm run lint -w backend
+      - name: Unit test
+        run: npm run test -w backend
+      - name: E2E (migrate deploy + jest --runInBand / gapless 不変条件含む)
+        run: npm run test:e2e -w backend
+
+  linear-packages:
+    name: linear / shared + client (vitest + tsc)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: linear
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: linear/package-lock.json
+      - run: npm ci
+      - run: npm run build:packages
+      - run: npm run lint -w @linear/shared && npm run lint -w @linear/client-sync
+      - name: vitest (fractional fuzz / reducer / SyncEngine)
+        run: npm run test -w @linear/shared && npm run test -w @linear/client-sync
+
+  linear-frontend:
+    name: linear / frontend (eslint + tsc + next build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: linear
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: linear/package-lock.json
+      - run: npm ci
+      - run: npm run build:packages
+      - run: npm run lint -w frontend
+      - run: npm run build -w frontend
+
+  linear-ai-worker:
+    name: linear / ai-worker (FastAPI + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: linear/ai-worker
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: linear/ai-worker/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+
+  linear-terraform:
+    name: linear / terraform (fmt + validate)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: linear/infra/terraform
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate

@@ -11,3 +11,9 @@ export const DeltaQuerySchema = z.object({
   since: z.coerce.number().int().min(0),
 });
 export type DeltaQuery = z.infer<typeof DeltaQuerySchema>;
+
+export const ActivityQuerySchema = z.object({
+  workspaceId: z.coerce.number().int().positive(),
+  issueId: z.coerce.number().int().positive(),
+});
+export type ActivityQuery = z.infer<typeof ActivityQuerySchema>;

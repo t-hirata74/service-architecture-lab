@@ -207,6 +207,22 @@ export class SyncService {
     };
   }
 
+  /**
+   * issue の変更履歴 = sync_ops の projection (専用テーブルを持たない)。
+   * activity feed (issue 詳細) 用に新しい順で返す。
+   */
+  async activityForIssue(
+    workspaceId: number,
+    issueId: number,
+  ): Promise<{ ops: SyncOp[] }> {
+    const rows = await this.prisma.syncOp.findMany({
+      where: { workspaceId, entityType: 'issue', entityId: issueId },
+      orderBy: { seq: 'desc' },
+      take: 50,
+    });
+    return { ops: rows.map((r) => this.rowToOp(r)) };
+  }
+
   private rowToOp(r: SyncOpRow): SyncOp {
     return {
       seq: Number(r.seq),

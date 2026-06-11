@@ -8,7 +8,7 @@ Linear を参考に、**「server 権威 sync log による delta sync + optimis
 
 ## 見どころハイライト
 
-> 🟡 **Phase 4 完了**: sync engine が両側そろった — server 側 (`POST /mutations` 採番/冪等台帳 + bootstrap/delta + 素 WS gateway) に加えて、**client 側 SyncEngine** (`client/` workspace / framework 非依存): confirmed + pending 分離の rebase / optimistic + 4xx rollback / **offline queue replay + 一時 id 再割当 (temp→real remap)** / gap の delta 自己修復。**reducer parity テスト** (bootstrap(0) + 全 ops 畳み込み ≡ 最終 bootstrap) で FE/BE の意味一致を固定。ai-worker (triage/duplicates mock) + `/ai/triage` 内部 ingress も稼働。jest e2e 30 + vitest 37 + pytest 9 green。Phase 5 で Next.js UI + Playwright + Terraform + CI。
+> 🟢 **MVP 完成** (Phase 1-5): server 権威 sync log (gapless 採番 + 冪等台帳) ⇄ client SyncEngine (optimistic / offline replay / temp id remap) を、Next.js UI (kanban + command palette + AI triage) と **実機フルスタック Playwright** (realtime fan-out / offline replay の 2 context hstack) で動作確認済み。jest e2e 31 + vitest 37 + pytest 9 + Playwright 2 + Terraform validate + CI 5 ジョブ。
 
 - **server 権威 sync log** — 全 mutation を per-workspace `seq`(= `lastSyncId`) で全順序化した append-only log に記録。採番は workspace 行の `FOR UPDATE` ロックで commit 順 = seq 順を保証し、delta 読み飛ばし (gap) を構造的に排除する（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md)）
 - **bootstrap + delta sync** — 初回は materialized snapshot を全量、以降は `?since=seq` の差分 catch-up。WS 切断からの再接続も同じ経路で吸収（[ADR 0002](docs/adr/0002-sync-log-per-workspace-seq.md) / [ADR 0005](docs/adr/0005-realtime-raw-websocket.md)）
@@ -66,6 +66,24 @@ flowchart LR
 
 ---
 
+## E2E デモ (Playwright で録画)
+
+2 BrowserContext (Device A | Device B、同一ユーザの 2 デバイス) を ffmpeg hstack で並べた実機フルスタック録画。
+
+### 1. realtime fan-out — 作成・移動が他デバイスへ即時反映
+
+左 (A) で issue 作成 → 楽観反映の直後に server 確定で `GEN-1` が付き、右 (B) には WS push (op) で届く。→ ボタンで Todo へ移動すると B のカードも列を移る。
+
+![realtime fan-out](playwright/captures/01-realtime-fanout.gif)
+
+### 2. offline replay — オフライン編集が復帰後に同期
+
+A をオフライン化して issue を作成 — 「保存中…」バッジ付きで楽観表示され、B には届かない。復帰すると pending queue が replay され (`clientMutationId` 冪等)、A に番号が付き B にも現れる。
+
+![offline replay](playwright/captures/02-offline-replay.gif)
+
+---
+
 ## ADR
 
 | # | 決定 |
@@ -91,13 +109,20 @@ npm install
 cp backend/.env.example backend/.env
 cd backend && npx prisma migrate dev && cd ..
 
-# 4. shared を build して backend (NestJS :3140) を起動
-npm run build -w @linear/shared
+# 4. packages を build して backend (NestJS :3140) と frontend (Next.js :3145) を起動
+npm run build:packages
 npm run start:dev -w backend
+npm run dev -w frontend          # 別タブ → http://localhost:3145
 
 # 動作確認
 curl http://localhost:3140/health
 # WS は ws://localhost:3140/sync/ws?workspaceId=<id>&token=<JWT> (hello → op push)
+```
+
+```sh
+# E2E (実機フルスタック / webServer が backend・frontend を production build で起動)
+cd playwright && npm install && npm test
+npm run capture                  # gif 録画 (ffmpeg 必須)
 ```
 
 ```sh
@@ -109,8 +134,6 @@ npm run test:e2e -w backend         # jest e2e (linear_test DB / --runInBand)
 npm run lint                        # eslint + tsc --noEmit
 cd ai-worker && .venv/bin/python -m pytest   # ai-worker (要 venv セットアップ)
 ```
-
-> frontend (Next.js :3145) は Phase 5 で追加する。ai-worker (:8130) は `docker compose up -d` で起動済み。
 
 ---
 

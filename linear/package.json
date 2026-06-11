@@ -4,11 +4,13 @@
   "workspaces": [
     "shared",
     "client",
-    "backend"
+    "backend",
+    "frontend"
   ],
   "scripts": {
     "build": "npm run build -w @linear/shared && npm run build -w @linear/client-sync && npm run build -w backend",
+    "build:packages": "npm run build -w @linear/shared && npm run build -w @linear/client-sync",
     "test": "npm run test -w @linear/shared && npm run test -w @linear/client-sync && npm run test:e2e -w backend",
-    "lint": "npm run lint -w @linear/shared && npm run lint -w @linear/client-sync && npm run lint -w backend"
+    "lint": "npm run lint -w @linear/shared && npm run lint -w @linear/client-sync && npm run lint -w backend && npm run lint -w frontend"
   }
 }

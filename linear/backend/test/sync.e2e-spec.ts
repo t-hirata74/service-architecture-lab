@@ -113,6 +113,25 @@ describe('sync bootstrap/delta (e2e)', () => {
     expect(empty.body.lastSyncId).toBe(5);
   });
 
+  it('activity: issue の変更履歴を sync_ops の projection として返す', async () => {
+    const issue = await prisma.issue.findFirstOrThrow({
+      where: { teamId, title: 'Issue A' },
+    });
+    const res = await get(
+      alice,
+      `/sync/activity?workspaceId=${alice.workspaceId}&issueId=${issue.id}`,
+    ).expect(200);
+    const body = res.body as { ops: Array<{ seq: number; action: string }> };
+    // Issue A に対する op は insert (seq 1) のみ。新しい順
+    expect(body.ops.map((o) => o.action)).toEqual(['insert']);
+
+    const mallory = await signupActor(app, 'mallory2@example.com', 'Mallory');
+    await get(
+      mallory,
+      `/sync/activity?workspaceId=${alice.workspaceId}&issueId=${issue.id}`,
+    ).expect(403);
+  });
+
   it('非メンバーの bootstrap / delta は 403', async () => {
     const mallory = await signupActor(app, 'mallory@example.com', 'Mallory');
     await get(

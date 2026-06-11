@@ -396,3 +396,15 @@ linear-ai-test: ## linear ai-worker テスト (pytest / triage + duplicates)
 .PHONY: linear-client-test
 linear-client-test: ## linear client sync engine テスト (vitest / optimistic + offline replay)
 	cd linear && npm run test -w @linear/client-sync
+
+.PHONY: linear-frontend
+linear-frontend: ## linear frontend (Next.js) を :3145 で起動 (shared/client build 込み)
+	cd linear && npm run build:packages && npm run dev -w frontend
+
+.PHONY: linear-e2e
+linear-e2e: ## linear E2E (Playwright / 実機フルスタック。要 mysql :3330)
+	cd linear/playwright && npm test
+
+.PHONY: linear-capture
+linear-capture: ## linear E2E gif 録画 (captures/*.gif / ffmpeg 必須)
+	cd linear/playwright && npm run capture
