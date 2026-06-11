@@ -183,7 +183,11 @@ describe('realtime WS gateway (e2e)', () => {
       .send({
         clientMutationId: randomUUID(),
         workspaceId: alice.workspaceId,
-        command: { type: 'inviteMember', email: 'bob@example.com', role: 'member' },
+        command: {
+          type: 'inviteMember',
+          email: 'bob@example.com',
+          role: 'member',
+        },
       })
       .expect(200); // seq 2
 
