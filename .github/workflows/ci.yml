@@ -1999,8 +1999,10 @@ jobs:
     env:
       E2E_DATABASE_URL: mysql://linear:linear@127.0.0.1:3306/linear_test
       DATABASE_URL: mysql://linear:linear@127.0.0.1:3306/linear_test
-      # migrate deploy は shadow を使わないが、schema.prisma の env() 解決の保険
-      SHADOW_DATABASE_URL: mysql://linear:linear@127.0.0.1:3306/linear_test
+      # migrate deploy は shadow に接続しないが、schema.prisma の env() 解決には必要。
+      # main(DATABASE_URL)と同一値だと Prisma P3019 で弾かれるため別 DB 名にする
+      # (deploy では接続されないので linear_shadow が実在しなくても可)。
+      SHADOW_DATABASE_URL: mysql://linear:linear@127.0.0.1:3306/linear_shadow
       JWT_SECRET: ci-test-secret-for-linear
 
     steps:
