@@ -75,12 +75,12 @@ Accepted（2026-06-19）
 - **reopen の整合**: 再オープン中に記帳 → 再締め、の間の試算表が動く。これは意図的に許容し、締め監査ログで追跡可能にする
 - **期間粒度**: 月次/年次の同時管理は scope 外。MVP は単一粒度の期間列で表現
 
-## このADRを守るテスト / 実装ポインタ（実装後に埋める）
+## このADRを守るテスト / 実装ポインタ
 
-- `backend/test/period/posting_guard.test.ts`（予定）— closed 期間への記帳・逆仕訳が拒否されること（アプリ層バイパス時も trigger で落ちる）
-- `backend/test/period/no_overlap.test.ts`（予定）— 同一 company で重なる期間を作れないこと（`EXCLUDE` 違反）
-- `backend/test/period/transitions.test.ts`（予定）— 未定義遷移を弾き、close / reopen のみ通ること
-- `backend/drizzle/`（予定）— `accounting_periods` の `EXCLUDE` 制約、記帳ガード trigger、`period_closings` 監査テーブル
+- `backend/test/domain.test.ts` — close→reopen / 再 close は 409 (不正遷移) / 締め済み期間への記帳 422 / 期間重複作成 422 (EXCLUDE) / 重複なしは 201
+- `backend/src/domain/periods.ts` — `WHERE status = ?` の compare-and-set state machine + `period_closings` 監査
+- `backend/src/domain/journals.ts` (`assertPeriodOpen`) — 記帳時の期間 open ガード
+- `backend/drizzle/0000_init.sql` — `accounting_periods_no_overlap` (EXCLUDE) / `freee_check_period_open` trigger / `btree_gist`
 
 ## 関連 ADR
 

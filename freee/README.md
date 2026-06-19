@@ -10,7 +10,13 @@ freee / マネーフォワード を参考に、**「Postgres Row-Level Security
 
 ## 見どころハイライト
 
-> 🟡 **Phase 2 完了**: ADR 0001-0004 + monorepo 初期化 (Hono/Drizzle/React-Vite/zod) + RLS/EXCLUDE/trigger を含む生 SQL migration + seed。**4 つの DB 不変条件 (RLS 分離 / append-only / 借方=貸方 / 期間ガード) を非特権ロール freee_app で検証済み** (`backend/scripts/smoke.ts`)、Hono RPC のフルパス (`/accounts` の tenant 別取得 + zod 検証) も疎通。次は Phase 3 (仕訳記帳 / 期末締め / 試算表のドメイン実装 + テスト)。
+> 🟡 **Phase 3 完了**: ドメイン中核 (仕訳記帳 / 逆仕訳 / 期末締め state machine / 試算表) を実装し **vitest 統合テスト 15 件パス**。Phase 2 で確立した RLS/EXCLUDE/trigger の上に、Hono ルート + Drizzle ドメイン層 + 共有 zod を載せ、`app.request()` でフルパス (tenant middleware → RLS → trigger → SQLSTATE→HTTP マッピング) を検証。次は Phase 4 (認証 1 経路 + ai-worker 内部 ingress)。
+
+**実装済みの主な学習ポイント:**
+- **借方=貸方 の二段防御** — 入口は共有 zod の `refine` (FE/BE 共通・即 400)、確定前に `SET CONSTRAINTS ALL IMMEDIATE` で DEFERRABLE trigger を同期発火させレスポンスに反映 ([ADR 0002](docs/adr/0002-double-entry-invariant-append-only-ledger.md) / `backend/src/domain/journals.ts`)
+- **期末締め state machine** — `open⇄closed` を `WHERE status = ?` の compare-and-set で進め、空更新なら不正遷移 409 (uber/shopify と同型 / `backend/src/domain/periods.ts`)
+- **DB 制約 → HTTP** — Drizzle 0.45 が pg エラーを `DrizzleQueryError` でラップするため cause チェーンを辿って SQLSTATE を取り出し、EXCLUDE=422 / append-only=409 等にマップ (`backend/src/app.ts`)
+- **試算表もテナント分離** — RLS により集計 SQL に `company_id` を書かずとも自社分だけ集計される
 
 このプロジェクトが「再現する技術課題」は以下の 4 点。実装が進んだら各項目に実装ポインタを足す。
 

@@ -68,11 +68,13 @@ freee / マネーフォワードは多数の事業者（= Company）を 1 プラ
 - **RLS の性能**: ポリシーの `USING` 条件が全クエリに AND される。`(company_id, ...)` 複合 index で吸収する。MVP では計測まではしない
 - **cross-tenant 集計**: 運用 admin の全社横断クエリは `BYPASSRLS` を持つ別ロール経由に限定し、アプリの実行時ロールには漏らさない
 
-## このADRを守るテスト / 実装ポインタ（実装後に埋める）
+## このADRを守るテスト / 実装ポインタ
 
-- `backend/test/multi_tenancy/rls_isolation.test.ts`（予定）— Company A の文脈で **アプリ層 scope を外しても** Company B の仕訳が 0 行になること（アプリ層 scoping では書けない、RLS 固有の不変条件テスト）
-- `backend/src/middleware/tenant.ts`（予定）— トランザクション + `SET LOCAL app.current_company`
-- `backend/drizzle/`（予定）— 全 tenant-scoped table の `ENABLE ROW LEVEL SECURITY` + ポリシー + アプリ用 `NOSUPERUSER` ロール作成
+- `backend/scripts/smoke.ts` — 非特権ロール freee_app で「GUC 未設定 → 0 行 (fail-closed)」「越境参照 → 0 行」を確認（アプリ層 scoping では書けない RLS 固有の不変条件）
+- `backend/test/domain.test.ts` — HTTP 経由で company 別に accounts / journal-entries / trial-balance が分離されること
+- `backend/src/middleware/tenant.ts` — トランザクション + `set_config('app.current_company', _, true)`
+- `backend/src/db/client.ts` — 実行時は非特権ロール freee_app で接続
+- `backend/drizzle/0000_init.sql` — 全 tenant-scoped table の RLS 有効化 + ポリシー + freee_app ロール作成
 
 ## 関連 ADR
 

@@ -70,11 +70,12 @@ Accepted（2026-06-19）
 - **NUMERIC の取り回し**: Drizzle / Hono RPC 境界で文字列⇄数値の変換が要る（JS の number は金額に使わない）。境界変換規約を ADR 0004 で扱う
 - **多通貨は scope 外**: 単一通貨前提。多通貨は為替差損益という別の不変条件論点になるので別 ADR に切る
 
-## このADRを守るテスト / 実装ポインタ（実装後に埋める）
+## このADRを守るテスト / 実装ポインタ
 
-- `backend/test/ledger/balanced_entry.test.ts`（予定）— 借方≠貸方の仕訳が COMMIT 時に reject されること（アプリ層プリチェックを意図的にバイパスしても DB trigger で落ちる）
-- `backend/test/ledger/append_only.test.ts`（予定）— 記帳済み entry/line の UPDATE/DELETE が拒否され、訂正は逆仕訳でのみ可能なこと
-- `backend/drizzle/`（予定）— `journal_lines` の DEFERRABLE constraint trigger 定義、append-only trigger
+- `backend/test/domain.test.ts` — balanced 記帳 201 / 借方≠貸方 400 (zod refine) / 逆仕訳で借方貸方反転
+- `backend/scripts/smoke.ts` — DB 層で「借方≠貸方を COMMIT 時に拒否」「記帳済みの UPDATE を append-only trigger が拒否」
+- `backend/src/domain/journals.ts` — 期間 open 事前チェック + `SET CONSTRAINTS ALL IMMEDIATE` で deferred trigger を同期発火 + 逆仕訳
+- `backend/drizzle/0000_init.sql` — `freee_check_entry_balanced` (DEFERRABLE INITIALLY DEFERRED) / `freee_forbid_mutation` (append-only)
 
 ## 関連 ADR
 

@@ -79,7 +79,7 @@ service-architecture-lab/
 | ~~`calendly`~~ → MVP 完成 | Rails 8 / **Ruby 4** | 期間 overlap / MySQL における `EXCLUDE` 代替 / RRULE 展開 / timezone 永続化 |
 | `pagerduty` | 未定 | incident escalation state machine / alert dedup (fingerprint + TTL) / on-call rotation |
 | `dropbox` | 未定 | content-defined chunking / delta sync / version graph / conflict resolution |
-| ~~`freee`~~ → 🟡 Phase 2 完了 | **TypeScript (Hono)** + React/Vite + **Postgres** | Postgres RLS による DB 強制マルチテナント (shopify アプリ層 scoping との対比) / 複式簿記の不変条件 (借方 = 貸方) deferrable constraint / 仕訳 ledger append-only + 逆仕訳 / 期末締め state machine / Hono RPC で FE/BE 型共有 (本リポ初 Postgres・Hono・非 Next.js) |
+| ~~`freee`~~ → 🟡 Phase 3 完了 | **TypeScript (Hono)** + React/Vite + **Postgres** | Postgres RLS による DB 強制マルチテナント (shopify アプリ層 scoping との対比) / 複式簿記の不変条件 (借方 = 貸方) deferrable constraint / 仕訳 ledger append-only + 逆仕訳 / 期末締め state machine / Hono RPC で FE/BE 型共有 (本リポ初 Postgres・Hono・非 Next.js) |
 | `mercari` | 未定 | C2C 取引 state machine / escrow (代金保留 → 受取確認後リリース) / 検索ランキング |
 | `timee` | 未定 | 時刻オフセット付きマッチング / 当日キャンセル再アサイン / 勤怠打刻 + 給与計算 |
 | `airflow` | **Python** | DAG 表現 + 依存解決 / scheduler + worker 分離 / XCom (タスク間データ受け渡し) / sensor / 冪等性 + リトライ |
