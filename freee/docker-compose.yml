@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: freee
+      POSTGRES_PASSWORD: freee
+      POSTGRES_DB: freee_development
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      # RLS 用のアプリ接続ロール作成などの初期化 SQL を置く場合はここに mount する。
+      # ただしテーブル定義 / RLS ポリシーは Drizzle migration 側で管理する方針。
+      # - ./infra/pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U freee -d freee_development"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ai-worker:
+    image: python:3.13
+    working_dir: /work
+    volumes:
+      - ./ai-worker:/work
+    command: sh -c "pip install -q -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8140:8000"
+    environment:
+      INTERNAL_TOKEN: dev-internal-token
+
+  # backend (Hono :3150) / frontend (React+Vite :3155) は host の Node で
+  # `npm run dev` を想定 (他プロジェクトの frontend と同方針、linear と同様)。
+  # CI / E2E でコンテナ化が必要になったら Dockerfile を足す。
+
+volumes:
+  pg_data:
