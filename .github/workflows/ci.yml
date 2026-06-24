@@ -51,7 +51,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/1
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -79,7 +79,7 @@ jobs:
         working-directory: slack/frontend
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -105,7 +105,7 @@ jobs:
         working-directory: slack/infra/terraform
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
@@ -129,7 +129,7 @@ jobs:
         working-directory: slack/ai-worker
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -186,7 +186,7 @@ jobs:
       DB_PASSWORD: youtube
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -214,7 +214,7 @@ jobs:
         working-directory: youtube/frontend
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -240,7 +240,7 @@ jobs:
         working-directory: youtube/infra/terraform
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
@@ -264,7 +264,7 @@ jobs:
         working-directory: youtube/ai-worker
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -321,7 +321,7 @@ jobs:
       DB_PASSWORD: github
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -354,7 +354,7 @@ jobs:
         working-directory: github/frontend
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -383,7 +383,7 @@ jobs:
         working-directory: github/ai-worker
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -417,7 +417,7 @@ jobs:
         working-directory: github/infra/terraform
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
@@ -464,7 +464,7 @@ jobs:
       DB_PASSWORD: perplexity
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -492,7 +492,7 @@ jobs:
         working-directory: perplexity/frontend
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -527,7 +527,7 @@ jobs:
       MYSQL_TEST_URL: "mysql+pymysql://perplexity:perplexity@127.0.0.1:65535/perplexity_test"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -561,7 +561,7 @@ jobs:
         working-directory: perplexity/infra/terraform
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
@@ -609,7 +609,7 @@ jobs:
       MYSQL_DATABASE: instagram_test
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -641,7 +641,7 @@ jobs:
         working-directory: instagram/frontend
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -670,7 +670,7 @@ jobs:
         working-directory: instagram/ai-worker
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -704,7 +704,7 @@ jobs:
         working-directory: instagram/infra/terraform
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4
@@ -749,7 +749,7 @@ jobs:
       HTTP_ADDR: 127.0.0.1:3060
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -784,7 +784,7 @@ jobs:
       run:
         working-directory: discord/ai-worker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -802,7 +802,7 @@ jobs:
       run:
         working-directory: discord/frontend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -822,7 +822,7 @@ jobs:
       run:
         working-directory: discord/playwright
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -840,7 +840,7 @@ jobs:
       run:
         working-directory: discord/infra/terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
@@ -855,7 +855,7 @@ jobs:
       run:
         working-directory: reddit/backend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -873,7 +873,7 @@ jobs:
       run:
         working-directory: reddit/ai-worker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -891,7 +891,7 @@ jobs:
       run:
         working-directory: reddit/frontend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -911,7 +911,7 @@ jobs:
       run:
         working-directory: reddit/playwright
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -926,7 +926,7 @@ jobs:
     name: reddit / playwright (full E2E + capture artifacts)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -1006,7 +1006,7 @@ jobs:
       run:
         working-directory: reddit/infra/terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
@@ -1019,7 +1019,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -1064,7 +1064,7 @@ jobs:
       DB_PASSWORD: root
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3.1"
@@ -1082,7 +1082,7 @@ jobs:
       run:
         working-directory: shopify/backend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3.1"
@@ -1100,7 +1100,7 @@ jobs:
       run:
         working-directory: shopify/ai-worker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -1118,7 +1118,7 @@ jobs:
       run:
         working-directory: shopify/frontend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -1138,7 +1138,7 @@ jobs:
       run:
         working-directory: shopify/infra/terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
@@ -1175,7 +1175,7 @@ jobs:
       DB_PASSWORD: root
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3.1"
@@ -1193,7 +1193,7 @@ jobs:
       run:
         working-directory: zoom/ai-worker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -1211,7 +1211,7 @@ jobs:
       run:
         working-directory: zoom/frontend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -1253,7 +1253,7 @@ jobs:
       NEXT_PUBLIC_API_BASE: http://127.0.0.1:3090
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: ruby/setup-ruby@v1
         with:
@@ -1314,7 +1314,7 @@ jobs:
       run:
         working-directory: zoom/infra/terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
@@ -1355,7 +1355,7 @@ jobs:
       DB_PASSWORD: root
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0.3"
@@ -1374,7 +1374,7 @@ jobs:
       run:
         working-directory: calendly/ai-worker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -1392,7 +1392,7 @@ jobs:
       run:
         working-directory: calendly/frontend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -1433,7 +1433,7 @@ jobs:
       NEXT_PUBLIC_API_BASE: http://127.0.0.1:3100
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: ruby/setup-ruby@v1
         with:
@@ -1494,7 +1494,7 @@ jobs:
       run:
         working-directory: calendly/infra/terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
@@ -1535,7 +1535,7 @@ jobs:
       HTTP_ADDR: 127.0.0.1:3110
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-go@v6
         with:
@@ -1571,7 +1571,7 @@ jobs:
       run:
         working-directory: uber/ai-worker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -1589,7 +1589,7 @@ jobs:
       run:
         working-directory: uber/frontend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -1609,7 +1609,7 @@ jobs:
       run:
         working-directory: uber/playwright
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -1627,7 +1627,7 @@ jobs:
       run:
         working-directory: uber/infra/terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
@@ -1664,7 +1664,7 @@ jobs:
       DB_PASSWORD: root
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0.5"
@@ -1685,7 +1685,7 @@ jobs:
       run:
         working-directory: figma/ai-worker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -1703,7 +1703,7 @@ jobs:
       run:
         working-directory: figma/frontend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -1744,7 +1744,7 @@ jobs:
       AI_WORKER_URL: http://127.0.0.1:8110
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: ruby/setup-ruby@v1
         with:
@@ -1805,7 +1805,7 @@ jobs:
       run:
         working-directory: figma/infra/terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
@@ -1844,7 +1844,7 @@ jobs:
       HTTP_ADDR: 127.0.0.1:3130
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version: "1.25"
@@ -1874,7 +1874,7 @@ jobs:
       run:
         working-directory: datadog/ai-worker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -1892,7 +1892,7 @@ jobs:
       run:
         working-directory: datadog/frontend
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "20"
@@ -1924,7 +1924,7 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v6
         with:
           go-version: "1.25"
@@ -1965,7 +1965,7 @@ jobs:
       run:
         working-directory: datadog/infra/terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
@@ -2006,7 +2006,7 @@ jobs:
       JWT_SECRET: ci-test-secret-for-linear
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
@@ -2031,7 +2031,7 @@ jobs:
       run:
         working-directory: linear
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
@@ -2050,7 +2050,7 @@ jobs:
       run:
         working-directory: linear
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
@@ -2068,7 +2068,7 @@ jobs:
       run:
         working-directory: linear/ai-worker
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -2084,7 +2084,7 @@ jobs:
       run:
         working-directory: linear/infra/terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.9.8"
