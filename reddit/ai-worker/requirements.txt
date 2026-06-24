@@ -7,5 +7,5 @@ aiomysql>=0.3.2,<0.4
 aiosqlite>=0.22.1,<0.23
 apscheduler>=3.11.2,<4.0
 httpx>=0.28.1,<0.29
-pytest>=8.0
+pytest>=9.1.1
 pytest-asyncio>=1.4.0,<1.5
